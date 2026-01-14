@@ -1,0 +1,15 @@
+Global:
+  use_gpu: false
+  enable_cls: true
+  enable_det: true
+  enable_rec: true
+
+Det:
+  model_path: models/ch_PP-OCRv4_det_infer.onnx
+
+Rec:
+  model_path: models/rec_ch_PP-OCRv4_infer.onnx
+  keys_path: models/dict_chinese.txt
+
+Cls:
+  model_path: models/ch_ppocr_mobile_v2.0_cls_infer.onnx

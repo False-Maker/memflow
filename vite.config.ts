@@ -14,6 +14,7 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     host: true,
+    open: false, // 禁止自动打开浏览器
     watch: {
       // 3. tell vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],

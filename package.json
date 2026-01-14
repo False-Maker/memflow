@@ -11,19 +11,23 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "dev:all": "dev.bat",
-    "dev:all:ps1": "powershell -ExecutionPolicy Bypass -File ./dev.ps1",
+    "dev:all:ps1": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1",
+    "test:setup": "powershell -ExecutionPolicy Bypass -File ./scripts/test.ps1 || bash ./scripts/test.sh",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:watch": "cargo watch -x 'test --manifest-path src-tauri/Cargo.toml'",
     "test:e2e": "playwright test",
-    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0 || echo 'ESLint not configured'",
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\" || echo 'Prettier not configured'",
     "version:patch": "bash scripts/version.sh patch || powershell -ExecutionPolicy Bypass -File scripts/version.ps1 patch",
     "version:minor": "bash scripts/version.sh minor || powershell -ExecutionPolicy Bypass -File scripts/version.ps1 minor",
-    "version:major": "bash scripts/version.sh major || powershell -ExecutionPolicy Bypass -File scripts/version.ps1 major"
+    "version:major": "bash scripts/version.sh major || powershell -ExecutionPolicy Bypass -File scripts/version.ps1 major",
+    "download:rapidocr": "powershell -ExecutionPolicy Bypass -File ./scripts/download_rapidocr.ps1",
+    "test:ocr": "powershell -ExecutionPolicy Bypass -File ./scripts/test_ocr.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.5.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.25",
     "lucide-react": "^0.556.0",
@@ -35,14 +39,21 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.17.0",
     "@tauri-apps/cli": "^2.0.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "globals": "^15.14.0",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.2.2",
+    "typescript-eslint": "^8.19.0",
     "vite": "^5.0.8"
   }
 }
