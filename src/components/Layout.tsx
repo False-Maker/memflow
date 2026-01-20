@@ -3,8 +3,12 @@ import Timeline from './Timeline'
 import KnowledgeGraph from './KnowledgeGraph'
 import FlowState from './FlowState'
 import QnA from './QnA'
+import GalleryView from './GalleryView'
+import ActivityHeatmap from './ActivityHeatmap'
+import ContextSidebar from './ContextSidebar'
+import ImmersiveReplay from './ImmersiveReplay'
 import { useApp } from '../contexts/AppContext'
-import { Play, Pause, Settings, Zap, History, MessageSquare, BarChart3 } from 'lucide-react'
+import { Play, Pause, Settings, Zap, History, MessageSquare, BarChart3, Calendar, X } from 'lucide-react'
 
 interface LayoutProps {
   onOpenSettings: () => void
@@ -22,6 +26,7 @@ interface LayoutProps {
 }
 
 export default function Layout({
+  // ... (props unchanged)
   onOpenSettings,
   onOpenAgentProposal,
   onOpenChatHistory,
@@ -33,21 +38,28 @@ export default function Layout({
   onSessionCreated,
   qaDraft,
 }: LayoutProps) {
-  const { state, startRecording, stopRecording } = useApp()
-  const [currentView, setCurrentView] = useState<'timeline' | 'graph' | 'stats' | 'qa'>('timeline')
-
+  const { state, dispatch, startRecording, stopRecording } = useApp()
+  const [heatmapOpen, setHeatmapOpen] = useState(false)
+  
   // 当需要切换到问答视图时自动切换
   useEffect(() => {
     if (shouldSwitchToQA) {
-      setCurrentView('qa')
+      dispatch({ type: 'SET_VIEW', payload: 'qa' })
       onViewSwitched?.()
     }
-  }, [shouldSwitchToQA, onViewSwitched])
+  }, [shouldSwitchToQA, onViewSwitched, dispatch])
+
+  const setCurrentView = (view: 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay') => {
+    dispatch({ type: 'SET_VIEW', payload: view })
+  }
+
+  const currentView = state.currentView as string
 
   return (
     <div className="flex flex-col h-screen bg-void">
       {/* 顶部工具栏 */}
       <header className="glass border-b border-glass-border px-4 py-3 flex items-center justify-between">
+        {/* ... (Logo and Recording controls unchanged) */}
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold text-neon-blue">MemFlow</h1>
           
@@ -88,6 +100,7 @@ export default function Layout({
 
         {/* 视图切换 */}
         <div className="flex items-center gap-2">
+          {/* ... (view buttons unchanged) */}
           <button
             onClick={() => setCurrentView('timeline')}
             className={`px-3 py-2 rounded-lg transition-all ${
@@ -97,6 +110,26 @@ export default function Layout({
             }`}
           >
             时间轴
+          </button>
+          <button
+            onClick={() => setCurrentView('gallery')}
+            className={`px-3 py-2 rounded-lg transition-all ${
+              currentView === 'gallery'
+                ? 'bg-neon-pink/20 text-neon-pink'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            画廊
+          </button>
+          <button
+            onClick={() => setCurrentView('replay')}
+            className={`px-3 py-2 rounded-lg transition-all ${
+              currentView === 'replay'
+                ? 'bg-neon-blue/20 text-neon-blue'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            时光机
           </button>
           <button
             onClick={() => setCurrentView('graph')}
@@ -132,6 +165,13 @@ export default function Layout({
 
         {/* 右侧操作按钮 */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setHeatmapOpen(true)}
+            className="p-2 rounded-lg text-gray-400 hover:text-neon-blue hover:bg-neon-blue/10 transition-all"
+            title="活动热力图"
+          >
+            <Calendar className="w-5 h-5" />
+          </button>
           <button
             onClick={onOpenAgentProposal}
             className="p-2 rounded-lg text-gray-400 hover:text-neon-blue hover:bg-neon-blue/10 transition-all"
@@ -171,16 +211,46 @@ export default function Layout({
       </header>
 
       {/* 主内容区 */}
-      <main className="flex-1 overflow-hidden min-h-0">
-        {currentView === 'timeline' && <Timeline />}
-        {currentView === 'graph' && <KnowledgeGraph />}
-        {currentView === 'stats' && <FlowState />}
-        {currentView === 'qa' && (
-          <QnA
-            initialSessionId={currentSessionId}
-            onSessionCreated={onSessionCreated}
-            draft={qaDraft}
-          />
+      <main className="flex-1 overflow-hidden min-h-0 relative">
+        <div className="flex h-full">
+          <div className="flex-1 overflow-hidden min-h-0">
+            {currentView === 'timeline' && <Timeline />}
+            {currentView === 'gallery' && <GalleryView />}
+            {currentView === 'replay' && <ImmersiveReplay />}
+            {currentView === 'graph' && <KnowledgeGraph />}
+            {currentView === 'stats' && <FlowState />}
+            {currentView === 'qa' && (
+              <QnA
+                initialSessionId={currentSessionId}
+                onSessionCreated={onSessionCreated}
+                draft={qaDraft}
+              />
+            )}
+          </div>
+          <ContextSidebar />
+        </div>
+        
+        {/* Heatmap Modal Overlay */}
+        {heatmapOpen && (
+          <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center pt-20">
+             <div className="bg-[#121214] border border-glass-border rounded-lg shadow-2xl w-[800px] max-w-[90vw] animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border">
+                   <h3 className="text-lg font-semibold text-neon-blue flex items-center gap-2">
+                     <Calendar className="w-5 h-5" />
+                     活动热力图
+                   </h3>
+                   <button 
+                     onClick={() => setHeatmapOpen(false)}
+                     className="text-gray-400 hover:text-white transition-colors"
+                   >
+                     <X className="w-5 h-5" />
+                   </button>
+                </div>
+                <div className="p-4"> 
+                   <ActivityHeatmap onClose={() => setHeatmapOpen(false)} />
+                </div>
+             </div>
+          </div>
         )}
       </main>
     </div>

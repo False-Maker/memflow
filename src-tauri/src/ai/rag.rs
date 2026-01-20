@@ -3,6 +3,7 @@ use crate::vector_db;
 use anyhow::Result;
 use sqlx::Row;
 use std::collections::HashMap;
+use chrono;
 
 #[derive(Debug, Clone)]
 pub struct SearchResult {
@@ -58,18 +59,19 @@ impl HybridSearch {
         }
 
         // 4. 应用时间衰减因子
+        let ids: Vec<i64> = combined.keys().cloned().collect();
+        let timestamps = self.get_timestamps(&ids).await?;
+        let now = chrono::Utc::now().timestamp();
+
         let mut final_results: Vec<SearchResult> = combined
             .into_iter()
             .map(|(id, (score, _))| {
-                // 获取活动时间戳（简化实现，避免阻塞）
-                // TODO: 异步获取活动信息
-
-                // 时间衰减：越新的活动权重越高（简化实现，暂时使用固定值）
-                let time_decay = 1.0;
+                let timestamp = timestamps.get(&id).copied().unwrap_or(0);
+                let new_score = Self::calculate_decayed_score(score, timestamp, now);
 
                 SearchResult {
                     id,
-                    score: score * time_decay,
+                    score: new_score,
                 }
             })
             .collect();
@@ -149,5 +151,85 @@ impl HybridSearch {
         }
 
         score
+    }
+
+    /// 批量获取活动时间戳
+    async fn get_timestamps(&self, ids: &[i64]) -> Result<HashMap<i64, i64>> {
+        if ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let pool = db::get_pool().await?;
+        let mut builder = sqlx::QueryBuilder::new("SELECT id, timestamp FROM activity_logs WHERE id IN (");
+        
+        let mut separated = builder.separated(", ");
+        for id in ids {
+            separated.push_bind(id);
+        }
+        separated.push_unseparated(")");
+
+        let rows = builder.build().fetch_all(&pool).await?;
+
+        let mut timestamps = HashMap::new();
+        for row in rows {
+            let id: i64 = row.get(0);
+            let timestamp: i64 = row.get(1);
+            timestamps.insert(id, timestamp);
+        }
+
+        Ok(timestamps)
+    }
+
+    /// 计算衰减后的分数
+    /// 衰减策略：每过去30天，权重降低 10% (乘以 0.9)
+    fn calculate_decayed_score(original_score: f64, timestamp: i64, now: i64) -> f64 {
+        if timestamp == 0 {
+            return original_score * 0.5; // 无时间戳的惩罚
+        }
+
+        let diff_seconds = now - timestamp;
+        if diff_seconds < 0 {
+            // 未来时间，不衰减
+            return original_score;
+        }
+
+        let days_diff = diff_seconds as f64 / 86400.0;
+        let decay_factor = 0.9f64.powf(days_diff / 30.0);
+        
+        original_score * decay_factor
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_time_decay_logic() {
+        let now = 1700000000; // 假设当前时间
+        let score = 100.0;
+
+        // 1. 测试当天 (无衰减)
+        let decayed = HybridSearch::calculate_decayed_score(score, now, now);
+        assert!((decayed - 100.0).abs() < 0.001);
+
+        // 2. 测试30天前 (应当约等于 90.0)
+        let past_30_days = now - 30 * 24 * 3600;
+        let decayed_30 = HybridSearch::calculate_decayed_score(score, past_30_days, now);
+        // 0.9^1 = 0.9
+        assert!((decayed_30 - 90.0).abs() < 0.001);
+
+        // 3. 测试60天前 (应当约等于 81.0)
+        let past_60_days = now - 60 * 24 * 3600;
+        let decayed_60 = HybridSearch::calculate_decayed_score(score, past_60_days, now);
+        // 0.9^2 = 0.81
+        assert!((decayed_60 - 81.0).abs() < 0.001);
+
+        // 4. 测试1年前 (365天)
+        let past_year = now - 365 * 24 * 3600;
+        let decayed_year = HybridSearch::calculate_decayed_score(score, past_year, now);
+        // 0.9^(365/30) = 0.9^12.16 ≈ 0.27
+        println!("Year decay: {}", decayed_year);
+        assert!(decayed_year < 30.0);
     }
 }

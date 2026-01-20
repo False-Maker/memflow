@@ -12,6 +12,7 @@ export default {
         'glass-border': 'rgba(255, 255, 255, 0.08)',
         'neon-blue': '#2DE2E6',
         'neon-purple': '#9D4EDD',
+        'neon-pink': '#F72585',
         'neon-red': '#FF3864',
         'neon-green': '#02C39A',
       },

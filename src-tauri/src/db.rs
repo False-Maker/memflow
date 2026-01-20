@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use crate::commands::{ActivityLog, Stats};
 use anyhow::Result;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
@@ -558,10 +559,143 @@ async fn ensure_sqlite_column(pool: &SqlitePool, table: &str, column: &str, ddl:
     }
 }
 
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct HeatmapData {
+    pub date: String,
+    pub count: i64,
+}
+
+pub async fn get_activity_heatmap_stats(year: Option<i32>) -> Result<Vec<HeatmapData>> {
+    let pool = get_pool().await?;
+    get_activity_heatmap_stats_impl(&pool, year).await
+}
+
+pub async fn get_activity_heatmap_stats_impl(pool: &SqlitePool, year: Option<i32>) -> Result<Vec<HeatmapData>> {
+    let year = year.unwrap_or_else(|| chrono::Utc::now().year());
+    
+    // 计算该年的起始和结束时间戳
+    let start_of_year = chrono::NaiveDate::from_ymd_opt(year, 1, 1)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .and_utc()
+        .timestamp();
+        
+    let end_of_year = chrono::NaiveDate::from_ymd_opt(year + 1, 1, 1)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .and_utc()
+        .timestamp();
+
+    let stats = sqlx::query_as::<_, HeatmapData>(
+        "SELECT date(timestamp, 'unixepoch', 'localtime') as date, count(*) as count 
+         FROM activity_logs 
+         WHERE timestamp >= ? AND timestamp < ? 
+         GROUP BY date",
+    )
+    .bind(start_of_year)
+    .bind(end_of_year)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(stats)
+}
+
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct OcrQueueItem {
+    pub id: i64,
+    pub activity_id: i64,
+    pub image_path: String,
+    pub retry_count: i64,
+}
+
+pub async fn enqueue_ocr_task(activity_id: i64) -> Result<()> {
+    let pool = get_pool().await?;
+    sqlx::query("INSERT OR IGNORE INTO ocr_queue (activity_id, status) VALUES (?, 'pending')")
+        .bind(activity_id)
+        .execute(&pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn get_pending_ocr_tasks(limit: i64) -> Result<Vec<OcrQueueItem>> {
+    let pool = get_pool().await?;
+    // Get pending tasks or processing tasks that are stuck (e.g. created > 5 mins ago)
+    let tasks = sqlx::query_as::<_, OcrQueueItem>(
+        r#"
+        SELECT q.id, q.activity_id, a.image_path, q.retry_count
+        FROM ocr_queue q
+        JOIN activity_logs a ON q.activity_id = a.id
+        WHERE q.status = 'pending'
+           OR (q.status = 'processing' AND q.updated_at < (strftime('%s', 'now') - 300))
+        ORDER BY q.created_at ASC
+        LIMIT ?
+        "#
+    )
+    .bind(limit)
+    .fetch_all(&pool)
+    .await?;
+
+    Ok(tasks)
+}
+
+pub async fn update_ocr_queue_status(id: i64, status: &str, error_message: Option<&str>) -> Result<()> {
+    let pool = get_pool().await?;
+    
+    // 如果是重试（从 processing 回到 pending），增加重试次数
+    // 如果是失败（failed），也意味这是最后一次尝试
+    // 但简单的逻辑是：调用者决定是否重试。
+    // 这里我们假设如果 status 是 pending，就是一次重试。
+    
+    let sql = if status == "pending" {
+        "UPDATE ocr_queue SET status = ?, error_message = ?, updated_at = strftime('%s', 'now'), retry_count = retry_count + 1 WHERE id = ?"
+    } else {
+        "UPDATE ocr_queue SET status = ?, error_message = ?, updated_at = strftime('%s', 'now') WHERE id = ?"
+    };
+    
+    sqlx::query(sql)
+        .bind(status)
+        .bind(error_message)
+        .bind(id)
+        .execute(&pool)
+        .await?;
+        
+    Ok(())
+}
+
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct OcrQueueStats {
+    pub pending: i64,
+    pub processing: i64,
+    pub done: i64,
+    pub failed: i64,
+}
+
+pub async fn get_ocr_queue_stats() -> Result<OcrQueueStats> {
+    let pool = get_pool().await?;
+    let stats = sqlx::query_as::<_, OcrQueueStats>(
+        r#"
+        SELECT
+            COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending,
+            COALESCE(SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END), 0) as processing,
+            COALESCE(SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END), 0) as done,
+            COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed
+        FROM ocr_queue
+        "#
+    )
+    .fetch_one(&pool)
+    .await?;
+    
+    Ok(stats)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use sqlx::sqlite::SqlitePoolOptions;
+
+
 
     #[tokio::test]
     async fn ensures_agent_executions_columns_exist() {
@@ -597,6 +731,62 @@ mod tests {
         assert!(cols.iter().any(|c| c == "finished_at"));
         assert!(cols.iter().any(|c| c == "error_message"));
         assert!(cols.iter().any(|c| c == "metadata_json"));
+    }
+
+    #[tokio::test]
+    async fn test_heatmap_aggregation_logic() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect(":memory:")
+            .await
+            .unwrap();
+
+        // Init schema
+        sqlx::query(
+            "CREATE TABLE activity_logs (
+                id INTEGER PRIMARY KEY,
+                timestamp INTEGER,
+                app_name TEXT,
+                window_title TEXT,
+                image_path TEXT,
+                phash TEXT,
+                app_path TEXT,
+                ocr_text TEXT
+            )"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Insert mock data
+        // 2024-01-01 12:00:00 UTC = 1704110400
+        // 2024-01-01 13:00:00 UTC = 1704114000
+        // 2024-01-02 12:00:00 UTC = 1704196800
+        
+        let ts1 = 1704110400; 
+        let ts2 = 1704114000;
+        let ts3 = 1704196800;
+        
+        sqlx::query("INSERT INTO activity_logs (timestamp) VALUES (?)")
+            .bind(ts1)
+            .execute(&pool)
+            .await.unwrap();
+        sqlx::query("INSERT INTO activity_logs (timestamp) VALUES (?)")
+            .bind(ts2)
+            .execute(&pool)
+            .await.unwrap();
+        sqlx::query("INSERT INTO activity_logs (timestamp) VALUES (?)")
+            .bind(ts3)
+            .execute(&pool)
+            .await.unwrap();
+
+        // Test with year 2024
+        let stats = get_activity_heatmap_stats_impl(&pool, Some(2024)).await.unwrap();
+        assert!(!stats.is_empty());
+        
+        // Sum of counts should be 3
+        let total: i64 = stats.iter().map(|s| s.count).sum();
+        assert_eq!(total, 3);
     }
 }
 
@@ -648,6 +838,259 @@ pub fn is_database_corrupted(err: &anyhow::Error) -> bool {
         || err_str.contains("code: 267")
         || err_str.contains("database disk image is malformed")
         || err_str.contains("database disk image is malformed")
+}
+
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct AppUsageStat {
+    pub app_name: String,
+    pub count: i64,
+}
+
+pub async fn get_app_usage_stats(limit: i64) -> Result<Vec<AppUsageStat>> {
+    let pool = get_pool().await?;
+    get_app_usage_stats_impl(&pool, limit).await
+}
+
+pub async fn get_app_usage_stats_impl(pool: &SqlitePool, limit: i64) -> Result<Vec<AppUsageStat>> {
+    let stats = sqlx::query_as::<_, AppUsageStat>(
+        "SELECT app_name, COUNT(*) as count 
+         FROM activity_logs 
+         GROUP BY app_name 
+         ORDER BY count DESC 
+         LIMIT ?",
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(stats)
+}
+
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct HourlyStat {
+    pub hour: String,
+    pub count: i64,
+}
+
+pub async fn get_hourly_activity_stats() -> Result<Vec<HourlyStat>> {
+    let pool = get_pool().await?;
+    get_hourly_activity_stats_impl(&pool).await
+}
+
+pub async fn get_hourly_activity_stats_impl(pool: &SqlitePool) -> Result<Vec<HourlyStat>> {
+    // 聚合每小时的活动数。SQLite 的 strftime('%H', ...) 返回 00-23 的字符串。
+    // 注意：这里使用的是 'localtime'，与 heatmap 一致。
+    let stats = sqlx::query_as::<_, HourlyStat>(
+        "SELECT strftime('%H:00', timestamp, 'unixepoch', 'localtime') as hour, COUNT(*) as count 
+         FROM activity_logs 
+         GROUP BY hour 
+         ORDER BY hour",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    // 为了前端方便，我们最好补全 0-23 小时的数据（如果某些小时没数据，SQL 不会返回）。
+    // 不过前端 BarChart 可以处理，或者我们在这里补全。
+    // 这里简单起见，让前端处理，或者返回全量。
+    // 补全逻辑比较繁琐，这里先返回 SQL 结果，前端 Recharts 的 BarChart 如果缺 key 只是不显示，
+    // 但为了“24小时分布”美观，最好补全。
+    // 让我们在 Rust 里补全。
+
+    let mut full_stats: Vec<HourlyStat> = (0..24)
+        .map(|h| HourlyStat {
+            hour: format!("{:02}:00", h),
+            count: 0,
+        })
+        .collect();
+
+    for s in stats {
+        if let Some(slot) = full_stats.iter_mut().find(|f| f.hour == s.hour) {
+            slot.count = s.count;
+        }
+    }
+
+    Ok(full_stats)
+}
+
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusMetric {
+    pub timestamp: i64,
+    pub apm: i32,
+    pub window_switch_count: i32,
+    pub focus_score: f64,
+}
+
+pub async fn insert_focus_metric(
+    timestamp: i64,
+    apm: i32,
+    window_switch_count: i32,
+    focus_score: f64,
+) -> Result<()> {
+    let pool = get_pool().await?;
+    sqlx::query(
+        "INSERT OR REPLACE INTO focus_metrics (timestamp, apm, window_switch_count, focus_score)
+         VALUES (?, ?, ?, ?)",
+    )
+    .bind(timestamp)
+    .bind(apm)
+    .bind(window_switch_count)
+    .bind(focus_score)
+    .execute(&pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn get_focus_metrics(
+    from_ts: Option<i64>,
+    to_ts: Option<i64>,
+    limit: i64,
+) -> Result<Vec<FocusMetric>> {
+    let pool = get_pool().await?;
+    get_focus_metrics_impl(&pool, from_ts, to_ts, limit).await
+}
+
+pub async fn get_focus_metrics_impl(
+    pool: &SqlitePool,
+    from_ts: Option<i64>,
+    to_ts: Option<i64>,
+    limit: i64,
+) -> Result<Vec<FocusMetric>> {
+    let mut sql = String::from(
+        "SELECT timestamp, apm, window_switch_count, focus_score FROM focus_metrics WHERE 1=1",
+    );
+    if from_ts.is_some() {
+        sql.push_str(" AND timestamp >= ?");
+    }
+    if to_ts.is_some() {
+        sql.push_str(" AND timestamp <= ?");
+    }
+    sql.push_str(" ORDER BY timestamp ASC LIMIT ?");
+
+    let mut q = sqlx::query_as::<_, FocusMetric>(&sql);
+    if let Some(v) = from_ts {
+        q = q.bind(v);
+    }
+    if let Some(v) = to_ts {
+        q = q.bind(v);
+    }
+    q = q.bind(limit);
+
+    Ok(q.fetch_all(pool).await?)
+}
+
+#[cfg(test)]
+mod stats_tests {
+    use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    #[tokio::test]
+    async fn test_app_usage_stats() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect(":memory:")
+            .await
+            .unwrap();
+
+        // Init schema
+        sqlx::query(
+            "CREATE TABLE activity_logs (
+                id INTEGER PRIMARY KEY,
+                timestamp INTEGER,
+                app_name TEXT,
+                window_title TEXT,
+                image_path TEXT,
+                phash TEXT,
+                app_path TEXT,
+                ocr_text TEXT
+            )"
+        )
+        .execute(&pool).await.unwrap();
+
+        // Insert data
+        sqlx::query("INSERT INTO activity_logs (timestamp, app_name) VALUES (?, ?)")
+            .bind(1000).bind("Chrome")
+            .execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO activity_logs (timestamp, app_name) VALUES (?, ?)")
+            .bind(2000).bind("Chrome")
+            .execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO activity_logs (timestamp, app_name) VALUES (?, ?)")
+            .bind(3000).bind("Code")
+            .execute(&pool).await.unwrap();
+
+        let stats = get_app_usage_stats_impl(&pool, 5).await.unwrap();
+        assert_eq!(stats.len(), 2);
+        assert_eq!(stats[0].app_name, "Chrome");
+        assert_eq!(stats[0].count, 2);
+        assert_eq!(stats[1].app_name, "Code");
+        assert_eq!(stats[1].count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_focus_metrics_query() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect(":memory:")
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE focus_metrics (
+                timestamp INTEGER PRIMARY KEY,
+                apm INTEGER NOT NULL,
+                window_switch_count INTEGER NOT NULL,
+                focus_score REAL NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO focus_metrics (timestamp, apm, window_switch_count, focus_score) VALUES (?, ?, ?, ?)",
+        )
+        .bind(1000_i64)
+        .bind(10_i32)
+        .bind(1_i32)
+        .bind(50.0_f64)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO focus_metrics (timestamp, apm, window_switch_count, focus_score) VALUES (?, ?, ?, ?)",
+        )
+        .bind(2000_i64)
+        .bind(20_i32)
+        .bind(2_i32)
+        .bind(60.0_f64)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO focus_metrics (timestamp, apm, window_switch_count, focus_score) VALUES (?, ?, ?, ?)",
+        )
+        .bind(3000_i64)
+        .bind(30_i32)
+        .bind(3_i32)
+        .bind(70.0_f64)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let rows = get_focus_metrics_impl(&pool, Some(1500), Some(3000), 10)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].timestamp, 2000);
+        assert_eq!(rows[1].timestamp, 3000);
+
+        let rows = get_focus_metrics_impl(&pool, None, None, 2).await.unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].timestamp, 1000);
+        assert_eq!(rows[1].timestamp, 2000);
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

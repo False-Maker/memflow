@@ -16,8 +16,9 @@ export interface ActivityLog {
 export interface AppState {
   isRecording: boolean
   activities: ActivityLog[]
-  currentView: 'timeline' | 'graph' | 'stats'
+  currentView: 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay'
   config: AppConfig
+  lastSearchParams?: SearchParams
 }
 
 export interface AppConfig {
@@ -27,6 +28,8 @@ export interface AppConfig {
   ocrRedactionEnabled?: boolean
   ocrRedactionLevel?: 'basic' | 'strict' | string
   aiEnabled: boolean
+  enableFocusAnalytics: boolean
+  enableProactiveAssistant: boolean
   retentionDays: number
   apiKey?: string
   chatModel?: string
@@ -39,6 +42,7 @@ export interface AppConfig {
   blocklistMode: string
   privacyModeEnabled: boolean
   privacyModeUntil?: number
+  intentParseTimeoutMs?: number
 }
 
 export interface SearchParams extends Record<string, unknown> {
@@ -57,8 +61,9 @@ type AppAction =
   | { type: 'ADD_ACTIVITY'; payload: ActivityLog }
   | { type: 'UPDATE_ACTIVITY_OCR'; payload: { id: number; ocrText: string } }
   | { type: 'SET_ACTIVITIES'; payload: ActivityLog[] }
-  | { type: 'SET_VIEW'; payload: 'timeline' | 'graph' | 'stats' }
+  | { type: 'SET_VIEW'; payload: 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay' }
   | { type: 'SET_CONFIG'; payload: AppConfig }
+  | { type: 'SET_SEARCH_PARAMS'; payload: SearchParams }
 
 const initialState: AppState = {
   isRecording: false,
@@ -70,6 +75,8 @@ const initialState: AppState = {
     ocrRedactionEnabled: true,
     ocrRedactionLevel: 'basic',
     aiEnabled: false,
+    enableFocusAnalytics: false,
+    enableProactiveAssistant: false,
     retentionDays: 30,
     blocklistEnabled: false,
     blocklistMode: 'blocklist',
@@ -98,6 +105,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, currentView: action.payload }
     case 'SET_CONFIG':
       return { ...state, config: action.payload }
+    case 'SET_SEARCH_PARAMS':
+      return { ...state, lastSearchParams: action.payload }
     default:
       return state
   }
@@ -175,6 +184,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       )
       dispatch({ type: 'SET_ACTIVITIES', payload: result.items })
+      dispatch({ type: 'SET_SEARCH_PARAMS', payload: params })
     } catch (error) {
       console.error('Failed to search activities:', error)
     }

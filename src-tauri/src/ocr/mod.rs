@@ -54,42 +54,35 @@ pub async fn process_image(image_path: &str, config: OcrConfig) -> Result<String
     let redaction_enabled = config.redaction_enabled;
     let redaction_level = config.redaction_level.clone();
 
-    // 在阻塞线程中执行 OCR（因为 reqwest::blocking 不能在 async 上下文中运行）
-    let text = tokio::task::spawn_blocking(move || -> Result<String> {
-        // 选择 OCR 引擎
-        let ocr_engine: Box<dyn OcrEngine> = match config.engine.as_str() {
-            "rapidocr" => {
-                tracing::info!("使用 RapidOCR 引擎");
+    // 选择 OCR 引擎
+    let ocr_engine: Box<dyn OcrEngine> = match config.engine.as_str() {
+        "rapidocr" => {
+            tracing::info!("使用 RapidOCR 引擎");
 
-                let engine = if let Some(ref resource_dir) = config.resource_dir {
-                    rapidocr::RapidOcrEngine::with_resource_dir(resource_dir.clone())?
-                } else {
-                    rapidocr::RapidOcrEngine::new()?
-                };
+            let engine = if let Some(ref resource_dir) = config.resource_dir {
+                rapidocr::RapidOcrEngine::with_resource_dir(resource_dir.clone())?
+            } else {
+                rapidocr::RapidOcrEngine::new()?
+            };
 
-                Box::new(engine)
-            }
-            _ => {
-                return Err(anyhow::anyhow!("不支持的 OCR 引擎: {}", config.engine));
-            }
-        };
+            Box::new(engine)
+        }
+        _ => {
+            return Err(anyhow::anyhow!("不支持的 OCR 引擎: {}", config.engine));
+        }
+    };
 
-        tracing::info!("使用 OCR 引擎: {}", ocr_engine.name());
+    tracing::info!("使用 OCR 引擎: {}", ocr_engine.name());
 
-        // 执行 OCR
-        let text = ocr_engine.recognize(&image_path)?;
+    // 执行 OCR (Async)
+    let text = ocr_engine.recognize(&image_path).await?;
 
-        // PII 脱敏
-        let text = if redaction_enabled {
-            mask_pii(&text, &redaction_level)
-        } else {
-            text
-        };
-
-        Ok(text)
-    })
-    .await
-    .map_err(|e| anyhow::anyhow!("OCR 任务执行失败: {}", e))??;
+    // PII 脱敏
+    let text = if redaction_enabled {
+        mask_pii(&text, &redaction_level)
+    } else {
+        text
+    };
 
     Ok(text)
 }

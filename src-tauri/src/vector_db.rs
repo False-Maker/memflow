@@ -171,7 +171,10 @@ pub async fn generate_embedding(text: &str) -> Result<Vec<f32>> {
                 return Ok(embedding);
             }
             Err(e) => {
-                tracing::warn!("OpenAI Embeddings API 调用失败，使用占位实现: {}", e);
+                tracing::warn!(
+                    "OpenAI Embeddings API 调用失败，使用占位实现: {}",
+                    crate::redact::redact_secrets(&e.to_string())
+                );
             }
         }
     } else {

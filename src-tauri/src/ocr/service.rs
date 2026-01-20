@@ -24,9 +24,12 @@ pub fn start_service(app_handle: &AppHandle) -> Result<()> {
         tracing::info!("OCR 服务已在运行");
         return Ok(());
     }
-
+    
+    tracing::info!("准备查找 OCR 服务脚本路径...");
     // 获取 Python 脚本路径
-    let script_path = get_ocr_server_path(app_handle)?;
+    let script_path = get_ocr_server_path(app_handle);
+    tracing::info!("get_ocr_server_path 结果: {:?}", script_path);
+    let script_path = script_path?;
 
     tracing::info!("启动 OCR 服务: {}", script_path.display());
 
@@ -119,25 +122,30 @@ pub fn stop_service() {
 
 /// 检查 OCR 服务是否在运行
 pub fn is_service_running() -> bool {
-    // 尝试连接服务
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(2))
-        .no_proxy()
-        .build();
+    // 使用 TcpStream 检查端口是否被监听
+    use std::net::TcpStream;
+    let addr_str = format!("127.0.0.1:{}", OCR_SERVICE_PORT);
+    tracing::info!("Checking if service is running at: {}", addr_str);
+    
+    let addr = match addr_str.parse::<std::net::SocketAddr>() {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::error!("Failed to parse address {}: {}", addr_str, e);
+            return false;
+        }
+    };
 
-    if let Ok(client) = client {
-        let urls = [
-            format!("http://127.0.0.1:{}/docs", OCR_SERVICE_PORT),
-            format!("http://127.0.0.1:{}/", OCR_SERVICE_PORT),
-        ];
-        for url in urls {
-            let response = client.get(&url).send();
-            if let Ok(response) = response {
-            return response.status().is_success();
-        }
-        }
+    /*
+    if let Ok(stream) = TcpStream::connect_timeout(&addr, Duration::from_secs(1)) {
+        // 端口已打开
+        let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+        let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+        tracing::info!("Service found running at {}", addr);
+        return true;
     }
-
+    tracing::info!("Service NOT running at {}", addr);
+    */
+    tracing::info!("Assuming service not running (debug)");
     false
 }
 
@@ -146,13 +154,19 @@ fn wait_for_service_with_child(child: &mut Child, timeout: Duration) -> Result<(
     let start = std::time::Instant::now();
     let check_interval = Duration::from_millis(500);
 
+    tracing::info!("Waiting for service to start (timeout {:?})", timeout);
     while start.elapsed() < timeout {
+        tracing::info!("Loop check...");
         if is_service_running() {
+            tracing::info!("Service is running!");
             return Ok(());
         }
+        tracing::info!("Service not running yet. Checking child status...");
         if let Ok(Some(status)) = child.try_wait() {
+             tracing::info!("Child exited with status: {}", status);
             return Err(anyhow::anyhow!("OCR 进程异常退出: {}", status));
         }
+        tracing::info!("Child running. Sleeping...");
         std::thread::sleep(check_interval);
     }
 
@@ -248,6 +262,12 @@ fn find_python() -> Result<std::path::PathBuf> {
         请安装 Python 3.8+ 并确保在系统 PATH 中"
     ))
 }
+
+
+
+
+
+
 
 
 

@@ -43,6 +43,9 @@ pub async fn init_config(app_handle: AppHandle) -> Result<()> {
             blocklist_mode: "blocklist".to_string(),
             privacy_mode_enabled: false,
             privacy_mode_until: None,
+            intent_parse_timeout_ms: Some(20_000),
+            enable_focus_analytics: false,
+            enable_proactive_assistant: false,
             ocr_redaction_enabled: true,
             ocr_redaction_level: "basic".to_string(),
         };

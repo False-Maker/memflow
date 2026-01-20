@@ -12,6 +12,11 @@ pub mod recorder;
 pub mod secure_storage;
 pub mod vector_db;
 pub mod window_info;
+pub mod focus_analytics;
+pub mod ocr_worker;
+pub mod proactive_context;
+pub mod redact;
+pub mod scheduler;
 
 use tracing_subscriber::prelude::*;
 use tauri::Manager;
@@ -45,6 +50,7 @@ pub fn run() {
             commands::get_performance_metrics,
             commands::trigger_gc,
             commands::ai_chat,
+            commands::ai_chat_stream,
             commands::test_chat_connection,
             commands::test_embedding_connection,
             commands::save_api_key,
@@ -105,14 +111,21 @@ pub fn run() {
             let ocr_handle = app_handle.clone();
             tauri::async_runtime::spawn_blocking(move || {
                 tracing::info!("Starting OCR service...");
+                /*
                 if let Err(e) = ocr::service::start_service(&ocr_handle) {
                     tracing::warn!("OCR service failed to start: {}", e);
                     eprintln!("WARNING: OCR service failed to start: {}", e);
                 }
+                */
             });
 
             // 初始化录制器（传递 AppHandle）
             recorder::init(app_handle.clone());
+            
+            // 初始化后台 OCR Worker
+            tracing::info!("Calling ocr_worker::spawn_ocr_worker...");
+            ocr_worker::spawn_ocr_worker(app_handle.clone());
+            tracing::info!("ocr_worker::spawn_ocr_worker returned.");
 
             // 初始化配置和数据库
             tauri::async_runtime::spawn(async move {
@@ -132,7 +145,7 @@ pub fn run() {
                     let (kind, hint) = db::diagnose_init_error(&e);
                     tracing::error!("Database init failure kind: {:?}. {}", kind, hint);
                     eprintln!("Database init hint: {}", hint);
-                    
+                     
                     // 记录详细的诊断信息
                     if let Ok(db_path) = db::get_db_path_for_diagnostics(&app_handle) {
                         tracing::error!(
@@ -142,6 +155,8 @@ pub fn run() {
                     }
                 } else {
                     tracing::info!("Database initialization completed successfully.");
+                    // 启动自动清理调度器 (等待数据库初始化完成后)
+                    scheduler::spawn_retention_scheduler();
                 }
             });
 

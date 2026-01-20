@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { useApp } from '../contexts/AppContext'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts'
 import { Activity, Clock, Monitor, Loader2, ShieldAlert } from 'lucide-react'
+// import ActivityHeatmap from './ActivityHeatmap' // Removed from here
 
 interface Stats {
   totalActivities: number
@@ -16,26 +16,46 @@ interface RecordingStat {
   count: number
 }
 
+interface FocusMetric {
+  timestamp: number
+  apm: number
+  windowSwitchCount: number
+  focusScore: number
+}
+
 export default function FlowState() {
-  const { state } = useApp()
   const [stats, setStats] = useState<Stats>({
     totalActivities: 0,
     totalHours: 0,
     topApp: '未知',
   })
   const [recordingStats, setRecordingStats] = useState<RecordingStat[]>([])
+  const [appUsageStats, setAppUsageStats] = useState<{name: string, value: number}[]>([])
+  const [hourlyStats, setHourlyStats] = useState<{hour: string, activities: number}[]>([])
+  const [focusMetrics, setFocusMetrics] = useState<FocusMetric[]>([])
   const [loading, setLoading] = useState(true)
 
   // 从后端获取统计数据
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [basicStats, recStats] = await Promise.all([
+        const now = Math.floor(Date.now() / 1000)
+        const from_ts = now - 24 * 3600
+        const [basicStats, recStats, appStats, hourlyStats, focusMetrics] = await Promise.all([
           invoke<Stats>('get_stats'),
-          invoke<RecordingStat[]>('get_recording_stats', { limit: 30 })
+          invoke<RecordingStat[]>('get_recording_stats', { limit: 30 }),
+          invoke<{app_name: string, count: number}[]>('get_app_usage_stats', { limit: 5 }),
+          invoke<{hour: string, count: number}[]>('get_hourly_activity_stats'),
+          invoke<FocusMetric[]>('get_focus_metrics', { from_ts, to_ts: now, limit: 24 * 60 }),
         ])
         setStats(basicStats)
         setRecordingStats(recStats)
+        
+        // Transform backend data for charts
+        setAppUsageStats(appStats.map(s => ({ name: s.app_name, value: s.count })))
+        setHourlyStats(hourlyStats.map(s => ({ hour: s.hour, activities: s.count })))
+        setFocusMetrics(focusMetrics)
+        
       } catch (e) {
         console.error('获取统计数据失败:', e)
       } finally {
@@ -61,44 +81,20 @@ export default function FlowState() {
     }))
   }, [recordingStats])
 
-  // 从活动数据计算应用使用分布（真实数据）
-  const appUsageData = useMemo(() => {
-    const appCounts: Record<string, number> = {}
-    for (const activity of state.activities) {
-      const appName = activity.appName || '未知'
-      appCounts[appName] = (appCounts[appName] || 0) + 1
-    }
-    
-    const sorted = Object.entries(appCounts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-    
-    // 取前 5 个，其余归为「其他」
-    if (sorted.length <= 5) return sorted
-    const top5 = sorted.slice(0, 5)
-    const othersValue = sorted.slice(5).reduce((sum, item) => sum + item.value, 0)
-    if (othersValue > 0) {
-      top5.push({ name: '其他', value: othersValue })
-    }
-    return top5
-  }, [state.activities])
-
-  // 从活动数据计算 24 小时活动分布（真实数据）
-  const hourlyData = useMemo(() => {
-    const hourlyCounts = Array(24).fill(0)
-    for (const activity of state.activities) {
-      // 后端时间戳是秒级
-      const ts = activity.timestamp < 1e12 ? activity.timestamp * 1000 : activity.timestamp
-      const hour = new Date(ts).getHours()
-      hourlyCounts[hour]++
-    }
-    return hourlyCounts.map((count, i) => ({
-      hour: `${i}:00`,
-      activities: count,
-    }))
-  }, [state.activities])
-
   const COLORS = ['#2DE2E6', '#9D4EDD', '#02C39A', '#FF3864', '#F77F00', '#D62828']
+
+  const focusChartData = useMemo(() => {
+    if (focusMetrics.length === 0) return []
+    const step = Math.max(1, Math.floor(focusMetrics.length / 240))
+    return focusMetrics
+      .filter((_, idx) => idx % step === 0)
+      .map((m) => ({
+        time: new Date(m.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        focusScore: m.focusScore,
+        apm: m.apm,
+        windowSwitchCount: m.windowSwitchCount,
+      }))
+  }, [focusMetrics])
 
   return (
     <div className="h-full overflow-y-auto p-6">
@@ -152,7 +148,7 @@ export default function FlowState() {
       {/* 应用使用分布 */}
       <div className="glass p-6 rounded-lg mb-6">
         <h3 className="text-md font-semibold text-white mb-4">应用使用分布</h3>
-        {appUsageData.length === 0 ? (
+        {appUsageStats.length === 0 ? (
           <div className="h-[300px] flex items-center justify-center text-gray-500">
             <div className="text-center">
               <Monitor className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -164,7 +160,7 @@ export default function FlowState() {
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={appUsageData}
+                data={appUsageStats}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
@@ -175,7 +171,7 @@ export default function FlowState() {
                 fill="#8884d8"
                 dataKey="value"
               >
-                {appUsageData.map((_, index) => (
+                {appUsageStats.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -189,7 +185,7 @@ export default function FlowState() {
       <div className="glass p-6 rounded-lg mb-6">
         <h3 className="text-md font-semibold text-white mb-4">24小时活动分布</h3>
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={hourlyData}>
+          <BarChart data={hourlyStats}>
             <CartesianGrid strokeDasharray="3 3" stroke="#333" />
             <XAxis dataKey="hour" stroke="#666" />
             <YAxis stroke="#666" />
@@ -203,6 +199,34 @@ export default function FlowState() {
             <Bar dataKey="activities" fill="#2DE2E6" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
+      <div className="glass p-6 rounded-lg mb-6">
+        <h3 className="text-md font-semibold text-white mb-4">专注度趋势（最近24小时）</h3>
+        {focusChartData.length === 0 ? (
+          <div className="h-[300px] flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <p>暂无专注度数据</p>
+              <p className="text-sm mt-1">开启“专注度分析”并录制一段时间后将显示</p>
+            </div>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={focusChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+              <XAxis dataKey="time" stroke="#666" />
+              <YAxis stroke="#666" domain={[0, 100]} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#121214',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '8px',
+                }}
+              />
+              <Line type="monotone" dataKey="focusScore" stroke="#9D4EDD" dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       {/* 跳过录制统计 */}

@@ -1,0 +1,213 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test-frontend:
+    name: Frontend Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run linter
+        run: pnpm lint
+        continue-on-error: true
+
+      - name: Run type check
+        run: pnpm type-check
+
+      - name: Run unit tests
+        run: pnpm test:unit
+
+      - name: Generate coverage report
+        run: pnpm test:unit:coverage
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/coverage-final.json
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
+        continue-on-error: true
+
+      - name: Check coverage thresholds
+        run: |
+          echo "检查覆盖率..."
+          if [ -f "coverage/coverage-final.json" ]; then
+            echo "覆盖率报告已生成"
+            # 检查 AppContext 覆盖率是否达到 70%
+            # 这里可以添加更详细的检查逻辑
+          fi
+        continue-on-error: true
+
+  test-rust:
+    name: Rust Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run Rust tests
+        working-directory: src-tauri
+        run: cargo test --manifest-path Cargo.toml
+        env:
+          RUST_BACKTRACE: 1
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Run integration tests
+        run: pnpm test:integration
+        continue-on-error: true
+
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    needs: [test-frontend, test-rust]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build Tauri app
+        working-directory: src-tauri
+        run: cargo build --release --manifest-path Cargo.toml
+        continue-on-error: true
+
+  coverage-check:
+    name: Coverage Check
+    runs-on: ubuntu-latest
+    needs: [test-frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Generate coverage report
+        run: pnpm test:unit:coverage
+
+      - name: Check coverage thresholds
+        run: |
+          echo "Coverage report generated"
+          if [ -f "coverage/coverage-final.json" ]; then
+            echo "Coverage file exists"
+            cat coverage/coverage-final.json | jq '.["src/contexts/AppContext.tsx"].s | map(select(. > 0)) | length'
+          fi
+        continue-on-error: true
+

@@ -95,10 +95,14 @@ pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
                         return Ok(answer);
                     }
                     Err(e) => {
-                        tracing::error!("Anthropic API 调用失败: {}", e);
+                        tracing::error!(
+                            "Anthropic API 调用失败: {}",
+                            crate::redact::redact_secrets(&e.to_string())
+                        );
                         return Ok(format!(
                             "⚠️ Anthropic API 调用失败\n\n错误信息：{}\n\n请检查：\n1. API Key 是否有效\n2. 网络连接是否正常\n3. 模型名称是否正确（当前: {}）",
-                            e, model_id
+                            crate::redact::redact_secrets(&e.to_string()),
+                            model_id
                         ));
                     }
                 }
@@ -112,7 +116,10 @@ pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
             }
             Err(e) => {
                 tracing::error!("获取 Anthropic API Key 失败: {}", e);
-                return Ok(format!("⚠️ 获取 API Key 失败：{}", e));
+                return Ok(format!(
+                    "⚠️ 获取 API Key 失败：{}",
+                    crate::redact::redact_secrets(&e.to_string())
+                ));
             }
         }
     } else {
@@ -131,10 +138,14 @@ pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
                         return Ok(answer);
                     }
                     Err(e) => {
-                        tracing::error!("OpenAI API 调用失败: {}", e);
+                        tracing::error!(
+                            "OpenAI API 调用失败: {}",
+                            crate::redact::redact_secrets(&e.to_string())
+                        );
                         return Ok(format!(
                             "⚠️ OpenAI API 调用失败\n\n错误信息：{}\n\n请检查：\n1. API Key 是否有效\n2. 网络连接是否正常\n3. 模型名称是否正确（当前: {}）\n4. 如果使用自定义 Base URL，请确认地址正确",
-                            e, model_id
+                            crate::redact::redact_secrets(&e.to_string()),
+                            model_id
                         ));
                     }
                 }
@@ -148,8 +159,119 @@ pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
             }
             Err(e) => {
                 tracing::error!("获取 OpenAI API Key 失败: {}", e);
-                return Ok(format!("⚠️ 获取 API Key 失败：{}", e));
+                return Ok(format!(
+                    "⚠️ 获取 API Key 失败：{}",
+                    crate::redact::redact_secrets(&e.to_string())
+                ));
             }
+        }
+    }
+}
+
+
+pub async fn chat_stream<F>(query: &str, _context: Vec<i64>, on_chunk: F) -> Result<()>
+where
+    F: Fn(String) + Send + Sync + 'static,
+{
+    // 1. 混合检索相关活动
+    let searcher = HybridSearch::new();
+    let results = searcher.search(query, 5).await?;
+
+    // 2. 构建上下文
+    let mut context_text = String::new();
+    let mut context_count = 0;
+    for result in results {
+        if let Ok(activity) = crate::db::get_activity_by_id(result.id).await {
+            let mut has_content = false;
+            if let Some(ref ocr_text) = activity.ocr_text {
+                if !ocr_text.trim().is_empty() {
+                    context_text.push_str(&format!(
+                        "应用: {} | 窗口: {}\n内容: {}\n\n",
+                        activity.app_name,
+                        activity.window_title,
+                        ocr_text.trim()
+                    ));
+                    has_content = true;
+                }
+            }
+            // 即使没有 OCR 文本，也记录应用和窗口信息
+            if !has_content {
+                context_text.push_str(&format!(
+                    "应用: {} | 窗口: {}\n\n",
+                    activity.app_name, activity.window_title
+                ));
+            }
+            context_count += 1;
+        }
+    }
+
+    tracing::info!(
+        "Retrieval for stream: {} items, {} chars",
+        context_count,
+        context_text.len()
+    );
+
+    // 3. 尝试调用 LLM API
+    let config = crate::app_config::get_config().await.unwrap_or_else(|_| {
+        let mut cfg: crate::commands::AppConfig = serde_json::from_str("{}").unwrap();
+        cfg.ocr_enabled = true;
+        cfg
+    });
+
+    let model_id = &config.chat_model;
+
+    // 根据模型名称自动判断提供商：如果以 "claude-" 开头则是 Anthropic，否则默认 OpenAI
+    let is_anthropic = model_id.starts_with("claude-");
+
+    if is_anthropic {
+        // Anthropic 暂未实现流式，使用非流式兼容
+        match crate::secure_storage::get_api_key("anthropic").await {
+            Ok(Some(api_key)) => {
+                let provider_config = ProviderConfig::new(
+                    api_key,
+                    config.anthropic_base_url.clone(),
+                    "https://api.anthropic.com",
+                );
+
+                match chat_with_anthropic(query, &context_text, model_id, &provider_config, None).await {
+                    Ok(answer) => {
+                        on_chunk(answer); // 发送完整响应
+                        Ok(())
+                    }
+                    Err(e) => {
+                        on_chunk(format!(
+                             "⚠️ Anthropic API Error: {}",
+                             crate::redact::redact_secrets(&e.to_string())
+                        ));
+                        Err(e)
+                    }
+                }
+            }
+            Ok(None) => {
+                on_chunk(format!("⚠️ Missing Anthropic API Key for {}", model_id));
+                Ok(())
+            }
+            Err(e) => Err(anyhow::anyhow!("Get API Key failed: {}", e)),
+        }
+    } else {
+        // 默认使用 OpenAI API
+        match crate::secure_storage::get_api_key("openai").await {
+            Ok(Some(api_key)) => {
+                let provider_config = ProviderConfig::new(
+                    api_key,
+                    config.openai_base_url.clone(),
+                    "https://api.openai.com/v1",
+                );
+                
+                // 使用 crate::ai::provider::chat_with_openai_stream
+                // 注意：需要 import 该函数，或者使用完整路径 calling
+                crate::ai::provider::chat_with_openai_stream(query, &context_text, model_id, &provider_config, None, on_chunk).await.map(|_| ())
+            }
+            Ok(None) => {
+                on_chunk(format!("⚠️ Missing OpenAI API Key for {}", model_id));
+                Ok(())
+            }
+            Err(e) => Err(anyhow::anyhow!("Get API Key failed: {}", e)),
         }
     }
 }
@@ -261,3 +383,265 @@ JSON 结构如下：
     Ok(result)
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FilterParams {
+    pub app_name: Option<String>,
+    pub keywords: Vec<String>,
+    pub date_range: Option<String>, // "today", "yesterday", "this_week", "last_week"
+    pub has_ocr: Option<bool>,
+}
+
+fn strip_json_code_fence(input: &str) -> &str {
+    let s = input.trim();
+    if s.starts_with("```json") {
+        return s
+            .trim_start_matches("```json")
+            .trim_end_matches("```")
+            .trim();
+    }
+    if s.starts_with("```") {
+        return s
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+    }
+    s
+}
+
+fn parse_filter_params_from_llm_response(response: &str) -> Result<FilterParams> {
+    let json_str = strip_json_code_fence(response);
+    let params: FilterParams = serde_json::from_str(json_str)
+        .map_err(|e| anyhow::anyhow!("JSON 解析失败: {} - 原文: {}", e, json_str))?;
+    Ok(params)
+}
+
+fn fallback_filter_params(query: &str) -> FilterParams {
+    let q = query.trim();
+    let lower = q.to_lowercase();
+
+    let mut date_range = None;
+    if lower.contains("yesterday") {
+        date_range = Some("yesterday".to_string());
+    } else if lower.contains("today") {
+        date_range = Some("today".to_string());
+    } else if lower.contains("last week") || lower.contains("last_week") {
+        date_range = Some("last_week".to_string());
+    } else if lower.contains("this week") || lower.contains("this_week") {
+        date_range = Some("this_week".to_string());
+    } else if lower.contains("this month") || lower.contains("this_month") {
+        date_range = Some("this_month".to_string());
+    }
+
+    let has_ocr = if lower.contains("ocr")
+        || lower.contains("content")
+        || lower.contains("text")
+        || lower.contains("内容")
+        || lower.contains("文本")
+    {
+        Some(true)
+    } else {
+        None
+    };
+
+    let keywords = q
+        .split_whitespace()
+        .filter_map(|w| {
+            let trimmed = w.trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '-');
+            if trimmed.is_empty() {
+                return None;
+            }
+            Some(trimmed.to_string())
+        })
+        .collect::<Vec<_>>();
+
+    FilterParams {
+        app_name: None,
+        keywords,
+        date_range,
+        has_ocr,
+    }
+}
+
+pub async fn parse_query_intent(query: &str) -> Result<FilterParams> {
+    let config = crate::app_config::get_config().await.unwrap_or_else(|_| {
+        let mut cfg: crate::commands::AppConfig = serde_json::from_str("{}").unwrap();
+        cfg.ocr_enabled = true;
+        cfg
+    });
+
+    if !config.ai_enabled {
+        return Ok(fallback_filter_params(query));
+    }
+
+    let model_id = &config.chat_model;
+    let is_anthropic = model_id.starts_with("claude-");
+    let timeout_ms = config.intent_parse_timeout_ms.unwrap_or(20_000);
+    let llm_timeout = std::time::Duration::from_millis(timeout_ms);
+
+    let system_prompt = r#"You are a smart query parser for a personal activity logger. 
+Your goal is to extract search filters from the user's natural language query.
+
+Return a JSON object with the following fields:
+- "app_name": (string | null) Filter by application name (e.g., "Chrome", "VS Code"). If the user mentions "pdf", map it to a likely pdf reader or just "pdf".
+- "keywords": (string[]) List of keywords to search in OCR text or window titles.
+- "date_range": (string | null) One of: "today", "yesterday", "this_week", "last_week", "this_month", or null if not specified.
+- "has_ocr": (boolean | null) true if user wants to search within text/content, null otherwise.
+
+Example 1:
+Input: "Show me what I did on Chrome yesterday"
+Output: { "app_name": "Chrome", "keywords": [], "date_range": "yesterday", "has_ocr": null }
+
+Example 2:
+Input: "Find PDF files about rust from last week"
+Output: { "app_name": "pdf", "keywords": ["rust"], "date_range": "last_week", "has_ocr": true }
+
+Example 3:
+Input: "coding session"
+Output: { "app_name": "Code", "keywords": ["coding"], "date_range": null, "has_ocr": null }
+
+Return ONLY the JSON object.
+"#;
+
+    let response = if is_anthropic {
+        match crate::secure_storage::get_api_key("anthropic").await {
+            Ok(Some(api_key)) => {
+                let provider_config = ProviderConfig::new(
+                    api_key,
+                    config.anthropic_base_url.clone(),
+                    "https://api.anthropic.com",
+                );
+
+                match tokio::time::timeout(
+                    llm_timeout,
+                    chat_with_anthropic(query, "", model_id, &provider_config, Some(system_prompt)),
+                )
+                .await
+                {
+                    Ok(Ok(v)) => Some(v),
+                    Ok(Err(e)) => {
+                        tracing::warn!(
+                            "parse_query_intent: Anthropic 调用失败，使用回退解析: {}",
+                            crate::redact::redact_secrets(&e.to_string())
+                        );
+                        None
+                    }
+                    Err(_) => {
+                        tracing::warn!(
+                            "parse_query_intent: Anthropic 调用超时({}ms) model={} base_url={}，使用回退解析",
+                            timeout_ms,
+                            model_id,
+                            provider_config.base_url
+                        );
+                        None
+                    }
+                }
+            }
+            Ok(None) => {
+                tracing::debug!("parse_query_intent: 未配置 Anthropic API Key，使用回退解析");
+                None
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "parse_query_intent: 获取 API Key 失败，使用回退解析: {}",
+                    crate::redact::redact_secrets(&e.to_string())
+                );
+                None
+            }
+        }
+    } else {
+        match crate::secure_storage::get_api_key("openai").await {
+            Ok(Some(api_key)) => {
+                let provider_config = ProviderConfig::new(
+                    api_key,
+                    config.openai_base_url.clone(),
+                    "https://api.openai.com/v1",
+                );
+
+                match tokio::time::timeout(
+                    llm_timeout,
+                    chat_with_openai(query, "", model_id, &provider_config, Some(system_prompt)),
+                )
+                .await
+                {
+                    Ok(Ok(v)) => Some(v),
+                    Ok(Err(e)) => {
+                        tracing::warn!(
+                            "parse_query_intent: OpenAI 调用失败，使用回退解析: {}",
+                            crate::redact::redact_secrets(&e.to_string())
+                        );
+                        None
+                    }
+                    Err(_) => {
+                        tracing::warn!(
+                            "parse_query_intent: OpenAI 调用超时({}ms) model={} base_url={}，使用回退解析",
+                            timeout_ms,
+                            model_id,
+                            provider_config.base_url
+                        );
+                        None
+                    }
+                }
+            }
+            Ok(None) => {
+                tracing::debug!("parse_query_intent: 未配置 OpenAI API Key，使用回退解析");
+                None
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "parse_query_intent: 获取 API Key 失败，使用回退解析: {}",
+                    crate::redact::redact_secrets(&e.to_string())
+                );
+                None
+            }
+        }
+    };
+
+    let Some(response) = response else {
+        return Ok(fallback_filter_params(query));
+    };
+
+    match parse_filter_params_from_llm_response(&response) {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            tracing::warn!(
+                "parse_query_intent: 解析失败，使用回退解析: {}",
+                crate::redact::redact_secrets(&e.to_string())
+            );
+            Ok(fallback_filter_params(query))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strips_code_fences_for_filter_params() {
+        let input = r#"```json
+{"app_name":"Chrome","keywords":[],"date_range":"yesterday","has_ocr":null}
+```"#;
+        let parsed = parse_filter_params_from_llm_response(input).unwrap();
+        assert_eq!(parsed.app_name.as_deref(), Some("Chrome"));
+        assert_eq!(parsed.date_range.as_deref(), Some("yesterday"));
+        assert!(parsed.keywords.is_empty());
+    }
+
+    #[test]
+    fn parses_plain_json_for_filter_params() {
+        let input = r#"{"app_name":null,"keywords":["rust"],"date_range":"last_week","has_ocr":true}"#;
+        let parsed = parse_filter_params_from_llm_response(input).unwrap();
+        assert_eq!(parsed.app_name, None);
+        assert_eq!(parsed.keywords, vec!["rust".to_string()]);
+        assert_eq!(parsed.date_range.as_deref(), Some("last_week"));
+        assert_eq!(parsed.has_ocr, Some(true));
+    }
+
+    #[test]
+    fn fallback_never_panics_and_returns_keywords() {
+        let parsed = fallback_filter_params("Find pdf last week rust ocr");
+        assert!(!parsed.keywords.is_empty());
+        assert_eq!(parsed.date_range.as_deref(), Some("last_week"));
+        assert_eq!(parsed.has_ocr, Some(true));
+    }
+}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { Send, Loader2, Sparkles, RotateCcw } from 'lucide-react'
 import MessageRating from './MessageRating'
 import type { LocalChatMessage, ChatMessage } from '../types/chat'
@@ -143,7 +144,7 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
     setLoading(true)
     setInput('')
 
-    // 添加用户消息到界面
+    // 1. 添加用户消息到界面
     const userMsg: LocalChatMessage = {
       localId: makeLocalId(),
       role: 'user',
@@ -152,46 +153,89 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
     }
     setMessages((prev) => [...prev, userMsg])
 
+    let currentSessionId = sessionId
+    // 助手消息占位符ID
+    const botLocalId = makeLocalId()
+
     try {
-      // 如果没有会话，创建新会话
-      let currentSessionId = sessionId
+      // 2. 如果没有会话，创建新会话
       if (!currentSessionId) {
         currentSessionId = await createSession(q)
       }
 
-      // 保存用户消息
+      // 3. 保存用户消息到数据库
       const userMsgId = await saveMessage(currentSessionId, 'user', q)
       setMessages((prev) =>
         prev.map((m) => (m.localId === userMsg.localId ? { ...m, dbId: userMsgId } : m))
       )
 
-      // 调用 AI 生成回答
-      const answer = await invoke<string>('ai_chat', { query: q })
-
-      // 保存助手消息
-      const botMsgId = await saveMessage(currentSessionId, 'assistant', answer)
-
-      // 添加助手消息到界面
-      const botMsg: LocalChatMessage = {
-        localId: makeLocalId(),
+      // 4. 准备助手消息占位符
+      // 注意：流式输出时，我们先显示一个空的或者正在思考的消息，然后随着 chunk 到来不断更新它
+      const initialBotMsg: LocalChatMessage = {
+        localId: botLocalId,
         role: 'assistant',
-        content: answer,
+        content: '', // 初始为空
         ts: Date.now(),
-        dbId: botMsgId,
       }
-      setMessages((prev) => [...prev, botMsg])
+      setMessages((prev) => [...prev, initialBotMsg])
+
+      // 5. 设置流式监听
+      let accumulatedResponse = ''
+      
+      // 监听 chunk 事件
+      const unlisten = await listen<string>('ai-chat-chunk', (event) => {
+        const chunk = event.payload
+        accumulatedResponse += chunk
+        
+        // 实时更新 UI
+        setMessages((prev) => 
+          prev.map((m) => 
+            m.localId === botLocalId 
+              ? { ...m, content: accumulatedResponse } 
+              : m
+          )
+        )
+      })
+
+      try {
+        // 6. 调用流式命令
+        // 这个命令会等待直到流结束才返回
+        await invoke('ai_chat_stream', { query: q })
+      } finally {
+        // 确保取消监听
+        unlisten()
+      }
+
+      // 7. 流式结束，保存完整消息到数据库
+      if (accumulatedResponse.trim()) {
+        const botMsgId = await saveMessage(currentSessionId, 'assistant', accumulatedResponse)
+        
+        // 更新消息的 dbId
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.localId === botLocalId
+              ? { ...m, dbId: botMsgId } // 更新 dbId，允许显示评价按钮等
+              : m
+          )
+        )
+      } else {
+        // 极端情况：没有任何响应
+        setError("AI 未返回任何内容")
+      }
+
     } catch (e) {
       const msg = typeof e === 'string' ? e : JSON.stringify(e)
+      console.error('AI Chat Error:', e)
       setError(msg)
-      setMessages((prev) => [
-        ...prev,
-        {
-          localId: makeLocalId(),
-          role: 'assistant',
-          content: `请求失败：${msg}`,
-          ts: Date.now(),
-        },
-      ])
+      
+      // 如果出错，更新当前正在生成的消息显示错误信息
+      setMessages((prev) => 
+        prev.map((m) => 
+          m.localId === botLocalId 
+            ? { ...m, content: m.content + `\n\n[出错了: ${msg}]` } 
+            : m
+        )
+      )
     } finally {
       setLoading(false)
     }
@@ -233,7 +277,7 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
 
       <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3">
         {isLoadingHistory ? (
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-8" role="status" aria-label="加载中">
             <Loader2 className="w-6 h-6 animate-spin text-neon-blue" />
           </div>
         ) : (

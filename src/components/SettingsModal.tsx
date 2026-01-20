@@ -1,5 +1,5 @@
 import { useState, useEffect, useReducer, useCallback } from 'react'
-import { X, Check, AlertCircle, Loader2, ChevronDown, Shield, Settings, Bot, Plus, Trash2, Eye, FolderOpen } from 'lucide-react'
+import { X, Check, AlertCircle, Loader2, ChevronDown, Shield, Settings, Bot, Plus, Trash2, Eye, FolderOpen, Gauge, Sparkles } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../contexts/AppContext'
@@ -438,6 +438,18 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     try {
       const backendService = service === 'custom' ? 'openai' : service
       await invoke('save_api_key', { service: backendService, key })
+
+      if (!state.config.aiEnabled) {
+        try {
+          const configWithAiEnabled = { ...state.config, aiEnabled: true }
+          await invoke('update_config', { config: configWithAiEnabled })
+          dispatch({ type: 'SET_CONFIG', payload: configWithAiEnabled })
+          setDraftConfig((prev) => ({ ...prev, aiEnabled: true }))
+        } catch (e) {
+          console.error('启用 AI 失败:', e)
+        }
+      }
+
       setApiKeyStatus((prev) => ({
         ...prev,
         [service]: { saved: true, loading: false, message: 'API Key 保存成功！' },
@@ -561,9 +573,20 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
       }
     } catch (e) {
       const msg = typeof e === 'string' ? e : JSON.stringify(e)
+      const safeMsg = msg
+        .replace(/Incorrect API key provided:\s*([^\s".\r\n]+)/g, 'Incorrect API key provided: [REDACTED]')
+        .replace(/Bearer\s+([^\s"'\r\n]+)/g, 'Bearer [REDACTED]')
+        .replace(/sk-[A-Za-z0-9_-]+/g, 'sk-[REDACTED]')
+      const isInvalidKey =
+        /invalid_api_key/i.test(safeMsg) ||
+        /401\s+Unauthorized/i.test(safeMsg) ||
+        /Incorrect API key provided/i.test(safeMsg)
+      const displayMsg = isInvalidKey
+        ? 'API Key 无效或已失效，请在设置中重新保存后再测试'
+        : safeMsg
       setTestState((prev) => ({
         ...prev,
-        [type]: { testing: false, result: 'error', message: `连接失败：${msg}` },
+        [type]: { testing: false, result: 'error', message: `连接失败：${displayMsg}` },
       }))
     }
 
@@ -749,6 +772,37 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           <div className="flex-1 overflow-y-auto p-6">
             {activeTab === 'general' ? (
               <div className="space-y-8">
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-neon-blue/20 text-neon-blue flex items-center justify-center">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">AI 能力</h3>
+                        <p className="text-sm text-gray-400">开启后允许使用大模型功能（智能搜索、上下文助理等）</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setDraftConfig((prev) => ({
+                          ...prev,
+                          aiEnabled: !prev.aiEnabled,
+                        }))
+                      }
+                      className={`w-12 h-6 rounded-full transition-colors relative ${
+                        draftConfig.aiEnabled ? 'bg-neon-blue' : 'bg-gray-600'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                          draftConfig.aiEnabled ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </section>
+
                 {/* ==================== Chat Model Section ==================== */}
                 <section className="space-y-4">
                   <div className="flex items-center gap-2">
@@ -1257,6 +1311,74 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                       </div>
                     </div>
                   )}
+                </section>
+
+                <div className="h-px bg-glass-border/50" />
+
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-neon-blue/20 text-neon-blue flex items-center justify-center">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">主动式 AI 助理</h3>
+                        <p className="text-sm text-gray-400">根据当前窗口推送相关记忆与建议</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setDraftConfig((prev) => ({
+                          ...prev,
+                          enableProactiveAssistant: !prev.enableProactiveAssistant,
+                        }))
+                      }
+                      className={`w-12 h-6 rounded-full transition-colors relative ${
+                        draftConfig.enableProactiveAssistant ? 'bg-neon-blue' : 'bg-gray-600'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                          draftConfig.enableProactiveAssistant ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </section>
+
+                <div className="h-px bg-glass-border/50" />
+
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                        <Gauge className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">专注度分析</h3>
+                        <p className="text-sm text-gray-400">
+                          仅记录输入强度与应用切换频率，不记录具体按键内容
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() =>
+                        setDraftConfig((prev) => ({
+                          ...prev,
+                          enableFocusAnalytics: !prev.enableFocusAnalytics,
+                        }))
+                      }
+                      className={`w-12 h-6 rounded-full transition-colors relative ${
+                        draftConfig.enableFocusAnalytics ? 'bg-purple-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                          draftConfig.enableFocusAnalytics ? 'translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </section>
 
                 <div className="h-px bg-glass-border/50" />

@@ -1,6 +1,7 @@
 use crate::ocr::ocr_engine::OcrEngine;
 use anyhow::{Context, Result};
-use reqwest::blocking::multipart;
+use async_trait::async_trait;
+use reqwest::multipart;
 use std::path::Path;
 
 /// RapidOCR API 服务地址
@@ -8,7 +9,7 @@ const DEFAULT_API_URL: &str = "http://127.0.0.1:9003/ocr";
 
 pub struct RapidOcrEngine {
     api_url: String,
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
 }
 
 impl RapidOcrEngine {
@@ -17,7 +18,7 @@ impl RapidOcrEngine {
         let api_url =
             std::env::var("RAPIDOCR_API_URL").unwrap_or_else(|_| DEFAULT_API_URL.to_string());
 
-        let client = reqwest::blocking::Client::builder()
+        let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .no_proxy()
             .build()
@@ -39,26 +40,31 @@ impl RapidOcrEngine {
     }
 
     /// 检查 OCR 服务是否可用
-    pub fn is_service_available(&self) -> bool {
+    pub async fn is_service_available(&self) -> bool {
         // 尝试请求服务的 docs 页面
         let docs_url = self.api_url.replace("/ocr", "/docs");
         self.client
             .get(&docs_url)
             .timeout(std::time::Duration::from_secs(2))
             .send()
+            .await
             .is_ok()
     }
 }
 
+#[async_trait]
 impl OcrEngine for RapidOcrEngine {
-    fn recognize(&self, image_path: &str) -> Result<String> {
+    async fn recognize(&self, image_path: &str) -> Result<String> {
         // 验证图片文件存在
         let image_path = Path::new(image_path);
         if !image_path.exists() {
             return Err(anyhow::anyhow!("图片文件不存在: {}", image_path.display()));
         }
 
-        // 读取图片文件
+        // 读取图片文件 (async read would be better, but file is local, spawn_blocking or std::fs::read is okay for small files)
+        // However, better to use tokio::fs if we are fully async, or just std::fs::read since it's fast on SSD usually.
+        // For correctness in async context, let's use tokio::fs or just keep std::fs::read but wrap if needed.
+        // reqwest multipart expects a stream or bytes.
         let image_bytes = std::fs::read(image_path)
             .with_context(|| format!("读取图片失败: {}", image_path.display()))?;
 
@@ -66,11 +72,13 @@ impl OcrEngine for RapidOcrEngine {
         let filename = image_path
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or("image.png");
+            .unwrap_or("image.png")
+            .to_string();
 
         // 构建 multipart 表单
+        // reqwest async multipart
         let part = multipart::Part::bytes(image_bytes)
-            .file_name(filename.to_string())
+            .file_name(filename)
             .mime_str("image/png")?;
 
         let form = multipart::Form::new().part("image", part);
@@ -83,18 +91,19 @@ impl OcrEngine for RapidOcrEngine {
             .post(&self.api_url)
             .multipart(form)
             .send()
+            .await
             .with_context(|| format!("OCR 请求失败，服务地址: {}", self.api_url))?;
 
         if !response.status().is_success() {
             return Err(anyhow::anyhow!(
                 "OCR 服务返回错误: {} - {}",
                 response.status(),
-                response.text().unwrap_or_default()
+                response.text().await.unwrap_or_default()
             ));
         }
 
         // 解析响应
-        let result: serde_json::Value = response.json().context("解析 OCR 响应 JSON 失败")?;
+        let result: serde_json::Value = response.json().await.context("解析 OCR 响应 JSON 失败")?;
 
         // 提取文本
         // rapidocr_api 返回格式: {"0": {"rec_txt": "文本", "dt_boxes": [...], "score": "0.9"}, ...}

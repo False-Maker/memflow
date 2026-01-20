@@ -61,6 +61,18 @@ pub struct AppConfig {
     pub privacy_mode_enabled: bool,
     #[serde(default, alias = "privacy_mode_until")]
     pub privacy_mode_until: Option<i64>,
+    #[serde(default, alias = "intent_parse_timeout_ms")]
+    pub intent_parse_timeout_ms: Option<u64>,
+    #[serde(
+        default = "default_enable_focus_analytics",
+        alias = "enable_focus_analytics"
+    )]
+    pub enable_focus_analytics: bool,
+    #[serde(
+        default = "default_enable_proactive_assistant",
+        alias = "enable_proactive_assistant"
+    )]
+    pub enable_proactive_assistant: bool,
     #[serde(
         default = "default_ocr_redaction_enabled",
         alias = "ocr_redaction_enabled"
@@ -106,6 +118,14 @@ fn default_embedding_use_shared_key() -> bool {
     true
 }
 
+fn default_enable_focus_analytics() -> bool {
+    false
+}
+
+fn default_enable_proactive_assistant() -> bool {
+    false
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Stats {
@@ -138,9 +158,18 @@ pub async fn stop_recording() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_activities(limit: Option<i64>) -> Result<Vec<ActivityLog>, String> {
-    db::get_activities(limit.unwrap_or(100))
-        .await
-        .map_err(|e| e.to_string())
+    let limit = limit.unwrap_or(100);
+    tracing::info!("Frontend requested get_activities, limit: {}", limit);
+    match db::get_activities(limit).await {
+        Ok(activities) => {
+            tracing::info!("Returning {} activities", activities.len());
+            Ok(activities)
+        }
+        Err(e) => {
+            tracing::error!("Failed to get activities: {}", e);
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
@@ -255,6 +284,31 @@ pub async fn get_image_path(
 }
 
 #[tauri::command]
+pub async fn get_image_paths(
+    filenames: Vec<String>,
+    app_handle: tauri::AppHandle,
+) -> Result<Vec<String>, String> {
+    let app_data = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("无法获取应用数据目录: {}", e))?;
+
+    let screenshots_dir = app_data.join("screenshots");
+
+    let mut results = Vec::with_capacity(filenames.len());
+    for filename in filenames {
+        let file_path = screenshots_dir.join(&filename);
+        let s = file_path
+            .to_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| "路径转换失败".to_string())?;
+        results.push(s);
+    }
+
+    Ok(results)
+}
+
+#[tauri::command]
 pub async fn get_graph_data() -> Result<graph::GraphData, String> {
     graph::load_graph().await.map_err(|e| e.to_string())
 }
@@ -296,6 +350,91 @@ pub async fn ai_chat(query: String) -> Result<String, String> {
     ai::chat(&query, vec![]).await.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub async fn ai_chat_stream(query: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Emitter;
+    
+    let handle = app_handle.clone();
+    let res = ai::chat_stream(&query, vec![], move |chunk| {
+        if let Err(e) = handle.emit("ai-chat-chunk", chunk) {
+            tracing::error!("Failed to emit ai-chat-chunk: {}", e);
+        }
+    })
+    .await;
+
+    if let Err(e) = res {
+        let _ = app_handle.emit("ai-chat-chunk", format!("Error: {}", e)); // Emit error as chunk or separate event? Plan says "handle error" implicitly. Sticking to simple error reporting.
+        return Err(e.to_string());
+    }
+
+    let _ = app_handle.emit("ai-chat-done", ());
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn parse_query_intent(query: String) -> Result<ai::FilterParams, String> {
+    ai::parse_query_intent(&query).await.map_err(|e| e.to_string())
+}
+
+
+#[tauri::command]
+pub async fn get_activity_heatmap_stats(year: Option<i32>) -> Result<Vec<db::HeatmapData>, String> {
+    db::get_activity_heatmap_stats(year)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_app_usage_stats(limit: Option<i64>) -> Result<Vec<db::AppUsageStat>, String> {
+    db::get_app_usage_stats(limit.unwrap_or(5))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_hourly_activity_stats() -> Result<Vec<db::HourlyStat>, String> {
+    db::get_hourly_activity_stats()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_focus_metrics(
+    from_ts: Option<i64>,
+    to_ts: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Vec<db::FocusMetric>, String> {
+    db::get_focus_metrics(from_ts, to_ts, limit.unwrap_or(24 * 60))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn open_external_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::AppConfig;
@@ -314,6 +453,7 @@ mod tests {
         assert_eq!(cfg.embedding_use_shared_key, true);
         assert_eq!(cfg.openai_base_url, None);
         assert_eq!(cfg.anthropic_base_url, None);
+        assert_eq!(cfg.enable_focus_analytics, false);
     }
 
     #[test]
@@ -330,7 +470,8 @@ mod tests {
           "embedding_base_url": "http://localhost:11434/v1",
           "embedding_use_shared_key": false,
           "openai_base_url": "https://api.openai.com/v1",
-          "anthropic_base_url": "https://api.anthropic.com"
+          "anthropic_base_url": "https://api.anthropic.com",
+          "enable_focus_analytics": true
         }
         "#;
         let cfg: AppConfig = serde_json::from_str(json).unwrap();
@@ -354,6 +495,7 @@ mod tests {
             cfg.anthropic_base_url.as_deref(),
             Some("https://api.anthropic.com")
         );
+        assert_eq!(cfg.enable_focus_analytics, true);
     }
 }
 
@@ -385,7 +527,7 @@ pub async fn test_chat_connection(params: TestChatConnectionParams) -> Result<()
         };
         crate::secure_storage::get_api_key(service)
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(|e| crate::redact::redact_secrets(&e.to_string()))?
             .ok_or_else(|| format!("未配置 {} API Key", service))?
     };
 
@@ -395,14 +537,14 @@ pub async fn test_chat_connection(params: TestChatConnectionParams) -> Result<()
         chat_with_anthropic("ping", "", &model, &cfg, None)
             .await
             .map(|_| ())
-            .map_err(|e| e.to_string())
+            .map_err(|e| crate::redact::redact_secrets(&e.to_string()))
     } else {
         let cfg = ProviderConfig::new(api_key, params.base_url, "https://api.openai.com/v1");
         // 真实调用一次 chat/completions
         chat_with_openai("ping", "", &model, &cfg, None)
             .await
             .map(|_| ())
-            .map_err(|e| e.to_string())
+            .map_err(|e| crate::redact::redact_secrets(&e.to_string()))
     }
 }
 
@@ -434,7 +576,7 @@ pub async fn test_embedding_connection(
         };
         crate::secure_storage::get_api_key(service)
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(|e| crate::redact::redact_secrets(&e.to_string()))?
             .ok_or_else(|| format!("未配置 {} API Key", service))?
     };
 
@@ -443,7 +585,7 @@ pub async fn test_embedding_connection(
     // 真实调用一次 embeddings
     let vec = embedding_with_openai("ping", &model, &cfg)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| crate::redact::redact_secrets(&e.to_string()))?;
 
     if vec.is_empty() {
         return Err("Embeddings API 返回空向量".to_string());
@@ -461,21 +603,22 @@ pub async fn test_embedding_connection(
 pub async fn save_api_key(service: String, key: String) -> Result<(), String> {
     crate::secure_storage::save_api_key(&service, &key)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| crate::redact::redact_secrets(&e.to_string()))
 }
 
 #[tauri::command]
 pub async fn get_api_key(service: String) -> Result<Option<String>, String> {
     crate::secure_storage::get_api_key(&service)
         .await
-        .map_err(|e| e.to_string())
+        .map(|v| v.map(|_| "configured".to_string()))
+        .map_err(|e| crate::redact::redact_secrets(&e.to_string()))
 }
 
 #[tauri::command]
 pub async fn delete_api_key(service: String) -> Result<(), String> {
     crate::secure_storage::delete_api_key(&service)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| crate::redact::redact_secrets(&e.to_string()))
 }
 
 // ============================================

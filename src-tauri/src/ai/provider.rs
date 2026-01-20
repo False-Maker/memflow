@@ -225,18 +225,19 @@ pub async fn chat_with_openai(
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_default();
+        let error_text = crate::redact::redact_secrets(&response.text().await.unwrap_or_default());
         return Err(anyhow::anyhow!(
             "OpenAI Chat API 返回错误: {} - {}",
             status,
-            error_text
+            safe_truncate(&error_text, 800)
         ));
     }
 
     let response_text = response.text().await.context("读取响应体失败")?;
+    let response_preview = crate::redact::redact_secrets(&response_text);
     tracing::debug!(
         "OpenAI API 原始响应: {}",
-        safe_truncate(&response_text, 1000)
+        safe_truncate(&response_preview, 1000)
     );
 
     let result: ChatResponse =
@@ -308,6 +309,157 @@ pub async fn chat_with_openai(
     }
 
     Ok(content)
+}
+
+/// 使用 OpenAI API 进行流式对话
+pub async fn chat_with_openai_stream<F>(
+    query: &str,
+    context: &str,
+    model: &str,
+    config: &ProviderConfig,
+    custom_system_prompt: Option<&str>,
+    on_chunk: F,
+) -> Result<String>
+where
+    F: Fn(String) + Send + Sync + 'static,
+{
+    #[derive(Serialize)]
+    struct ChatRequestStream {
+        model: String,
+        messages: Vec<Message>,
+        max_tokens: u32,
+        temperature: f32,
+        stream: bool,
+    }
+
+    #[derive(Serialize)]
+    struct Message {
+        role: String,
+        content: String,
+    }
+
+    #[derive(Deserialize, Debug)]
+    struct StreamResponse {
+        choices: Vec<StreamChoice>,
+    }
+
+    #[derive(Deserialize, Debug)]
+    struct StreamChoice {
+        delta: StreamDelta,
+        finish_reason: Option<String>,
+    }
+
+    #[derive(Deserialize, Debug)]
+    struct StreamDelta {
+        content: Option<String>,
+    }
+
+    // 构建系统提示词
+    let default_system_prompt = if context.is_empty() {
+        "你是桌面活动记录分析助手。直接回答用户的问题，简洁明了。如果用户只是测试，简单确认即可。"
+            .to_string()
+    } else {
+        "你是桌面活动记录分析助手。基于用户提供的桌面活动记录（OCR文本、应用名称等）回答问题。只回答事实，不要解释如何设计系统。".to_string()
+    };
+    
+    let system_prompt = custom_system_prompt
+        .map(|s| s.to_string())
+        .unwrap_or(default_system_prompt);
+
+    // 构建用户消息
+    let user_content = if context.is_empty() {
+        query.to_string()
+    } else {
+        format!("{}\n\n--- 相关桌面活动记录 ---\n{}", query, context)
+    };
+
+    let request = ChatRequestStream {
+        model: model.to_string(),
+        messages: vec![
+            Message {
+                role: "system".to_string(),
+                content: system_prompt,
+            },
+            Message {
+                role: "user".to_string(),
+                content: user_content,
+            },
+        ],
+        max_tokens: 2000,
+        temperature: 0.7,
+        stream: true,
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("创建 HTTP 客户端失败")?;
+
+    let base = config.base_url.trim_end_matches('/');
+    let url = if base.ends_with("/chat/completions") {
+        base.to_string()
+    } else {
+        format!("{}/chat/completions", base)
+    };
+
+    let mut response = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", config.api_key))
+        .header("Content-Type", "application/json")
+        .json(&request)
+        .send()
+        .await
+        .context("OpenAI Chat API 请求失败")?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = crate::redact::redact_secrets(&response.text().await.unwrap_or_default());
+        return Err(anyhow::anyhow!(
+            "OpenAI Chat API 返回错误: {} - {}",
+            status,
+            safe_truncate(&error_text, 800)
+        ));
+    }
+
+    let mut full_response = String::new();
+    let mut buffer = String::new();
+
+    while let Some(chunk) = response.chunk().await? {
+        let chunk_str = String::from_utf8_lossy(&chunk);
+        buffer.push_str(&chunk_str);
+
+        while let Some(line_end) = buffer.find('\n') {
+            let line = buffer[..line_end].trim();
+            let line_content = line.to_string(); // copy for processing
+            buffer.drain(..line_end + 1); // remove line + newline
+
+            if line_content.is_empty() {
+                continue;
+            }
+
+            if line_content.starts_with("data: ") {
+                let json_str = &line_content[6..];
+                if json_str == "[DONE]" {
+                    break;
+                }
+
+                if let Ok(stream_resp) = serde_json::from_str::<StreamResponse>(json_str) {
+                    if let Some(choice) = stream_resp.choices.first() {
+                        if let Some(content) = &choice.delta.content {
+                            if !content.is_empty() {
+                                on_chunk(content.clone());
+                                full_response.push_str(content);
+                            }
+                        }
+                    }
+                } else {
+                    tracing::warn!("解析流式响应行失败: {}", safe_truncate(json_str, 100));
+                }
+            }
+        }
+    }
+
+    Ok(full_response)
 }
 
 /// 使用 Anthropic API 进行对话
@@ -399,11 +551,11 @@ pub async fn chat_with_anthropic(
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_default();
+        let error_text = crate::redact::redact_secrets(&response.text().await.unwrap_or_default());
         return Err(anyhow::anyhow!(
             "Anthropic Chat API 返回错误: {} - {}",
             status,
-            error_text
+            safe_truncate(&error_text, 800)
         ));
     }
 
@@ -469,11 +621,11 @@ pub async fn embedding_with_openai(
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_default();
+        let error_text = crate::redact::redact_secrets(&response.text().await.unwrap_or_default());
         return Err(anyhow::anyhow!(
             "OpenAI Embeddings API 返回错误: {} - {}",
             status,
-            error_text
+            safe_truncate(&error_text, 800)
         ));
     }
 
