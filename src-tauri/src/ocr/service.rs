@@ -135,7 +135,6 @@ pub fn is_service_running() -> bool {
         }
     };
 
-    /*
     if let Ok(stream) = TcpStream::connect_timeout(&addr, Duration::from_secs(1)) {
         // 端口已打开
         let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
@@ -144,8 +143,6 @@ pub fn is_service_running() -> bool {
         return true;
     }
     tracing::info!("Service NOT running at {}", addr);
-    */
-    tracing::info!("Assuming service not running (debug)");
     false
 }
 
@@ -262,6 +259,7 @@ fn find_python() -> Result<std::path::PathBuf> {
         请安装 Python 3.8+ 并确保在系统 PATH 中"
     ))
 }
+
 
 
 

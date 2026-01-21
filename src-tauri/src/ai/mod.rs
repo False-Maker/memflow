@@ -5,6 +5,7 @@ use crate::ai::provider::{chat_with_anthropic, chat_with_openai, ProviderConfig}
 use crate::ai::rag::HybridSearch;
 use crate::vector_db;
 use anyhow::Result;
+use chrono::{Duration, Local, TimeZone};
 
 pub async fn analyze_activity(activity_id: i64) -> Result<String> {
     // 1. 获取活动信息
@@ -28,43 +29,190 @@ pub async fn analyze_activity(activity_id: i64) -> Result<String> {
     ))
 }
 
-pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
-    // 1. 混合检索相关活动
-    let searcher = HybridSearch::new();
-    let results = searcher.search(query, 5).await?;
+fn calculate_timestamps(range: &str) -> (Option<i64>, Option<i64>) {
+    let now = Local::now();
+    let today_start = now
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .and_local_timezone(Local)
+        .unwrap()
+        .timestamp();
+    let today_end = now
+        .date_naive()
+        .and_hms_opt(23, 59, 59)
+        .unwrap()
+        .and_local_timezone(Local)
+        .unwrap()
+        .timestamp();
 
-    // 2. 构建上下文
-    let mut context_text = String::new();
-    let mut context_count = 0;
-    for result in results {
-        if let Ok(activity) = crate::db::get_activity_by_id(result.id).await {
-            let mut has_content = false;
-            if let Some(ref ocr_text) = activity.ocr_text {
-                if !ocr_text.trim().is_empty() {
-                    context_text.push_str(&format!(
-                        "应用: {} | 窗口: {}\n内容: {}\n\n",
-                        activity.app_name,
-                        activity.window_title,
-                        ocr_text.trim()
-                    ));
-                    has_content = true;
-                }
-            }
-            // 即使没有 OCR 文本，也记录应用和窗口信息
-            if !has_content {
-                context_text.push_str(&format!(
-                    "应用: {} | 窗口: {}\n\n",
-                    activity.app_name, activity.window_title
-                ));
-            }
-            context_count += 1;
+    match range {
+        "today" | "今天" => (Some(today_start), Some(today_end)),
+        "yesterday" | "昨天" => {
+            let y = now - Duration::days(1);
+            let start = y
+                .date_naive()
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_local_timezone(Local)
+                .unwrap()
+                .timestamp();
+            let end = y
+                .date_naive()
+                .and_hms_opt(23, 59, 59)
+                .unwrap()
+                .and_local_timezone(Local)
+                .unwrap()
+                .timestamp();
+            (Some(start), Some(end))
         }
+        "this_week" | "本周" => {
+            let start = (now - Duration::days(7)).timestamp();
+            (Some(start), Some(today_end))
+        }
+        "last_week" | "上周" => {
+            let start = (now - Duration::days(14)).timestamp();
+            let end = (now - Duration::days(7)).timestamp();
+            (Some(start), Some(end))
+        }
+        "this_month" | "本月" => {
+            let start = (now - Duration::days(30)).timestamp();
+            (Some(start), Some(today_end))
+        }
+        _ => (None, None),
+    }
+}
+
+async fn build_context_from_range(
+    query: &str,
+    intent: &FilterParams,
+) -> Result<(String, usize)> {
+    let (from_ts, to_ts) = if let Some(range) = &intent.date_range {
+        calculate_timestamps(range)
+    } else {
+        (None, None)
+    };
+
+    // 如果指定了时间范围，但没有解析出时间戳（即未知的时间描述），则回退到 HybridSearch
+    if intent.date_range.is_some() && from_ts.is_none() {
+        return Ok((String::new(), 0));
     }
 
+    let search_query = if !intent.keywords.is_empty() {
+        Some(intent.keywords.join(" OR "))
+    } else {
+        None
+    };
+
+    let (activities, _) = crate::db::search_activities(
+        search_query,
+        intent.app_name.clone(),
+        from_ts,
+        to_ts,
+        intent.has_ocr,
+        Some(50), // 增加上下文数量以支持总结
+        None,
+        Some("time".to_string()),
+    )
+    .await?;
+
+    let mut context_text = String::new();
+    let mut context_count = 0;
+
+    for activity in activities {
+        let time_str = Local.timestamp_opt(activity.timestamp, 0)
+            .unwrap()
+            .format("%H:%M:%S")
+            .to_string();
+
+        if let Some(ref ocr_text) = activity.ocr_text {
+            if !ocr_text.trim().is_empty() {
+                context_text.push_str(&format!(
+                    "[{}] 应用: {} | 窗口: {}\n内容: {}\n\n",
+                    time_str,
+                    activity.app_name,
+                    activity.window_title,
+                    ocr_text.trim()
+                ));
+            } else {
+                 context_text.push_str(&format!(
+                    "[{}] 应用: {} | 窗口: {}\n\n",
+                    time_str,
+                    activity.app_name,
+                    activity.window_title
+                ));
+            }
+        } else {
+             context_text.push_str(&format!(
+                "[{}] 应用: {} | 窗口: {}\n\n",
+                time_str,
+                activity.app_name,
+                activity.window_title
+            ));
+        }
+        context_count += 1;
+    }
+
+    Ok((context_text, context_count))
+}
+
+pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
+    // 1. 解析意图
+    let intent = parse_query_intent(query).await.unwrap_or_else(|_| fallback_filter_params(query));
+    
+    // 2. 获取上下文
+    let (mut context_text, mut context_count) = if intent.date_range.is_some() {
+        match build_context_from_range(query, &intent).await {
+             Ok((text, count)) if count > 0 => (text, count),
+             _ => (String::new(), 0),
+        }
+    } else {
+        (String::new(), 0)
+    };
+
+    // 如果还没有上下文（意图解析未返回时间范围，或者时间范围搜索为空），则使用混合检索
+    if context_count == 0 {
+         let searcher = HybridSearch::new();
+         let results = searcher.search(query, 5).await?;
+        
+         for result in results {
+            if let Ok(activity) = crate::db::get_activity_by_id(result.id).await {
+                // 简单起见，这里复用 formatting 逻辑
+                let time_str = Local.timestamp_opt(activity.timestamp, 0)
+                    .unwrap()
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string();
+
+                let mut has_content = false;
+                if let Some(ref ocr_text) = activity.ocr_text {
+                    if !ocr_text.trim().is_empty() {
+                        context_text.push_str(&format!(
+                            "[{}] 应用: {} | 窗口: {}\n内容: {}\n\n",
+                            time_str,
+                            activity.app_name,
+                            activity.window_title,
+                            ocr_text.trim()
+                        ));
+                        has_content = true;
+                    }
+                }
+                if !has_content {
+                    context_text.push_str(&format!(
+                        "[{}] 应用: {} | 窗口: {}\n\n",
+                        time_str,
+                        activity.app_name, activity.window_title
+                    ));
+                }
+                context_count += 1;
+            }
+        }
+    }
+    
     tracing::info!(
-        "检索到 {} 条相关活动记录，构建了 {} 字符的上下文",
+        "Chat Context: {} items, {} chars (Intent: DateRange={:?})",
         context_count,
-        context_text.len()
+        context_text.len(),
+        intent.date_range
     );
 
     // 3. 尝试调用 LLM API
@@ -173,42 +321,62 @@ pub async fn chat_stream<F>(query: &str, _context: Vec<i64>, on_chunk: F) -> Res
 where
     F: Fn(String) + Send + Sync + 'static,
 {
-    // 1. 混合检索相关活动
-    let searcher = HybridSearch::new();
-    let results = searcher.search(query, 5).await?;
+    // 1. 解析意图 (Time Awareness)
+    let intent = parse_query_intent(query).await.unwrap_or_else(|_| fallback_filter_params(query));
+    
+    // 2. 获取上下文
+    let (mut context_text, mut context_count) = if intent.date_range.is_some() {
+        match build_context_from_range(query, &intent).await {
+             Ok((text, count)) if count > 0 => (text, count),
+             _ => (String::new(), 0),
+        }
+    } else {
+        (String::new(), 0)
+    };
 
-    // 2. 构建上下文
-    let mut context_text = String::new();
-    let mut context_count = 0;
-    for result in results {
-        if let Ok(activity) = crate::db::get_activity_by_id(result.id).await {
-            let mut has_content = false;
-            if let Some(ref ocr_text) = activity.ocr_text {
-                if !ocr_text.trim().is_empty() {
-                    context_text.push_str(&format!(
-                        "应用: {} | 窗口: {}\n内容: {}\n\n",
-                        activity.app_name,
-                        activity.window_title,
-                        ocr_text.trim()
-                    ));
-                    has_content = true;
+    // 如果还没有上下文，回退到 HybridSearch
+    if context_count == 0 {
+         let searcher = HybridSearch::new();
+         let results = searcher.search(query, 5).await?;
+        
+         for result in results {
+            if let Ok(activity) = crate::db::get_activity_by_id(result.id).await {
+                // 简单起见，这里复用 formatting 逻辑
+                let time_str = Local.timestamp_opt(activity.timestamp, 0)
+                    .unwrap()
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string();
+
+                let mut has_content = false;
+                if let Some(ref ocr_text) = activity.ocr_text {
+                    if !ocr_text.trim().is_empty() {
+                        context_text.push_str(&format!(
+                            "[{}] 应用: {} | 窗口: {}\n内容: {}\n\n",
+                            time_str,
+                            activity.app_name,
+                            activity.window_title,
+                            ocr_text.trim()
+                        ));
+                        has_content = true;
+                    }
                 }
+                if !has_content {
+                    context_text.push_str(&format!(
+                        "[{}] 应用: {} | 窗口: {}\n\n",
+                        time_str,
+                        activity.app_name, activity.window_title
+                    ));
+                }
+                context_count += 1;
             }
-            // 即使没有 OCR 文本，也记录应用和窗口信息
-            if !has_content {
-                context_text.push_str(&format!(
-                    "应用: {} | 窗口: {}\n\n",
-                    activity.app_name, activity.window_title
-                ));
-            }
-            context_count += 1;
         }
     }
 
     tracing::info!(
-        "Retrieval for stream: {} items, {} chars",
+        "Chat Stream Context: {} items, {} chars (Intent: DateRange={:?})",
         context_count,
-        context_text.len()
+        context_text.len(),
+        intent.date_range
     );
 
     // 3. 尝试调用 LLM API
@@ -224,7 +392,7 @@ where
     let is_anthropic = model_id.starts_with("claude-");
 
     if is_anthropic {
-        // Anthropic 暂未实现流式，使用非流式兼容
+        // 使用支持流式的 Anthropic 调用
         match crate::secure_storage::get_api_key("anthropic").await {
             Ok(Some(api_key)) => {
                 let provider_config = ProviderConfig::new(
@@ -233,19 +401,15 @@ where
                     "https://api.anthropic.com",
                 );
 
-                match chat_with_anthropic(query, &context_text, model_id, &provider_config, None).await {
-                    Ok(answer) => {
-                        on_chunk(answer); // 发送完整响应
-                        Ok(())
-                    }
-                    Err(e) => {
-                        on_chunk(format!(
-                             "⚠️ Anthropic API Error: {}",
-                             crate::redact::redact_secrets(&e.to_string())
-                        ));
-                        Err(e)
-                    }
-                }
+                // 调用新实现的流式函数
+                crate::ai::provider::chat_with_anthropic_stream(
+                    query, 
+                    &context_text, 
+                    model_id, 
+                    &provider_config, 
+                    None, 
+                    on_chunk
+                ).await.map(|_| ())
             }
             Ok(None) => {
                 on_chunk(format!("⚠️ Missing Anthropic API Key for {}", model_id));
@@ -263,8 +427,6 @@ where
                     "https://api.openai.com/v1",
                 );
                 
-                // 使用 crate::ai::provider::chat_with_openai_stream
-                // 注意：需要 import 该函数，或者使用完整路径 calling
                 crate::ai::provider::chat_with_openai_stream(query, &context_text, model_id, &provider_config, None, on_chunk).await.map(|_| ())
             }
             Ok(None) => {
@@ -301,6 +463,14 @@ pub async fn analyze_for_proposals(context_text: &str) -> Result<AiAnalysisResul
 
     let model_id = &config.chat_model;
     let is_anthropic = model_id.starts_with("claude-");
+    
+    // 诊断日志：显示实际读取到的配置
+    tracing::info!(
+        "analyze_for_proposals: model={}, openai_base_url={:?}, is_anthropic={}",
+        model_id,
+        config.openai_base_url,
+        is_anthropic
+    );
     
     let system_prompt = r#"你是专业的个人工作助理。请分析用户的电脑活动日志，识别出用户今天的主要任务/上下文（Task Contexts）。
 请返回 JSON 格式，不要包含 Markdown 代码块标记。

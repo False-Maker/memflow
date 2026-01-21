@@ -119,7 +119,7 @@ fn default_embedding_use_shared_key() -> bool {
 }
 
 fn default_enable_focus_analytics() -> bool {
-    false
+    true
 }
 
 fn default_enable_proactive_assistant() -> bool {

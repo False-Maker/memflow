@@ -44,7 +44,7 @@ pub async fn init_config(app_handle: AppHandle) -> Result<()> {
             privacy_mode_enabled: false,
             privacy_mode_until: None,
             intent_parse_timeout_ms: Some(20_000),
-            enable_focus_analytics: false,
+            enable_focus_analytics: true,
             enable_proactive_assistant: false,
             ocr_redaction_enabled: true,
             ocr_redaction_level: "basic".to_string(),
@@ -58,7 +58,18 @@ pub async fn init_config(app_handle: AppHandle) -> Result<()> {
 
 async fn save_config_internal(config_path: &PathBuf, config: &AppConfig) -> Result<()> {
     let content = serde_json::to_string_pretty(config)?;
-    std::fs::write(config_path, content)?;
+    
+    // 原子性写入：先写临时文件，再重命名
+    let temp_path = config_path.with_extension("json.tmp");
+    std::fs::write(&temp_path, &content)?;
+    
+    // Windows 上 rename 不会覆盖已存在文件，需要先删除
+    if config_path.exists() {
+        std::fs::remove_file(config_path)?;
+    }
+    std::fs::rename(&temp_path, config_path)?;
+    
+    tracing::debug!("配置已保存到: {:?}", config_path);
     Ok(())
 }
 

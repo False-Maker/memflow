@@ -26,7 +26,7 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
 
   const listRef = useRef<HTMLDivElement | null>(null)
   const canSend = useMemo(() => input.trim().length > 0 && !loading, [input, loading])
-  
+
   // 用于跟踪是否已初始化，避免重复加载
   const isInitializedRef = useRef(false)
   const lastLoadedSessionRef = useRef<number | null>(null)
@@ -58,7 +58,7 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
     if (isInitializedRef.current && !initialSessionId) {
       return
     }
-    
+
     // 如果是从历史继续对话（外部传入的 sessionId）
     // 注意：创建新会话时父组件可能会把 sessionId 回传进来，如果这里直接 reload 会覆盖刚刚追加的本地消息气泡
     if (initialSessionId && initialSessionId !== lastLoadedSessionRef.current) {
@@ -181,17 +181,17 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
 
       // 5. 设置流式监听
       let accumulatedResponse = ''
-      
+
       // 监听 chunk 事件
       const unlisten = await listen<string>('ai-chat-chunk', (event) => {
         const chunk = event.payload
         accumulatedResponse += chunk
-        
+
         // 实时更新 UI
-        setMessages((prev) => 
-          prev.map((m) => 
-            m.localId === botLocalId 
-              ? { ...m, content: accumulatedResponse } 
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.localId === botLocalId
+              ? { ...m, content: accumulatedResponse }
               : m
           )
         )
@@ -209,7 +209,7 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
       // 7. 流式结束，保存完整消息到数据库
       if (accumulatedResponse.trim()) {
         const botMsgId = await saveMessage(currentSessionId, 'assistant', accumulatedResponse)
-        
+
         // 更新消息的 dbId
         setMessages((prev) =>
           prev.map((m) =>
@@ -227,12 +227,12 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
       const msg = typeof e === 'string' ? e : JSON.stringify(e)
       console.error('AI Chat Error:', e)
       setError(msg)
-      
+
       // 如果出错，更新当前正在生成的消息显示错误信息
-      setMessages((prev) => 
-        prev.map((m) => 
-          m.localId === botLocalId 
-            ? { ...m, content: m.content + `\n\n[出错了: ${msg}]` } 
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.localId === botLocalId
+            ? { ...m, content: m.content + `\n\n[出错了: ${msg}]` }
             : m
         )
       )
@@ -281,20 +281,19 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
             <Loader2 className="w-6 h-6 animate-spin text-neon-blue" />
           </div>
         ) : (
-          messages.map((m) => (
+          messages.map((m, index) => (
             <div
               key={m.localId}
               className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 border ${
-                  m.role === 'user'
-                    ? 'bg-neon-blue/10 border-neon-blue/20 text-white'
-                    : 'bg-surface/50 border-glass-border/50 text-gray-100'
-                }`}
+                className={`max-w-[85%] rounded-2xl px-4 py-3 border ${m.role === 'user'
+                  ? 'bg-neon-blue/10 border-neon-blue/20 text-white'
+                  : 'bg-surface/50 border-glass-border/50 text-gray-100'
+                  }`}
               >
                 <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                  {m.content || (m.role === 'assistant' ? '（回复内容为空）' : '（消息内容为空）')}
+                  {m.content || (loading && index === messages.length - 1 && m.role === 'assistant' ? '' : (m.role === 'assistant' ? '（回复内容为空）' : '（消息内容为空）'))}
                 </pre>
                 {/* 助手消息显示评价按钮 */}
                 {m.role === 'assistant' && m.dbId && (

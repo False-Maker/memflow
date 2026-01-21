@@ -30,8 +30,8 @@ export default function FlowState() {
     topApp: '未知',
   })
   const [recordingStats, setRecordingStats] = useState<RecordingStat[]>([])
-  const [appUsageStats, setAppUsageStats] = useState<{name: string, value: number}[]>([])
-  const [hourlyStats, setHourlyStats] = useState<{hour: string, activities: number}[]>([])
+  const [appUsageStats, setAppUsageStats] = useState<{ name: string, value: number }[]>([])
+  const [hourlyStats, setHourlyStats] = useState<{ hour: string, activities: number }[]>([])
   const [focusMetrics, setFocusMetrics] = useState<FocusMetric[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -41,21 +41,47 @@ export default function FlowState() {
       try {
         const now = Math.floor(Date.now() / 1000)
         const from_ts = now - 24 * 3600
-        const [basicStats, recStats, appStats, hourlyStats, focusMetrics] = await Promise.all([
+        const results = await Promise.allSettled([
           invoke<Stats>('get_stats'),
           invoke<RecordingStat[]>('get_recording_stats', { limit: 30 }),
-          invoke<{app_name: string, count: number}[]>('get_app_usage_stats', { limit: 5 }),
-          invoke<{hour: string, count: number}[]>('get_hourly_activity_stats'),
+          invoke<{ app_name: string, count: number }[]>('get_app_usage_stats', { limit: 5 }),
+          invoke<{ hour: string, count: number }[]>('get_hourly_activity_stats'),
           invoke<FocusMetric[]>('get_focus_metrics', { from_ts, to_ts: now, limit: 24 * 60 }),
-        ])
-        setStats(basicStats)
-        setRecordingStats(recStats)
-        
-        // Transform backend data for charts
-        setAppUsageStats(appStats.map(s => ({ name: s.app_name, value: s.count })))
-        setHourlyStats(hourlyStats.map(s => ({ hour: s.hour, activities: s.count })))
-        setFocusMetrics(focusMetrics)
-        
+        ]);
+
+        const [basicRes, recRes, appRes, hourlyRes, focusRes] = results;
+
+        if (basicRes.status === 'fulfilled') {
+          console.log('Basic Stats loaded:', basicRes.value);
+          setStats(basicRes.value);
+        } else {
+          console.error('Failed to load basic stats:', basicRes.reason);
+        }
+
+        if (recRes.status === 'fulfilled') {
+          setRecordingStats(recRes.value);
+        } else {
+          console.error('Failed to load recording stats:', recRes.reason);
+        }
+
+        if (appRes.status === 'fulfilled') {
+          setAppUsageStats(appRes.value.map(s => ({ name: s.app_name, value: s.count })));
+        } else {
+          console.error('Failed to load app usage stats:', appRes.reason);
+        }
+
+        if (hourlyRes.status === 'fulfilled') {
+          setHourlyStats(hourlyRes.value.map(s => ({ hour: s.hour, activities: s.count })));
+        } else {
+          console.error('Failed to load hourly stats:', hourlyRes.reason);
+        }
+
+        if (focusRes.status === 'fulfilled') {
+          setFocusMetrics(focusRes.value);
+        } else {
+          console.error('Failed to load focus metrics:', focusRes.reason);
+        }
+
       } catch (e) {
         console.error('获取统计数据失败:', e)
       } finally {
@@ -72,11 +98,11 @@ export default function FlowState() {
     recordingStats.forEach(stat => {
       reasonCounts[stat.reason] = (reasonCounts[stat.reason] || 0) + stat.count
     })
-    
+
     return Object.entries(reasonCounts).map(([name, value]) => ({
-      name: name === 'privacy_mode' ? '隐私模式' : 
-            name === 'blocklist' ? '黑名单' : 
-            name === 'allowlist_miss' ? '非白名单' : name,
+      name: name === 'privacy_mode' ? '隐私模式' :
+        name === 'blocklist' ? '黑名单' :
+          name === 'allowlist_miss' ? '非白名单' : name,
       value
     }))
   }, [recordingStats])
@@ -125,8 +151,8 @@ export default function FlowState() {
             <Loader2 className="w-6 h-6 animate-spin text-neon-purple" />
           ) : (
             <div className="text-3xl font-bold text-white">
-              {stats.totalHours < 1 
-                ? `${Math.round(stats.totalHours * 60)}m` 
+              {stats.totalHours < 1
+                ? `${Math.round(stats.totalHours * 60)}m`
                 : `${stats.totalHours.toFixed(1)}h`}
             </div>
           )}
@@ -233,42 +259,42 @@ export default function FlowState() {
       {skippedStatsData.length > 0 && (
         <div className="glass p-6 rounded-lg">
           <div className="flex items-center gap-2 mb-4">
-             <ShieldAlert className="w-5 h-5 text-orange-500" />
-             <h3 className="text-md font-semibold text-white">隐私保护拦截统计</h3>
+            <ShieldAlert className="w-5 h-5 text-orange-500" />
+            <h3 className="text-md font-semibold text-white">隐私保护拦截统计</h3>
           </div>
           <div className="grid grid-cols-2 gap-4">
-             <div className="h-[250px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={skippedStatsData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {skippedStatsData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-             </div>
-             <div className="flex flex-col justify-center space-y-4">
-                {skippedStatsData.map((item, index) => (
-                  <div key={item.name} className="flex items-center justify-between p-3 bg-surface/30 rounded-lg border border-glass-border">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                      <span className="text-gray-300">{item.name}</span>
-                    </div>
-                    <span className="text-xl font-bold text-white">{item.value}</span>
+            <div className="h-[250px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={skippedStatsData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {skippedStatsData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-col justify-center space-y-4">
+              {skippedStatsData.map((item, index) => (
+                <div key={item.name} className="flex items-center justify-between p-3 bg-surface/30 rounded-lg border border-glass-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                    <span className="text-gray-300">{item.name}</span>
                   </div>
-                ))}
-             </div>
+                  <span className="text-xl font-bold text-white">{item.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

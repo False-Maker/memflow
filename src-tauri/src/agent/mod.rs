@@ -169,9 +169,8 @@ pub async fn propose_automation(params: AgentProposeParams) -> Result<Vec<Automa
     let rule_based_summary =
         build_activity_summary(time_window_hours, rows.len() as i64, &top_apps, &top_titles);
 
-    // 尝试使用 LLM 生成摘要
-    // 构建上下文（取最近 100 条，避免 Token 过多）
-    let context_items: Vec<String> = rows.iter().take(100).map(|row| {
+    // 构建上下文（取最近 40 条，减少 Token 消耗并提高响应速度）
+    let context_items: Vec<String> = rows.iter().take(40).map(|row| {
         let timestamp: i64 = row.get(1);
         let app_name: String = row.get(2);
         let window_title: String = row.get(3);
@@ -197,7 +196,7 @@ pub async fn propose_automation(params: AgentProposeParams) -> Result<Vec<Automa
     let mut proposals: Vec<AutomationProposalDto> = Vec::new();
 
     tracing::info!("agent propose: start ai analysis (context chars={})", context_text.len());
-    match tokio::time::timeout(Duration::from_secs(25), crate::ai::analyze_for_proposals(&context_text)).await {
+    match tokio::time::timeout(Duration::from_secs(60), crate::ai::analyze_for_proposals(&context_text)).await {
         Ok(Ok(analysis)) => {
             tracing::info!("agent propose: ai analysis ok, tasks={}", analysis.tasks.len());
             
@@ -237,7 +236,18 @@ pub async fn propose_automation(params: AgentProposeParams) -> Result<Vec<Automa
                 // 4. 恢复步骤：打开应用 (限制数量)
                 for path in task.related_apps.iter().take(3) {
                     let path = path.trim();
-                    if !path.is_empty() && (path.contains(":/") || path.contains(":\\") || path.starts_with("/")) {
+                    let path_lower = path.to_lowercase();
+                    // 排除 memflow 自身和系统应用
+                    let is_memflow = path_lower.contains("memflow");
+                    let is_system = path_lower.contains("explorer.exe") 
+                        || path_lower.contains("cmd.exe")
+                        || path_lower.contains("powershell.exe");
+                    
+                    if !path.is_empty() 
+                        && !is_memflow 
+                        && !is_system
+                        && (path.contains(":/") || path.contains(":\\") || path.starts_with("/")) 
+                    {
                          steps.push(AutomationStep::OpenApp { path: path.to_string() });
                     }
                 }

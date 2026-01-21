@@ -198,12 +198,12 @@ pub async fn chat_with_openai(
                 content: user_content,
             },
         ],
-        max_tokens: 2000,
+        max_tokens: 4096,
         temperature: 0.7,
     };
 
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(300))
         .build()
         .context("创建 HTTP 客户端失败")?;
     // 智能处理 URL：如果已经包含 /chat/completions 则不再追加
@@ -214,6 +214,9 @@ pub async fn chat_with_openai(
         format!("{}/chat/completions", base)
     };
 
+    tracing::info!("chat_with_openai: 发送请求到 {}", url);
+    let start = std::time::Instant::now();
+    
     let response = client
         .post(&url)
         .header("Authorization", format!("Bearer {}", config.api_key))
@@ -222,6 +225,8 @@ pub async fn chat_with_openai(
         .send()
         .await
         .context("OpenAI Chat API 请求失败")?;
+    
+    tracing::info!("chat_with_openai: 收到响应, 耗时 {}ms, status={}", start.elapsed().as_millis(), response.status());
 
     if !response.status().is_success() {
         let status = response.status();
@@ -391,7 +396,7 @@ where
     };
 
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(300))
         .build()
         .context("创建 HTTP 客户端失败")?;
 
@@ -526,7 +531,7 @@ pub async fn chat_with_anthropic(
     };
 
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(300))
         .build()
         .context("创建 HTTP 客户端失败")?;
     // 智能处理 URL：如果已经包含 /v1/messages 则不再追加
@@ -571,6 +576,153 @@ pub async fn chat_with_anthropic(
     Ok(result.content[0].text.clone())
 }
 
+/// 使用 Anthropic API 进行流式对话
+pub async fn chat_with_anthropic_stream<F>(
+    query: &str,
+    context: &str,
+    model: &str,
+    config: &ProviderConfig,
+    custom_system_prompt: Option<&str>,
+    on_chunk: F,
+) -> Result<String>
+where
+    F: Fn(String) + Send + Sync + 'static,
+{
+    #[derive(Serialize)]
+    struct ChatRequestStream {
+        model: String,
+        max_tokens: u32,
+        messages: Vec<Message>,
+        system: Option<String>,
+        stream: bool,
+    }
+
+    #[derive(Serialize)]
+    struct Message {
+        role: String,
+        content: String,
+    }
+
+    // 这些结构体用于解析 SSE 事件数据
+    #[derive(Deserialize, Debug)]
+    struct StreamEvent {
+        #[serde(rename = "type")]
+        event_type: String,
+        delta: Option<StreamDelta>,
+    }
+
+    #[derive(Deserialize, Debug)]
+    struct StreamDelta {
+        #[serde(rename = "type")]
+        delta_type: String,
+        text: Option<String>,
+    }
+
+    // 构建系统提示词
+    let default_system_prompt = if context.is_empty() {
+        "你是桌面活动记录分析助手。直接回答用户的问题，简洁明了。如果用户只是测试，简单确认即可。"
+            .to_string()
+    } else {
+        "你是桌面活动记录分析助手。基于用户提供的桌面活动记录（OCR文本、应用名称等）回答问题。只回答事实，不要解释如何设计系统。".to_string()
+    };
+    
+    let system_prompt = custom_system_prompt
+        .map(|s| s.to_string())
+        .unwrap_or(default_system_prompt);
+
+    // 构建用户消息
+    let user_content = if context.is_empty() {
+        query.to_string()
+    } else {
+        format!("{}\n\n--- 相关桌面活动记录 ---\n{}", query, context)
+    };
+
+    let request = ChatRequestStream {
+        model: model.to_string(),
+        max_tokens: 4096,
+        messages: vec![Message {
+            role: "user".to_string(),
+            content: user_content,
+        }],
+        system: Some(system_prompt),
+        stream: true,
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(300))
+        .build()
+        .context("创建 HTTP 客户端失败")?;
+
+    // 智能处理 URL
+    let base = config.base_url.trim_end_matches('/');
+    let url = if base.ends_with("/v1/messages") || base.ends_with("/messages") {
+        base.to_string()
+    } else if base.ends_with("/v1") {
+        format!("{}/messages", base)
+    } else {
+        format!("{}/v1/messages", base)
+    };
+
+    let mut response = client
+        .post(&url)
+        .header("x-api-key", &config.api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("Content-Type", "application/json")
+        .json(&request)
+        .send()
+        .await
+        .context("Anthropic Chat API 请求失败")?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = crate::redact::redact_secrets(&response.text().await.unwrap_or_default());
+        return Err(anyhow::anyhow!(
+            "Anthropic Chat API 返回错误: {} - {}",
+            status,
+            safe_truncate(&error_text, 800)
+        ));
+    }
+
+    let mut full_response = String::new();
+    let mut buffer = String::new();
+
+    while let Some(chunk) = response.chunk().await? {
+        let chunk_str = String::from_utf8_lossy(&chunk);
+        buffer.push_str(&chunk_str);
+
+        while let Some(line_end) = buffer.find('\n') {
+            let line = buffer[..line_end].trim();
+            let line_content = line.to_string(); 
+            buffer.drain(..line_end + 1);
+
+            if line_content.is_empty() {
+                continue;
+            }
+
+            if line_content.starts_with("data: ") {
+                let json_str = &line_content[6..];
+                // Anthropic SSE 结束事件通常是 event: message_stop，data 里可能不包含 update
+                // 这里我们解析每个 event data
+                
+                if let Ok(event) = serde_json::from_str::<StreamEvent>(json_str) {
+                     if event.event_type == "content_block_delta" {
+                         if let Some(delta) = event.delta {
+                             if delta.delta_type == "text_delta" {
+                                 if let Some(text) = delta.text {
+                                     on_chunk(text.clone());
+                                     full_response.push_str(&text);
+                                 }
+                             }
+                         }
+                     }
+                }
+            }
+        }
+    }
+
+    Ok(full_response)
+}
+
 /// 使用 OpenAI API 生成嵌入向量
 pub async fn embedding_with_openai(
     text: &str,
@@ -594,7 +746,7 @@ pub async fn embedding_with_openai(
     }
 
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
+        .timeout(Duration::from_secs(300))
         .build()
         .context("创建 HTTP 客户端失败")?;
     let request = EmbeddingRequest {

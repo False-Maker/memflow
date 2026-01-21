@@ -44,6 +44,10 @@ pub fn run() {
             commands::remove_blocklist_item,
             commands::clear_blocklist,
             commands::get_stats,
+            commands::get_activity_heatmap_stats,
+            commands::get_app_usage_stats,
+            commands::get_hourly_activity_stats,
+            commands::get_focus_metrics,
             commands::get_image_path,
             commands::get_graph_data,
             commands::rebuild_graph,
@@ -111,12 +115,10 @@ pub fn run() {
             let ocr_handle = app_handle.clone();
             tauri::async_runtime::spawn_blocking(move || {
                 tracing::info!("Starting OCR service...");
-                /*
                 if let Err(e) = ocr::service::start_service(&ocr_handle) {
                     tracing::warn!("OCR service failed to start: {}", e);
                     eprintln!("WARNING: OCR service failed to start: {}", e);
                 }
-                */
             });
 
             // 初始化录制器（传递 AppHandle）

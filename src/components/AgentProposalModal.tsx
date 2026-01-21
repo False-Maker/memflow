@@ -99,8 +99,8 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
         invoke<AutomationProposal[]>('agent_propose_automation', {
           params: proposeParams,
         }),
-        35_000,
-        '加载智能提案超时（35s），请检查后端日志或网络/模型配置'
+        90_000,
+        '加载智能提案超时（90s），请检查后端日志或网络/模型配置'
       )
       setProposals(result)
     } catch (e) {
@@ -181,7 +181,7 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
         if (current) {
           const msg = buildCompletionNotice(current)
           if (msg) setActionNotice(msg)
-          
+
           if (current.status === 'success' && selected) {
             setHandoffText(selected.description)
           }
@@ -242,8 +242,8 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
       setActionNotice('已提交执行请求...')
       const res = await withTimeout(
         invoke<ExecutionResult>('agent_execute_automation', { proposalId: selected.id }),
-        35_000,
-        '提交执行请求超时（35s）'
+        90_000,
+        '提交执行请求超时（90s）'
       )
       setExecutingId(res.executionId)
       setPolling(true)
@@ -352,11 +352,10 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
               setViewMode('list')
               setSelected(null)
             }}
-            className={`flex-1 py-3 text-center transition-colors ${
-              activeTab === 'proposals'
+            className={`flex-1 py-3 text-center transition-colors ${activeTab === 'proposals'
                 ? 'text-neon-blue border-b-2 border-neon-blue'
                 : 'text-gray-400 hover:text-white'
-            }`}
+              }`}
           >
             今日任务
           </button>
@@ -366,11 +365,10 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
               setViewMode('list')
               setSelected(null)
             }}
-            className={`flex-1 py-3 text-center transition-colors ${
-              activeTab === 'history'
+            className={`flex-1 py-3 text-center transition-colors ${activeTab === 'history'
                 ? 'text-neon-blue border-b-2 border-neon-blue'
                 : 'text-gray-400 hover:text-white'
-            }`}
+              }`}
           >
             回顾历史
           </button>

@@ -136,9 +136,8 @@ export default function ContextSidebar() {
     <>
       <AgentModal open={isAgentOpen} onClose={() => setIsAgentOpen(false)} />
       <aside
-        className={`h-full border-l border-glass-border bg-[#0f0f12] transition-all duration-300 ${
-          open ? 'w-[320px]' : 'w-[52px]'
-        } flex flex-col shrink-0 z-20 shadow-[-5px_0_20px_rgba(0,0,0,0.3)]`}
+        className={`h-full border-l border-glass-border bg-[#0f0f12] transition-all duration-300 ${open ? 'w-[320px]' : 'w-[52px]'
+          } flex flex-col shrink-0 z-20 shadow-[-5px_0_20px_rgba(0,0,0,0.3)]`}
       >
         <div className="h-full flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-3 py-3 border-b border-glass-border bg-surface/50 backdrop-blur-sm">
@@ -156,31 +155,31 @@ export default function ContextSidebar() {
               )}
             </div>
             {open && (
-               <button
-                  onClick={() => setOpen(false)}
-                  className="p-1.5 rounded-md text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
-               >
-                  <ChevronRight className="w-4 h-4" />
-               </button>
+              <button
+                onClick={() => setOpen(false)}
+                className="p-1.5 rounded-md text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             )}
           </div>
-          
+
           {!open && (
-               <button
-                  onClick={() => setOpen(true)}
-                  className="mt-2 mx-auto p-2 rounded-md text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
-               >
-                  <ChevronLeft className="w-4 h-4" />
-               </button>
+            <button
+              onClick={() => setOpen(true)}
+              className="mt-2 mx-auto p-2 rounded-md text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
           )}
-  
+
           {open && (
             <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
               <div className="flex items-center justify-between px-1 text-[10px] text-gray-500">
                 <span>模型：{modelLabel}</span>
                 <span>{proactiveReady ? '上下文助理已启用' : disabledReason ? disabledReason : '未启用'}</span>
               </div>
-              
+
               {/* Agent Trigger */}
               <button
                 onClick={() => setIsAgentOpen(true)}
@@ -209,7 +208,7 @@ export default function ContextSidebar() {
                     <Clock className="w-3 h-3" />
                     <span>触发于 {formatTime(displayed.context.triggeredAt)}</span>
                   </div>
-  
+
                   {/* 2. Suggested Actions */}
                   {displayed.suggestedActions.length > 0 && (
                     <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300 delay-100">
@@ -224,14 +223,14 @@ export default function ContextSidebar() {
                             className="flex items-center gap-3 p-3 rounded-xl bg-surface/30 border border-glass-border/50 hover:bg-surface/60 hover:border-neon-blue/30 hover:shadow-lg transition-all group text-left"
                           >
                             <div className="shrink-0 p-2 rounded-lg bg-black/20 group-hover:bg-neon-blue/10 transition-colors">
-                               {getActionIcon(action.action, idx)}
+                              {getActionIcon(action.action, idx)}
                             </div>
                             <div className="min-w-0">
                               <div className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors">
-                                  {action.label}
+                                {action.label}
                               </div>
                               <div className="text-[10px] text-gray-500 truncate group-hover:text-gray-400">
-                                  {action.action === 'open_url' ? '打开链接' : action.action === 'search' ? '搜索记忆' : '复制内容'}
+                                {action.action === 'open_url' ? '打开链接' : action.action === 'search' ? '搜索记忆' : '复制内容'}
                               </div>
                             </div>
                           </button>
@@ -239,7 +238,7 @@ export default function ContextSidebar() {
                       </div>
                     </section>
                   )}
-  
+
                   {/* 3. Related Memories */}
                   <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300 delay-200">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">
@@ -258,11 +257,11 @@ export default function ContextSidebar() {
                           >
                             <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-neon-blue/0 group-hover:bg-neon-blue transition-colors" />
                             <div className="text-sm font-medium text-gray-300 group-hover:text-white truncate mb-1">
-                               {m.windowTitle}
+                              {m.windowTitle}
                             </div>
                             <div className="flex items-center justify-between text-xs text-gray-500">
-                               <span className="truncate max-w-[70%]">{m.appName}</span>
-                               <span>{new Date(m.timestamp * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                              <span className="truncate max-w-[70%]">{m.appName}</span>
+                              <span>{new Date(m.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                           </button>
                         ))}

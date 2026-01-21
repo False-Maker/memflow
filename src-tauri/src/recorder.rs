@@ -1,6 +1,7 @@
 use crate::app_config;
 use crate::commands::ActivityLog;
 use crate::db;
+use crate::focus_analytics;
 use crate::ocr;
 use crate::window_info;
 use anyhow::Result;
@@ -36,6 +37,9 @@ pub fn start() -> Result<()> {
     tokio::spawn(async {
         recording_loop().await;
     });
+
+    // 启动专注度分析（如果已启用）
+    focus_analytics::spawn_if_enabled();
 
     Ok(())
 }
@@ -202,6 +206,7 @@ async fn capture_and_save() -> Result<()> {
             // 相同帧，只更新时间戳
             if let Some(_activity_id) = db::find_activity_by_phash(&phash_str).await? {
                 tracing::debug!("检测到重复帧，跳过保存: {}", phash_str);
+                // println!("[DEBUG] Duplicate frame detected, skipping save: {}", phash_short);
                 return Ok(());
             }
         }
@@ -221,11 +226,14 @@ async fn capture_and_save() -> Result<()> {
     };
     let filename = format!("{}_{}.png", timestamp, phash_short);
     let file_path = screenshots_dir.join(&filename);
+    
+    println!("[DEBUG] Saving screenshot: {:?}", file_path);
 
     // 保存为 PNG 格式
     screenshot.save_with_format(&file_path, image::ImageFormat::Png)?;
 
     // 7. 保存到数据库
+    println!("[DEBUG] Inserting activity into DB: {}", window_info.process_name);
     let activity_id = match db::insert_activity(
         timestamp,
         &window_info.process_name,

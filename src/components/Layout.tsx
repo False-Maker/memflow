@@ -40,7 +40,7 @@ export default function Layout({
 }: LayoutProps) {
   const { state, dispatch, startRecording, stopRecording } = useApp()
   const [heatmapOpen, setHeatmapOpen] = useState(false)
-  
+
   // 当需要切换到问答视图时自动切换
   useEffect(() => {
     if (shouldSwitchToQA) {
@@ -62,15 +62,14 @@ export default function Layout({
         {/* ... (Logo and Recording controls unchanged) */}
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold text-neon-blue">MemFlow</h1>
-          
+
           {/* 录制控制 */}
           <button
             onClick={state.isRecording ? stopRecording : startRecording}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-              state.isRecording
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${state.isRecording
                 ? 'bg-neon-red/20 text-neon-red hover:bg-neon-red/30'
                 : 'bg-neon-green/20 text-neon-green hover:bg-neon-green/30'
-            }`}
+              }`}
           >
             {state.isRecording ? (
               <>
@@ -88,9 +87,8 @@ export default function Layout({
           {/* 状态指示器 */}
           <div className="flex items-center gap-2">
             <div
-              className={`w-2 h-2 rounded-full ${
-                state.isRecording ? 'bg-neon-red animate-pulse-slow' : 'bg-gray-500'
-              }`}
+              className={`w-2 h-2 rounded-full ${state.isRecording ? 'bg-neon-red animate-pulse-slow' : 'bg-gray-500'
+                }`}
             />
             <span className="text-sm text-gray-400">
               {state.isRecording ? '录制中' : '已停止'}
@@ -103,61 +101,55 @@ export default function Layout({
           {/* ... (view buttons unchanged) */}
           <button
             onClick={() => setCurrentView('timeline')}
-            className={`px-3 py-2 rounded-lg transition-all ${
-              currentView === 'timeline'
+            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'timeline'
                 ? 'bg-neon-blue/20 text-neon-blue'
                 : 'text-gray-400 hover:text-white'
-            }`}
+              }`}
           >
             时间轴
           </button>
           <button
             onClick={() => setCurrentView('gallery')}
-            className={`px-3 py-2 rounded-lg transition-all ${
-              currentView === 'gallery'
+            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'gallery'
                 ? 'bg-neon-pink/20 text-neon-pink'
                 : 'text-gray-400 hover:text-white'
-            }`}
+              }`}
           >
             画廊
           </button>
           <button
             onClick={() => setCurrentView('replay')}
-            className={`px-3 py-2 rounded-lg transition-all ${
-              currentView === 'replay'
+            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'replay'
                 ? 'bg-neon-blue/20 text-neon-blue'
                 : 'text-gray-400 hover:text-white'
-            }`}
+              }`}
           >
             时光机
           </button>
           <button
             onClick={() => setCurrentView('graph')}
-            className={`px-3 py-2 rounded-lg transition-all ${
-              currentView === 'graph'
+            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'graph'
                 ? 'bg-neon-purple/20 text-neon-purple'
                 : 'text-gray-400 hover:text-white'
-            }`}
+              }`}
           >
             知识图谱
           </button>
           <button
             onClick={() => setCurrentView('stats')}
-            className={`px-3 py-2 rounded-lg transition-all ${
-              currentView === 'stats'
+            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'stats'
                 ? 'bg-neon-green/20 text-neon-green'
                 : 'text-gray-400 hover:text-white'
-            }`}
+              }`}
           >
             统计
           </button>
           <button
             onClick={() => setCurrentView('qa')}
-            className={`px-3 py-2 rounded-lg transition-all ${
-              currentView === 'qa'
+            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'qa'
                 ? 'bg-neon-blue/20 text-neon-blue'
                 : 'text-gray-400 hover:text-white'
-            }`}
+              }`}
           >
             问答
           </button>
@@ -229,27 +221,27 @@ export default function Layout({
           </div>
           <ContextSidebar />
         </div>
-        
+
         {/* Heatmap Modal Overlay */}
         {heatmapOpen && (
           <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center pt-20">
-             <div className="bg-[#121214] border border-glass-border rounded-lg shadow-2xl w-[800px] max-w-[90vw] animate-in fade-in zoom-in-95 duration-200">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border">
-                   <h3 className="text-lg font-semibold text-neon-blue flex items-center gap-2">
-                     <Calendar className="w-5 h-5" />
-                     活动热力图
-                   </h3>
-                   <button 
-                     onClick={() => setHeatmapOpen(false)}
-                     className="text-gray-400 hover:text-white transition-colors"
-                   >
-                     <X className="w-5 h-5" />
-                   </button>
-                </div>
-                <div className="p-4"> 
-                   <ActivityHeatmap onClose={() => setHeatmapOpen(false)} />
-                </div>
-             </div>
+            <div className="bg-[#121214] border border-glass-border rounded-lg shadow-2xl w-[800px] max-w-[90vw] animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border">
+                <h3 className="text-lg font-semibold text-neon-blue flex items-center gap-2">
+                  <Calendar className="w-5 h-5" />
+                  活动热力图
+                </h3>
+                <button
+                  onClick={() => setHeatmapOpen(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4">
+                <ActivityHeatmap onClose={() => setHeatmapOpen(false)} />
+              </div>
+            </div>
           </div>
         )}
       </main>
