@@ -17,6 +17,8 @@ pub mod ocr_worker;
 pub mod proactive_context;
 pub mod redact;
 pub mod scheduler;
+pub mod uia;
+pub mod win_event;
 
 use tracing_subscriber::prelude::*;
 use tauri::Manager;
@@ -79,6 +81,7 @@ pub fn run() {
             commands::agent_cancel_execution,
             commands::run_retention_cleanup,
             commands::get_recording_stats,
+            commands::get_ocr_queue_stats,
         ])
         .setup(|app| {
             let mut filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -135,6 +138,14 @@ pub fn run() {
                     tracing::error!("CRITICAL: Config init failed: {:#}", e);
                     tracing::error!("CRITICAL: Config init failed (debug): {:?}", e);
                     eprintln!("CRITICAL: Config init failed: {:#}", e);
+                }
+                
+                // 初始化 Prompts 配置（从资源目录加载）
+                let resource_path = app_handle.path().resource_dir().ok();
+                if let Err(e) = ai::prompts::init_prompts(resource_path).await {
+                    tracing::warn!("Prompts 配置初始化失败，使用默认值: {}", e);
+                } else {
+                    tracing::info!("Prompts 配置初始化完成");
                 }
 
                 tracing::info!("Starting database initialization...");

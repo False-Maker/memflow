@@ -48,6 +48,10 @@ pub async fn init_config(app_handle: AppHandle) -> Result<()> {
             enable_proactive_assistant: false,
             ocr_redaction_enabled: true,
             ocr_redaction_level: "basic".to_string(),
+            ocr_preprocess_enabled: true,
+            ocr_preprocess_target_width: 1280,
+            ocr_preprocess_max_pixels: 3_000_000,
+            agent_note_path: None,
         };
         save_config_internal(&config_path, &default_config).await?;
         *CONFIG.write().await = Some(default_config);

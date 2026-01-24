@@ -1,13 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import QnA from './QnA'
 import { invoke } from '@tauri-apps/api/core'
-import { AppProvider } from '../contexts/AppContext'
+import { listen } from '@tauri-apps/api/event'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
   convertFileSrc: vi.fn((path: string) => `tauri://localhost/${path}`),
+}))
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
 }))
 
 vi.mock('../utils/imageLoader', () => ({
@@ -15,14 +19,14 @@ vi.mock('../utils/imageLoader', () => ({
 }))
 
 const mockInvoke = vi.mocked(invoke)
+const mockListen = vi.mocked(listen)
 
-const Wrapper = ({ children }: { children: React.ReactNode }) => (
-  <AppProvider>{children}</AppProvider>
-)
+const Wrapper = ({ children }: { children: React.ReactNode }) => children
 
 describe('QnA', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockListen.mockResolvedValue(() => {})
   })
 
   it('应该渲染欢迎消息', () => {
@@ -47,13 +51,16 @@ describe('QnA', () => {
 
   it('应该发送消息并显示回复', async () => {
     const user = userEvent.setup()
-    // 初始化时 AppProvider 会调用 get_config 和 get_activities
+    mockListen.mockImplementationOnce(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+      if (eventName === 'ai-chat-chunk') {
+        handler({ payload: '这是AI回复' })
+      }
+      return () => {}
+    })
     mockInvoke
-      .mockResolvedValueOnce(undefined) // get_config (AppProvider 初始化)
-      .mockResolvedValueOnce([]) // get_activities (AppProvider 初始化)
       .mockResolvedValueOnce(1) // create_chat_session
       .mockResolvedValueOnce(2) // save_chat_message (user)
-      .mockResolvedValueOnce('这是AI回复') // ai_chat
+      .mockResolvedValueOnce(undefined) // ai_chat_stream
       .mockResolvedValueOnce(3) // save_chat_message (assistant)
 
     render(<QnA />, { wrapper: Wrapper })
@@ -81,15 +88,21 @@ describe('QnA', () => {
       content: '测试问题',
       contextIds: null,
     })
-    expect(mockInvoke).toHaveBeenCalledWith('ai_chat', { query: '测试问题' })
+    expect(mockInvoke).toHaveBeenCalledWith('ai_chat_stream', { query: '测试问题' })
   })
 
   it('应该在发送后清空输入框', async () => {
     const user = userEvent.setup()
+    mockListen.mockImplementationOnce(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+      if (eventName === 'ai-chat-chunk') {
+        handler({ payload: '回复' })
+      }
+      return () => {}
+    })
     mockInvoke
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(2)
-      .mockResolvedValueOnce('回复')
+      .mockResolvedValueOnce(undefined) // ai_chat_stream
       .mockResolvedValueOnce(3)
 
     render(<QnA />, { wrapper: Wrapper })
@@ -116,10 +129,16 @@ describe('QnA', () => {
 
   it('应该允许使用 Enter 键发送消息', async () => {
     const user = userEvent.setup()
+    mockListen.mockImplementationOnce(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+      if (eventName === 'ai-chat-chunk') {
+        handler({ payload: '回复' })
+      }
+      return () => {}
+    })
     mockInvoke
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(2)
-      .mockResolvedValueOnce('回复')
+      .mockResolvedValueOnce(undefined) // ai_chat_stream
       .mockResolvedValueOnce(3)
 
     render(<QnA />, { wrapper: Wrapper })
@@ -149,10 +168,11 @@ describe('QnA', () => {
   it('应该在发送失败时显示错误消息', async () => {
     const user = userEvent.setup()
     const error = new Error('发送失败')
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockInvoke
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(2)
-      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce(1) // create_chat_session
+      .mockResolvedValueOnce(2) // save_chat_message (user)
+      .mockRejectedValueOnce(error) // ai_chat_stream
 
     render(<QnA />, { wrapper: Wrapper })
 
@@ -163,8 +183,9 @@ describe('QnA', () => {
     await user.click(sendButton)
 
     await waitFor(() => {
-      expect(screen.getByText(/请求失败/i)).toBeInTheDocument()
+      expect(screen.getByText(/^发送失败$/)).toBeInTheDocument()
     })
+    consoleErrorSpy.mockRestore()
   })
 
   it('应该显示开始新对话按钮', () => {
@@ -177,10 +198,16 @@ describe('QnA', () => {
 
   it('应该能够开始新对话', async () => {
     const user = userEvent.setup()
+    mockListen.mockImplementationOnce(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+      if (eventName === 'ai-chat-chunk') {
+        handler({ payload: '回复' })
+      }
+      return () => {}
+    })
     mockInvoke
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(2)
-      .mockResolvedValueOnce('回复')
+      .mockResolvedValueOnce(undefined) // ai_chat_stream
       .mockResolvedValueOnce(3)
 
     render(<QnA />, { wrapper: Wrapper })
@@ -222,7 +249,10 @@ describe('QnA', () => {
       },
     ]
 
-    mockInvoke.mockResolvedValueOnce(mockMessages)
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_chat_messages') return mockMessages
+      return undefined
+    })
 
     render(<QnA initialSessionId={123} />, { wrapper: Wrapper })
 
@@ -244,7 +274,10 @@ describe('QnA', () => {
       resolveMessages = resolve
     })
 
-    mockInvoke.mockResolvedValueOnce(messagesPromise)
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_chat_messages') return messagesPromise
+      return undefined
+    })
 
     render(<QnA initialSessionId={123} />, { wrapper: Wrapper })
 
@@ -275,13 +308,16 @@ describe('QnA', () => {
     const user = userEvent.setup()
     const onSessionCreated = vi.fn()
 
-    // 初始化时 AppProvider 会调用 get_config 和 get_activities
+    mockListen.mockImplementationOnce(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+      if (eventName === 'ai-chat-chunk') {
+        handler({ payload: '回复' })
+      }
+      return () => {}
+    })
     mockInvoke
-      .mockResolvedValueOnce(undefined) // get_config (AppProvider 初始化)
-      .mockResolvedValueOnce([]) // get_activities (AppProvider 初始化)
       .mockResolvedValueOnce(456) // create_chat_session
       .mockResolvedValueOnce(1) // save_chat_message (user)
-      .mockResolvedValueOnce('回复') // ai_chat
+      .mockResolvedValueOnce(undefined) // ai_chat_stream
       .mockResolvedValueOnce(2) // save_chat_message (assistant)
 
     render(<QnA onSessionCreated={onSessionCreated} />, { wrapper: Wrapper })

@@ -36,6 +36,7 @@ windows = { version = "0.58", features = [
     "Win32_System_ProcessStatus",
     "Win32_Graphics_Imaging",
     "Win32_System_Com",
+    "Win32_UI_Accessibility",
 ] }
 reqwest = { version = "0.11", features = ["json", "rustls-tls", "blocking", "multipart", "stream"] }
 keyring = "2.0"
@@ -48,6 +49,8 @@ arboard = "3.4"
 tauri-plugin-dialog = "2"
 device_query = "0.2.4"
 async-trait = "0.1.89"
+jieba-rs = "0.7"
+scopeguard = "1.2.0"
 
 [features]
 # 默认功能

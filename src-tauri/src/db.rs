@@ -5,6 +5,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
 use sqlx::{QueryBuilder, Row};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
@@ -17,6 +18,11 @@ static SCREENSHOTS_DIR: once_cell::sync::Lazy<tokio::sync::Mutex<Option<PathBuf>
 // 恢复操作互斥锁，确保一次只有一个恢复操作
 static RECOVERY_LOCK: once_cell::sync::Lazy<tokio::sync::Mutex<()>> =
     once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(()));
+
+static SKIPPED_STATS: once_cell::sync::Lazy<tokio::sync::Mutex<HashMap<String, i64>>> =
+    once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(HashMap::new()));
+
+static SKIPPED_STATS_FLUSH_STARTED: AtomicBool = AtomicBool::new(false);
 
 pub async fn init_db(app_handle: AppHandle) -> Result<()> {
     // 获取应用数据目录
@@ -241,6 +247,15 @@ pub async fn get_stats() -> Result<Stats> {
     })
 }
 
+/// 获取活动记录总数（用于缓存判断）
+pub async fn get_activity_count() -> Result<i64> {
+    let pool = get_pool().await?;
+    let count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM activity_logs")
+        .fetch_one(&pool)
+        .await?;
+    Ok(count)
+}
+
 pub async fn get_screenshots_dir() -> Option<PathBuf> {
     SCREENSHOTS_DIR.lock().await.clone()
 }
@@ -269,14 +284,82 @@ pub async fn search_activities(
     order_by: Option<String>,
 ) -> Result<(Vec<ActivityLog>, i64)> {
     let pool = get_pool().await?;
+    search_activities_impl(&pool, query, app_name, from_ts, to_ts, has_ocr, limit, offset, order_by).await
+}
+
+/// 内部实现，接受 pool 参数以便于单元测试
+pub async fn search_activities_impl(
+    pool: &SqlitePool,
+    query: Option<String>,
+    app_name: Option<String>,
+    from_ts: Option<i64>,
+    to_ts: Option<i64>,
+    has_ocr: Option<bool>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    order_by: Option<String>,
+) -> Result<(Vec<ActivityLog>, i64)> {
+    let has_query = query.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+
+    // 构建 COUNT 查询以获取 total
+    let total = {
+        let mut count_builder = QueryBuilder::new("SELECT COUNT(*) FROM activity_logs a ");
+
+        if has_query {
+            count_builder.push("JOIN activity_logs_fts ON a.id = activity_logs_fts.rowid ");
+        }
+
+        count_builder.push("WHERE 1=1 ");
+
+        if has_query {
+            count_builder.push("AND activity_logs_fts MATCH ");
+            count_builder.push_bind(query.as_ref().unwrap().clone());
+            count_builder.push(" ");
+        }
+
+        if let Some(ref app) = app_name {
+            if !app.is_empty() {
+                count_builder.push("AND (");
+                count_builder.push("LOWER(a.app_name) LIKE '%' || LOWER(");
+                count_builder.push_bind(app.clone());
+                count_builder.push(") || '%'");
+                count_builder.push(" OR LOWER(REPLACE(a.app_name, '.exe', '')) LIKE '%' || LOWER(");
+                count_builder.push_bind(app.clone());
+                count_builder.push(") || '%'");
+                count_builder.push(") ");
+            }
+        }
+
+        if let Some(from) = from_ts {
+            count_builder.push("AND a.timestamp >= ");
+            count_builder.push_bind(from);
+        }
+
+        if let Some(to) = to_ts {
+            count_builder.push("AND a.timestamp <= ");
+            count_builder.push_bind(to);
+        }
+
+        if let Some(ocr) = has_ocr {
+            if ocr {
+                count_builder.push("AND a.ocr_text IS NOT NULL AND a.ocr_text != '' ");
+            } else {
+                count_builder.push("AND (a.ocr_text IS NULL OR a.ocr_text = '') ");
+            }
+        }
+
+        let count_query = count_builder.build();
+        let row = count_query.fetch_one(pool).await?;
+        row.get::<i64, _>(0)
+    };
+
+    // 构建主查询
     let mut builder = QueryBuilder::new(
         "SELECT a.id, a.timestamp, a.app_name, a.window_title, a.image_path, a.ocr_text, a.phash FROM activity_logs a "
     );
 
-    let has_query = query.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
-
     if has_query {
-        builder.push("JOIN activity_logs_fts f ON a.id = f.rowid ");
+        builder.push("JOIN activity_logs_fts ON a.id = activity_logs_fts.rowid ");
     }
 
     builder.push("WHERE 1=1 ");
@@ -337,11 +420,7 @@ pub async fn search_activities(
     }
 
     let query = builder.build();
-    let rows = query.fetch_all(&pool).await?;
-
-    // Count total (optional, for now just 0 or separate query if needed)
-    // For performance, maybe skip total count or do a separate count query with same filters.
-    // Let's do a simplified count.
+    let rows = query.fetch_all(pool).await?;
 
     let activities = rows
         .into_iter()
@@ -356,7 +435,7 @@ pub async fn search_activities(
         })
         .collect();
 
-    Ok((activities, 0))
+    Ok((activities, total))
 }
 
 pub async fn get_blocklist() -> Result<Vec<String>> {
@@ -1091,6 +1170,200 @@ mod stats_tests {
         assert_eq!(rows[0].timestamp, 1000);
         assert_eq!(rows[1].timestamp, 2000);
     }
+
+    #[tokio::test]
+    async fn test_search_activities_total() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect(":memory:")
+            .await
+            .unwrap();
+
+        // 创建表结构（不含 FTS，测试无 query 的情况）
+        sqlx::query(
+            "CREATE TABLE activity_logs (
+                id INTEGER PRIMARY KEY,
+                timestamp INTEGER,
+                app_name TEXT,
+                window_title TEXT,
+                image_path TEXT,
+                phash TEXT,
+                app_path TEXT,
+                ocr_text TEXT
+            )"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // 插入测试数据
+        for i in 1..=10 {
+            sqlx::query(
+                "INSERT INTO activity_logs (timestamp, app_name, window_title, image_path, ocr_text) VALUES (?, ?, ?, ?, ?)"
+            )
+            .bind(1000 * i as i64)
+            .bind(if i <= 5 { "Chrome" } else { "Code" })
+            .bind(format!("Window {}", i))
+            .bind(format!("img_{}.png", i))
+            .bind(if i % 2 == 0 { Some("some text") } else { None::<&str> })
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        // 测试1：无过滤条件，total 应为 10
+        let (activities, total) = search_activities_impl(
+            &pool, None, None, None, None, None, Some(5), None, None
+        ).await.unwrap();
+        assert_eq!(total, 10, "Total should be 10 without any filters");
+        assert_eq!(activities.len(), 5, "Should return 5 items with limit=5");
+
+        // 测试2：按 app_name 过滤
+        let (activities, total) = search_activities_impl(
+            &pool, None, Some("Chrome".to_string()), None, None, None, Some(100), None, None
+        ).await.unwrap();
+        assert_eq!(total, 5, "Total should be 5 for Chrome");
+        assert_eq!(activities.len(), 5);
+
+        // 测试3：按时间范围过滤
+        let (activities, total) = search_activities_impl(
+            &pool, None, None, Some(3000), Some(7000), None, Some(100), None, None
+        ).await.unwrap();
+        assert_eq!(total, 5, "Total should be 5 for timestamp 3000-7000");
+        assert_eq!(activities.len(), 5);
+
+        // 测试4：has_ocr = true
+        let (activities, total) = search_activities_impl(
+            &pool, None, None, None, None, Some(true), Some(100), None, None
+        ).await.unwrap();
+        assert_eq!(total, 5, "Total should be 5 for records with OCR text");
+        assert_eq!(activities.len(), 5);
+
+        // 测试5：has_ocr = false
+        let (activities, total) = search_activities_impl(
+            &pool, None, None, None, None, Some(false), Some(100), None, None
+        ).await.unwrap();
+        assert_eq!(total, 5, "Total should be 5 for records without OCR text");
+        assert_eq!(activities.len(), 5);
+
+        // 测试6：组合过滤 - Chrome + has_ocr
+        let (activities, total) = search_activities_impl(
+            &pool, None, Some("Chrome".to_string()), None, None, Some(true), Some(100), None, None
+        ).await.unwrap();
+        assert_eq!(total, 2, "Total should be 2 for Chrome with OCR (ids 2,4)");
+        assert_eq!(activities.len(), 2);
+
+        // 测试7：分页 - offset
+        let (activities, total) = search_activities_impl(
+            &pool, None, None, None, None, None, Some(3), Some(2), None
+        ).await.unwrap();
+        assert_eq!(total, 10, "Total should still be 10 with pagination");
+        assert_eq!(activities.len(), 3, "Should return 3 items with limit=3, offset=2");
+    }
+
+    #[tokio::test]
+    async fn test_search_activities_with_fts_query_total_and_rank() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect(":memory:")
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE activity_logs (
+                id INTEGER PRIMARY KEY,
+                timestamp INTEGER,
+                app_name TEXT,
+                window_title TEXT,
+                image_path TEXT,
+                phash TEXT,
+                app_path TEXT,
+                ocr_text TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query("CREATE VIRTUAL TABLE activity_logs_fts USING fts5(ocr_text)")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "INSERT INTO activity_logs (id, timestamp, app_name, window_title, image_path, ocr_text) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(1_i64)
+        .bind(1000_i64)
+        .bind("Chrome")
+        .bind("Window 1")
+        .bind("img_1.png")
+        .bind(Some("hello world"))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query("INSERT INTO activity_logs_fts(rowid, ocr_text) VALUES (?, ?)")
+            .bind(1_i64)
+            .bind("hello world")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "INSERT INTO activity_logs (id, timestamp, app_name, window_title, image_path, ocr_text) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(2_i64)
+        .bind(2000_i64)
+        .bind("Code")
+        .bind("Window 2")
+        .bind("img_2.png")
+        .bind(Some("bye world"))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query("INSERT INTO activity_logs_fts(rowid, ocr_text) VALUES (?, ?)")
+            .bind(2_i64)
+            .bind("bye world")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let (activities, total) = search_activities_impl(
+            &pool,
+            Some("hello".to_string()),
+            None,
+            None,
+            None,
+            None,
+            Some(10),
+            None,
+            Some("rank".to_string()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 1);
+        assert_eq!(activities.len(), 1);
+        assert_eq!(activities[0].id, 1);
+
+        let (_activities, total) = search_activities_impl(
+            &pool,
+            Some("world".to_string()),
+            None,
+            None,
+            None,
+            None,
+            Some(10),
+            None,
+            Some("rank".to_string()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(total, 2);
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1539,19 +1812,55 @@ pub async fn cleanup_old_activities(days: u32, dry_run: bool) -> Result<CleanupS
 }
 
 pub async fn increment_skipped_stat(reason: &str) -> Result<()> {
-    let pool = get_pool().await?;
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    {
+        let mut buf = SKIPPED_STATS.lock().await;
+        *buf.entry(reason.to_string()).or_insert(0) += 1;
+    }
 
-    sqlx::query(
-        "INSERT INTO recording_stats (date, reason, count) 
-         VALUES (?, ?, 1) 
-         ON CONFLICT(date, reason) 
-         DO UPDATE SET count = count + 1",
-    )
-    .bind(today)
-    .bind(reason)
-    .execute(&pool)
-    .await?;
+    if !SKIPPED_STATS_FLUSH_STARTED.swap(true, Ordering::SeqCst) {
+        tokio::spawn(async {
+            loop {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+
+                let drained: HashMap<String, i64> = {
+                    let mut buf = SKIPPED_STATS.lock().await;
+                    if buf.is_empty() {
+                        continue;
+                    }
+                    std::mem::take(&mut *buf)
+                };
+
+                let pool = match get_pool().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        let mut buf = SKIPPED_STATS.lock().await;
+                        for (reason, count) in drained {
+                            *buf.entry(reason).or_insert(0) += count;
+                        }
+                        continue;
+                    }
+                };
+
+                let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+                let mut qb =
+                    QueryBuilder::new("INSERT INTO recording_stats (date, reason, count) ");
+                qb.push_values(drained.iter(), |mut b, (reason, count)| {
+                    b.push_bind(&today).push_bind(reason).push_bind(*count);
+                });
+                qb.push(
+                    " ON CONFLICT(date, reason) DO UPDATE SET count = count + excluded.count",
+                );
+
+                if let Err(e) = qb.build().execute(&pool).await {
+                    tracing::warn!("flush skipped stats failed: {}", e);
+                    let mut buf = SKIPPED_STATS.lock().await;
+                    for (reason, count) in drained {
+                        *buf.entry(reason).or_insert(0) += count;
+                    }
+                }
+            }
+        });
+    }
 
     Ok(())
 }

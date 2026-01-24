@@ -1,6 +1,10 @@
+pub mod nlp;
+pub mod prompt_engine;
+pub mod prompts;
 pub mod provider;
 pub mod rag;
 
+use crate::ai::prompts::{get_analyze_proposals_prompt, get_intent_parser_prompt};
 use crate::ai::provider::{chat_with_anthropic, chat_with_openai, ProviderConfig};
 use crate::ai::rag::HybridSearch;
 use crate::vector_db;
@@ -84,7 +88,7 @@ fn calculate_timestamps(range: &str) -> (Option<i64>, Option<i64>) {
 }
 
 async fn build_context_from_range(
-    query: &str,
+    _query: &str,
     intent: &FilterParams,
 ) -> Result<(String, usize)> {
     let (from_ts, to_ts) = if let Some(range) = &intent.date_range {
@@ -472,28 +476,8 @@ pub async fn analyze_for_proposals(context_text: &str) -> Result<AiAnalysisResul
         is_anthropic
     );
     
-    let system_prompt = r#"你是专业的个人工作助理。请分析用户的电脑活动日志，识别出用户今天的主要任务/上下文（Task Contexts）。
-请返回 JSON 格式，不要包含 Markdown 代码块标记。
-JSON 结构如下：
-{
-  "tasks": [
-    {
-      "title": "任务名称（如：MemFlow 后端开发）",
-      "summary": "该任务段的详细摘要（Markdown 格式），包含主要操作和产出",
-      "related_urls": ["https://github.com/...", "https://docs.rs/..."],
-      "related_files": ["D:\\Projects\\src\\main.rs", "C:\\Users\\...\\report.docx"],
-      "related_apps": ["C:\\Program Files\\...\\Code.exe"]
-    }
-  ]
-}
-
-要求：
-1. `tasks`: 将连续或相关联的活动聚类为一个任务。
-2. `summary`: 必须是 Markdown 格式，结构清晰。
-3. `related_urls`: 提取该任务中访问的关键文档或网页链接（最多 5 个）。
-4. `related_files`: 尝试从窗口标题或 OCR 内容中提取关键的本地文件路径（如 .docx, .pdf, .rs, .py 等）。
-5. `related_apps`: 如果任务依赖特定应用程序（如 VS Code, Photoshop），且日志中明确记录了该应用的绝对路径（app_path），请将其路径放入此列表。忽略系统自带应用（如资源管理器）。
-"#;
+    // 从外部配置加载系统提示词
+    let system_prompt = get_analyze_proposals_prompt().await;
 
     let response = if is_anthropic {
         match crate::secure_storage::get_api_key("anthropic").await {
@@ -509,7 +493,7 @@ JSON 结构如下：
                     context_text, 
                     model_id, 
                     &provider_config, 
-                    Some(system_prompt)
+                    Some(&system_prompt)
                 ).await?
             }
             Ok(None) => return Err(anyhow::anyhow!("未配置 Anthropic API Key")),
@@ -529,7 +513,7 @@ JSON 结构如下：
                     context_text, 
                     model_id, 
                     &provider_config, 
-                    Some(system_prompt)
+                    Some(&system_prompt)
                 ).await?
             }
             Ok(None) => return Err(anyhow::anyhow!("未配置 OpenAI API Key")),
@@ -648,29 +632,8 @@ pub async fn parse_query_intent(query: &str) -> Result<FilterParams> {
     let timeout_ms = config.intent_parse_timeout_ms.unwrap_or(20_000);
     let llm_timeout = std::time::Duration::from_millis(timeout_ms);
 
-    let system_prompt = r#"You are a smart query parser for a personal activity logger. 
-Your goal is to extract search filters from the user's natural language query.
-
-Return a JSON object with the following fields:
-- "app_name": (string | null) Filter by application name (e.g., "Chrome", "VS Code"). If the user mentions "pdf", map it to a likely pdf reader or just "pdf".
-- "keywords": (string[]) List of keywords to search in OCR text or window titles.
-- "date_range": (string | null) One of: "today", "yesterday", "this_week", "last_week", "this_month", or null if not specified.
-- "has_ocr": (boolean | null) true if user wants to search within text/content, null otherwise.
-
-Example 1:
-Input: "Show me what I did on Chrome yesterday"
-Output: { "app_name": "Chrome", "keywords": [], "date_range": "yesterday", "has_ocr": null }
-
-Example 2:
-Input: "Find PDF files about rust from last week"
-Output: { "app_name": "pdf", "keywords": ["rust"], "date_range": "last_week", "has_ocr": true }
-
-Example 3:
-Input: "coding session"
-Output: { "app_name": "Code", "keywords": ["coding"], "date_range": null, "has_ocr": null }
-
-Return ONLY the JSON object.
-"#;
+    // 从外部配置加载系统提示词
+    let system_prompt = get_intent_parser_prompt().await;
 
     let response = if is_anthropic {
         match crate::secure_storage::get_api_key("anthropic").await {
@@ -683,7 +646,7 @@ Return ONLY the JSON object.
 
                 match tokio::time::timeout(
                     llm_timeout,
-                    chat_with_anthropic(query, "", model_id, &provider_config, Some(system_prompt)),
+                    chat_with_anthropic(query, "", model_id, &provider_config, Some(&system_prompt)),
                 )
                 .await
                 {
@@ -729,7 +692,7 @@ Return ONLY the JSON object.
 
                 match tokio::time::timeout(
                     llm_timeout,
-                    chat_with_openai(query, "", model_id, &provider_config, Some(system_prompt)),
+                    chat_with_openai(query, "", model_id, &provider_config, Some(&system_prompt)),
                 )
                 .await
                 {

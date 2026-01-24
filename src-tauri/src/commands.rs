@@ -80,6 +80,24 @@ pub struct AppConfig {
     pub ocr_redaction_enabled: bool,
     #[serde(default = "default_ocr_redaction_level", alias = "ocr_redaction_level")]
     pub ocr_redaction_level: String,
+    #[serde(
+        default = "default_ocr_preprocess_enabled",
+        alias = "ocr_preprocess_enabled"
+    )]
+    pub ocr_preprocess_enabled: bool,
+    #[serde(
+        default = "default_ocr_preprocess_target_width",
+        alias = "ocr_preprocess_target_width"
+    )]
+    pub ocr_preprocess_target_width: u32,
+    #[serde(
+        default = "default_ocr_preprocess_max_pixels",
+        alias = "ocr_preprocess_max_pixels"
+    )]
+    pub ocr_preprocess_max_pixels: u64,
+    /// Agent 生成笔记的保存路径（可选，默认为文档目录）
+    #[serde(default, alias = "agent_note_path")]
+    pub agent_note_path: Option<String>,
 }
 
 fn default_recording_interval() -> u64 {
@@ -96,6 +114,18 @@ fn default_ocr_redaction_enabled() -> bool {
 
 fn default_ocr_redaction_level() -> String {
     "basic".to_string()
+}
+
+fn default_ocr_preprocess_enabled() -> bool {
+    true
+}
+
+fn default_ocr_preprocess_target_width() -> u32 {
+    1280
+}
+
+fn default_ocr_preprocess_max_pixels() -> u64 {
+    3_000_000
 }
 
 fn default_ocr_engine() -> String {
@@ -200,6 +230,11 @@ pub async fn get_recording_stats(limit: Option<i64>) -> Result<Vec<db::Recording
     db::get_recording_stats(limit.unwrap_or(30))
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_ocr_queue_stats() -> Result<db::OcrQueueStats, String> {
+    db::get_ocr_queue_stats().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -453,7 +488,37 @@ mod tests {
         assert_eq!(cfg.embedding_use_shared_key, true);
         assert_eq!(cfg.openai_base_url, None);
         assert_eq!(cfg.anthropic_base_url, None);
-        assert_eq!(cfg.enable_focus_analytics, false);
+        assert_eq!(cfg.enable_focus_analytics, true); // 修正：默认值应为 true
+        assert_eq!(cfg.enable_proactive_assistant, false);
+        assert_eq!(cfg.blocklist_enabled, false);
+        assert_eq!(cfg.blocklist_mode, "blocklist");
+        assert_eq!(cfg.privacy_mode_enabled, false);
+        assert_eq!(cfg.ocr_redaction_enabled, true);
+        assert_eq!(cfg.ocr_redaction_level, "basic");
+        assert_eq!(cfg.ocr_preprocess_enabled, true);
+        assert_eq!(cfg.ocr_preprocess_target_width, 1280);
+        assert_eq!(cfg.ocr_preprocess_max_pixels, 3_000_000);
+    }
+
+    #[test]
+    fn app_config_partial_json_fills_defaults() {
+        // 测试部分字段的 JSON 会正确填充缺失字段的默认值
+        let json = r#"{"recordingInterval": 3000, "ocrEnabled": true}"#;
+        let cfg: AppConfig = serde_json::from_str(json).unwrap();
+        
+        // 指定的字段应该使用提供的值
+        assert_eq!(cfg.recording_interval, 3000);
+        assert_eq!(cfg.ocr_enabled, true);
+        
+        // 未指定的字段应该使用默认值
+        assert_eq!(cfg.ocr_engine, "rapidocr");
+        assert_eq!(cfg.ai_enabled, false);
+        assert_eq!(cfg.retention_days, 30);
+        assert_eq!(cfg.enable_focus_analytics, true);
+        assert_eq!(cfg.blocklist_mode, "blocklist");
+        assert_eq!(cfg.ocr_preprocess_enabled, true);
+        assert_eq!(cfg.ocr_preprocess_target_width, 1280);
+        assert_eq!(cfg.ocr_preprocess_max_pixels, 3_000_000);
     }
 
     #[test]
@@ -496,6 +561,9 @@ mod tests {
             Some("https://api.anthropic.com")
         );
         assert_eq!(cfg.enable_focus_analytics, true);
+        assert_eq!(cfg.ocr_preprocess_enabled, true);
+        assert_eq!(cfg.ocr_preprocess_target_width, 1280);
+        assert_eq!(cfg.ocr_preprocess_max_pixels, 3_000_000);
     }
 }
 

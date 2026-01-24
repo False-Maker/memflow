@@ -31,13 +31,37 @@ impl HybridSearch {
     }
 
     /// 混合检索：结合 BM25 关键词匹配和向量语义检索
+    /// 
+    /// 优化策略：
+    /// 1. 先用 FTS/BM25 获取候选集（粗筛，快速）
+    /// 2. 对候选集进行向量语义检索（精排，只针对候选）
+    /// 3. 加权合并结果
+    /// 
+    /// 这样将向量检索从 O(N) 全表扫描降为 O(|candidates|)
     pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
-        // 1. 向量语义检索
-        let query_embedding = vector_db::generate_embedding(query).await?;
-        let vector_results = vector_db::search_similar(query_embedding, limit * 2).await?;
+        // 候选集大小：取 limit 的若干倍，确保有足够的候选用于精排
+        let candidate_size = (limit * 4).max(50);
 
-        // 2. BM25 关键词检索
-        let bm25_results = self.bm25_search(query, limit * 2).await?;
+        // 1. BM25 关键词检索（获取候选集）
+        let bm25_results = self.bm25_search(query, candidate_size).await?;
+        
+        // 提取候选 ID
+        let candidate_ids: Vec<i64> = bm25_results.iter().map(|r| r.id).collect();
+        
+        // 2. 向量语义检索（只在候选集中搜索）
+        let query_embedding = vector_db::generate_embedding(query).await?;
+        let vector_results = if candidate_ids.is_empty() {
+            // 如果 BM25 没有结果，回退到全表向量检索
+            vector_db::search_similar(query_embedding, limit * 2).await?
+        } else {
+            // 只对候选集进行向量检索
+            vector_db::search_similar_with_candidates(
+                query_embedding,
+                limit * 2,
+                Some(&candidate_ids),
+            )
+            .await?
+        };
 
         // 3. 合并结果（加权平均）
         let mut combined: HashMap<i64, (f64, usize)> = HashMap::new();

@@ -48,6 +48,8 @@ describe('AppContext', () => {
         blocklistMode: 'blocklist',
         privacyModeEnabled: false,
       },
+      configLoaded: false,
+      configError: null,
     }
 
     it('应该设置录制状态', () => {
@@ -269,12 +271,12 @@ describe('AppContext', () => {
       })
     })
 
-    it('应该在配置加载失败时使用默认值', async () => {
+    it('应该在配置加载失败时记录错误状态', async () => {
       mockInvoke
         .mockRejectedValueOnce(new Error('Config not found'))
         .mockResolvedValueOnce([])
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
       const { result } = renderHook(() => useApp(), {
         wrapper: AppProvider,
@@ -284,10 +286,19 @@ describe('AppContext', () => {
         expect(mockInvoke).toHaveBeenCalledWith('get_config')
       })
 
-      expect(consoleWarnSpy).toHaveBeenCalled()
+      await waitFor(() => {
+        expect(result.current.state.configLoaded).toBe(true)
+        expect(result.current.state.configError).toBe('Config not found')
+      })
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to load config from backend:',
+        'Config not found'
+      )
+      // 配置保持初始占位值
       expect(result.current.state.config).toBeDefined()
 
-      consoleWarnSpy.mockRestore()
+      consoleErrorSpy.mockRestore()
     })
 
     it('应该监听后端事件', async () => {
@@ -570,6 +581,7 @@ describe('AppContext', () => {
       })
       expect(result.current.state.activities).toEqual(mockSearchResult.items)
       expect(result.current.state.lastSearchParams).toEqual(searchParams)
+      expect(result.current.state.searchTotal).toBe(1)
     })
 
     it('应该处理完整的搜索参数', async () => {

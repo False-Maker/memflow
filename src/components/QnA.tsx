@@ -224,7 +224,14 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
       }
 
     } catch (e) {
-      const msg = typeof e === 'string' ? e : JSON.stringify(e)
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'string'
+            ? e
+            : typeof e === 'object' && e !== null && 'message' in e && typeof (e as { message?: unknown }).message === 'string'
+              ? (e as { message: string }).message
+              : JSON.stringify(e)
       console.error('AI Chat Error:', e)
       setError(msg)
 

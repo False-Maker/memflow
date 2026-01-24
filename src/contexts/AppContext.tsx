@@ -18,7 +18,10 @@ export interface AppState {
   activities: ActivityLog[]
   currentView: 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay'
   config: AppConfig
+  configLoaded: boolean
+  configError: string | null
   lastSearchParams?: SearchParams
+  searchTotal?: number
 }
 
 export interface AppConfig {
@@ -63,8 +66,12 @@ type AppAction =
   | { type: 'SET_ACTIVITIES'; payload: ActivityLog[] }
   | { type: 'SET_VIEW'; payload: 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay' }
   | { type: 'SET_CONFIG'; payload: AppConfig }
+  | { type: 'SET_CONFIG_ERROR'; payload: string }
   | { type: 'SET_SEARCH_PARAMS'; payload: SearchParams }
+  | { type: 'SET_SEARCH_RESULT'; payload: { items: ActivityLog[]; total: number; params: SearchParams } }
 
+// 前端默认配置仅作为初始占位，实际配置应从后端加载
+// 这些默认值应与后端 commands.rs 中的默认值保持一致
 const initialState: AppState = {
   isRecording: false,
   activities: [],
@@ -72,16 +79,22 @@ const initialState: AppState = {
   config: {
     recordingInterval: 5000,
     ocrEnabled: true,
+    ocrEngine: 'rapidocr',
     ocrRedactionEnabled: true,
     ocrRedactionLevel: 'basic',
     aiEnabled: false,
-    enableFocusAnalytics: false,
+    enableFocusAnalytics: true, // 与后端默认值一致
     enableProactiveAssistant: false,
     retentionDays: 30,
+    chatModel: 'gpt-4o-mini',
+    embeddingModel: 'text-embedding-3-small',
+    embeddingUseSharedKey: true,
     blocklistEnabled: false,
     blocklistMode: 'blocklist',
     privacyModeEnabled: false,
   },
+  configLoaded: false,
+  configError: null,
 }
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -104,9 +117,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_VIEW':
       return { ...state, currentView: action.payload }
     case 'SET_CONFIG':
-      return { ...state, config: action.payload }
+      return { ...state, config: action.payload, configLoaded: true, configError: null }
+    case 'SET_CONFIG_ERROR':
+      return { ...state, configError: action.payload, configLoaded: true }
     case 'SET_SEARCH_PARAMS':
       return { ...state, lastSearchParams: action.payload }
+    case 'SET_SEARCH_RESULT':
+      return {
+        ...state,
+        activities: action.payload.items,
+        searchTotal: action.payload.total,
+        lastSearchParams: action.payload.params,
+      }
     default:
       return state
   }
@@ -131,8 +153,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const config = await invoke<AppConfig>('get_config')
       dispatch({ type: 'SET_CONFIG', payload: config })
     } catch (error) {
-      // 如果后端配置尚未初始化或读取失败，则继续使用前端默认值
-      console.warn('Failed to load config from backend, using defaults:', error)
+      // 配置加载失败时，记录错误状态而不是静默回退
+      // 这确保用户知道配置来源的问题
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('Failed to load config from backend:', errorMessage)
+      dispatch({ type: 'SET_CONFIG_ERROR', payload: errorMessage })
     }
   }
 
@@ -183,8 +208,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           orderBy: params.orderBy,
         }
       )
-      dispatch({ type: 'SET_ACTIVITIES', payload: result.items })
-      dispatch({ type: 'SET_SEARCH_PARAMS', payload: params })
+      dispatch({
+        type: 'SET_SEARCH_RESULT',
+        payload: { items: result.items, total: result.total, params },
+      })
     } catch (error) {
       console.error('Failed to search activities:', error)
     }

@@ -1,9 +1,31 @@
+use crate::ai::nlp::{extract_keywords, extract_keywords_tfidf, KeywordOptions};
 use crate::db;
 use anyhow::Result;
 use chrono::{DateTime, Timelike, Utc};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use std::collections::HashMap;
+use std::sync::RwLock;
+
+/// 图谱缓存结构
+struct GraphCache {
+    data: Option<GraphData>,
+    last_activity_count: i64,
+    last_updated: Option<std::time::Instant>,
+}
+
+/// 全局图谱缓存（避免频繁重建）
+static GRAPH_CACHE: Lazy<RwLock<GraphCache>> = Lazy::new(|| {
+    RwLock::new(GraphCache {
+        data: None,
+        last_activity_count: 0,
+        last_updated: None,
+    })
+});
+
+/// 缓存有效期（5 分钟）
+const CACHE_TTL_SECS: u64 = 300;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphData {
@@ -33,8 +55,31 @@ struct ActivityRecord {
     ocr_text: Option<String>,
 }
 
-/// 构建知识图谱
+/// 构建知识图谱（带缓存）
 pub async fn build_graph() -> Result<GraphData> {
+    // 检查缓存是否有效
+    let current_count = db::get_activity_count().await.unwrap_or(0);
+    
+    {
+        let cache = GRAPH_CACHE.read().unwrap();
+        if let Some(ref cached_data) = cache.data {
+            if let Some(last_updated) = cache.last_updated {
+                let elapsed = last_updated.elapsed().as_secs();
+                // 如果活动数量未变化且缓存未过期，直接返回缓存
+                if cache.last_activity_count == current_count && elapsed < CACHE_TTL_SECS {
+                    tracing::debug!(
+                        "使用图谱缓存 (活动数: {}, 缓存时间: {}s)",
+                        current_count,
+                        elapsed
+                    );
+                    return Ok(cached_data.clone());
+                }
+            }
+        }
+    }
+    
+    tracing::info!("重建知识图谱 (活动数: {})", current_count);
+    
     // 1. 提取实体（应用、文档、时间段）
     let activities = db::get_activities(1000).await?;
     let records: Vec<ActivityRecord> = activities
@@ -46,7 +91,32 @@ pub async fn build_graph() -> Result<GraphData> {
         })
         .collect();
 
-    Ok(build_graph_from_records(&records))
+    let graph = build_graph_from_records(&records);
+    
+    // 更新缓存
+    {
+        let mut cache = GRAPH_CACHE.write().unwrap();
+        cache.data = Some(graph.clone());
+        cache.last_activity_count = current_count;
+        cache.last_updated = Some(std::time::Instant::now());
+    }
+    
+    Ok(graph)
+}
+
+/// 强制重建图谱（忽略缓存）
+pub async fn rebuild_graph_force() -> Result<GraphData> {
+    tracing::info!("强制重建知识图谱");
+    
+    // 清除缓存
+    {
+        let mut cache = GRAPH_CACHE.write().unwrap();
+        cache.data = None;
+        cache.last_updated = None;
+    }
+    
+    // 重新构建
+    build_graph().await
 }
 
 fn build_graph_from_records(records: &[ActivityRecord]) -> GraphData {
@@ -70,11 +140,11 @@ fn build_graph_from_records(records: &[ActivityRecord]) -> GraphData {
         // 创建边：应用 -> 时间段
         edges.push((app_id.clone(), time_id.clone(), "occurs_at".to_string()));
 
-        // 如果有 OCR 文本，提取关键词作为文档节点
+        // 如果有 OCR 文本，使用 NLP 引擎提取关键词作为文档节点
         if let Some(ref ocr_text) = activity.ocr_text {
             if ocr_text.len() > 10 {
-                // 简单的关键词提取（实际应该使用 NLP）
-                let keywords = extract_keywords(ocr_text);
+                // 使用 NLP 引擎提取关键词
+                let keywords = extract_keywords_for_graph(ocr_text);
                 for keyword in keywords {
                     let doc_id = format!("doc:{}", keyword);
                     *doc_nodes.entry(doc_id.clone()).or_insert(0) += 1;
@@ -135,16 +205,24 @@ fn build_graph_from_records(records: &[ActivityRecord]) -> GraphData {
     }
 }
 
-/// 简单的关键词提取（占位实现）
-fn extract_keywords(text: &str) -> Vec<String> {
-    // 简单的实现：提取长度大于 2 的中文词和英文单词
-    let words: Vec<&str> = text
-        .split(|c: char| !c.is_alphanumeric() && !c.is_alphabetic())
-        .filter(|w| w.len() > 2)
-        .take(5) // 最多提取 5 个关键词
-        .collect();
-
-    words.into_iter().map(|s| s.to_string()).collect()
+/// 使用 NLP 引擎提取关键词
+fn extract_keywords_for_graph(text: &str) -> Vec<String> {
+    // 优先使用 TF-IDF 提取高质量关键词
+    let tfidf_keywords = extract_keywords_tfidf(text, 3);
+    
+    if !tfidf_keywords.is_empty() {
+        return tfidf_keywords;
+    }
+    
+    // 回退到普通分词提取
+    let options = KeywordOptions {
+        max_keywords: 5,
+        min_word_len: 2,
+        filter_stopwords: true,
+        filter_numbers: true,
+    };
+    
+    extract_keywords(text, Some(options))
 }
 
 /// 保存图谱数据到数据库

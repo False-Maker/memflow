@@ -49,8 +49,27 @@ pub async fn insert_embedding(activity_id: i64, embedding: Vec<f32>) -> Result<(
     Ok(())
 }
 
-/// 搜索相似向量
+/// 搜索相似向量（全表扫描版本，保留用于向后兼容）
 pub async fn search_similar(query: Vec<f32>, limit: usize) -> Result<Vec<SearchResult>> {
+    // 无候选集限制，搜索所有向量
+    search_similar_with_candidates(query, limit, None).await
+}
+
+/// 搜索相似向量（带候选集过滤，性能优化版本）
+/// 
+/// # 参数
+/// - `query`: 查询向量
+/// - `limit`: 返回结果数量上限
+/// - `candidate_ids`: 可选的候选 activity_id 集合，仅在这些 ID 中搜索
+/// 
+/// # 性能说明
+/// 当提供候选集时，只对候选集中的向量计算余弦相似度，
+/// 将时间复杂度从 O(N) 降为 O(|candidates|)
+pub async fn search_similar_with_candidates(
+    query: Vec<f32>,
+    limit: usize,
+    candidate_ids: Option<&[i64]>,
+) -> Result<Vec<SearchResult>> {
     if query.len() != EMBEDDING_DIM {
         return Err(anyhow::anyhow!(
             "查询向量维度不匹配: 期望 {}, 实际 {}",
@@ -61,10 +80,26 @@ pub async fn search_similar(query: Vec<f32>, limit: usize) -> Result<Vec<SearchR
 
     let pool = db::get_pool().await?;
 
-    // 获取所有向量
-    let rows = sqlx::query("SELECT activity_id, embedding FROM vector_embeddings")
-        .fetch_all(&pool)
-        .await?;
+    // 根据是否有候选集构建不同的查询
+    let rows = match candidate_ids {
+        Some(ids) if !ids.is_empty() => {
+            // 有候选集：只查询候选 ID 的向量
+            let mut builder =
+                sqlx::QueryBuilder::new("SELECT activity_id, embedding FROM vector_embeddings WHERE activity_id IN (");
+            let mut separated = builder.separated(", ");
+            for id in ids {
+                separated.push_bind(*id);
+            }
+            separated.push_unseparated(")");
+            builder.build().fetch_all(&pool).await?
+        }
+        _ => {
+            // 无候选集：全表扫描（原有行为）
+            sqlx::query("SELECT activity_id, embedding FROM vector_embeddings")
+                .fetch_all(&pool)
+                .await?
+        }
+    };
 
     let mut results = Vec::new();
 

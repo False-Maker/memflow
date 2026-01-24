@@ -1,6 +1,14 @@
 //! 智能代理（Agent）- 自动化提案与执行（MVP）
 //!
 //! 目标：基于 activity_logs 生成低风险自动化提案，并在用户确认后执行；全过程可审计并支持取消。
+//! 
+//! 增强功能：
+//! - 基于时间间隔的会话分割
+//! - 可配置的上下文构建参数
+//! - 可配置的笔记输出路径
+//! - Tool Trait 抽象层（借鉴 Dify Tool/Plugin 系统）
+
+pub mod tools;
 
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
@@ -15,7 +23,12 @@ use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
 
+use crate::ai::prompts::get_agent_config;
 use crate::db::get_pool;
+use crate::ai::prompt_engine::PromptTemplate;
+use crate::agent::tools::{create_default_registry, ToolRegistry};
+
+static TOOL_REGISTRY: Lazy<ToolRegistry> = Lazy::new(create_default_registry);
 
 static EXECUTION_CANCEL_FLAGS: Lazy<Mutex<HashMap<i64, Arc<AtomicBool>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
@@ -25,6 +38,86 @@ fn truncate_chars(s: &str, max_chars: usize) -> String {
         return s.to_string();
     }
     s.chars().take(max_chars).collect()
+}
+
+/// 基于时间间隔将活动记录分割为会话
+/// 如果两条记录之间的时间间隔超过 gap_minutes 分钟，则认为是不同的会话
+fn split_into_sessions(rows: &[sqlx::sqlite::SqliteRow], gap_minutes: i64) -> Vec<Vec<&sqlx::sqlite::SqliteRow>> {
+    if rows.is_empty() {
+        return vec![];
+    }
+    
+    let gap_seconds = gap_minutes * 60;
+    let mut sessions: Vec<Vec<&sqlx::sqlite::SqliteRow>> = vec![];
+    let mut current_session: Vec<&sqlx::sqlite::SqliteRow> = vec![];
+    let mut last_timestamp: Option<i64> = None;
+    
+    // 注意：rows 是按时间降序排列的（最新的在前）
+    for row in rows.iter() {
+        let timestamp: i64 = row.get(1);
+        
+        if let Some(last_ts) = last_timestamp {
+            // 由于是降序，last_ts > timestamp
+            if last_ts - timestamp > gap_seconds {
+                // 时间间隔过大，开始新会话
+                if !current_session.is_empty() {
+                    sessions.push(current_session);
+                    current_session = vec![];
+                }
+            }
+        }
+        
+        current_session.push(row);
+        last_timestamp = Some(timestamp);
+    }
+    
+    // 添加最后一个会话
+    if !current_session.is_empty() {
+        sessions.push(current_session);
+    }
+    
+    sessions
+}
+
+/// 智能选择上下文行：优先选择最近且活动较多的会话
+fn select_context_rows<'a>(
+    sessions: &'a [Vec<&'a sqlx::sqlite::SqliteRow>],
+    max_items: usize,
+) -> Vec<&'a sqlx::sqlite::SqliteRow> {
+    if sessions.is_empty() {
+        return vec![];
+    }
+    
+    let mut selected: Vec<&sqlx::sqlite::SqliteRow> = vec![];
+    let mut remaining = max_items;
+    
+    // 策略：从最近的会话开始，每个会话取适当数量的记录
+    // 较大的会话（可能是主要工作）获得更多配额
+    for session in sessions.iter() {
+        if remaining == 0 {
+            break;
+        }
+        
+        // 根据会话大小分配配额：较大的会话获得更多
+        let session_quota = if sessions.len() == 1 {
+            remaining
+        } else {
+            // 至少取 5 条，或者按比例分配
+            let min_quota = 5.min(remaining);
+            let proportional = (session.len() * remaining / sessions.iter().map(|s| s.len()).sum::<usize>()).max(min_quota);
+            proportional.min(remaining)
+        };
+        
+        for row in session.iter().take(session_quota) {
+            selected.push(row);
+            remaining -= 1;
+            if remaining == 0 {
+                break;
+            }
+        }
+    }
+    
+    selected
 }
 
 // ============================================
@@ -169,8 +262,25 @@ pub async fn propose_automation(params: AgentProposeParams) -> Result<Vec<Automa
     let rule_based_summary =
         build_activity_summary(time_window_hours, rows.len() as i64, &top_apps, &top_titles);
 
-    // 构建上下文（取最近 40 条，减少 Token 消耗并提高响应速度）
-    let context_items: Vec<String> = rows.iter().take(40).map(|row| {
+    // 从配置获取上下文构建参数
+    let agent_config = get_agent_config().await;
+    let context_max_items = agent_config.context_max_items;
+    let max_chars_per_ocr = agent_config.context_max_chars_per_ocr;
+    let session_gap_minutes = agent_config.session_gap_minutes;
+    
+    // 基于时间间隔的会话分割
+    let sessions = split_into_sessions(&rows, session_gap_minutes);
+    tracing::info!(
+        "agent propose: 识别到 {} 个会话（间隔阈值: {} 分钟）",
+        sessions.len(),
+        session_gap_minutes
+    );
+    
+    // 智能选择会话：优先选择最近且活动较多的会话
+    let selected_rows = select_context_rows(&sessions, context_max_items);
+    
+    // 构建上下文（使用配置的参数）
+    let context_items: Vec<String> = selected_rows.iter().map(|row| {
         let timestamp: i64 = row.get(1);
         let app_name: String = row.get(2);
         let window_title: String = row.get(3);
@@ -185,7 +295,8 @@ pub async fn propose_automation(params: AgentProposeParams) -> Result<Vec<Automa
 
         if let Some(text) = ocr_text {
              if !text.trim().is_empty() {
-                 let truncated = truncate_chars(&text, 100);
+                 // 使用配置的 OCR 文本截断长度
+                 let truncated = truncate_chars(&text, max_chars_per_ocr);
                  line.push_str(&format!(" | 内容: {}", truncated.replace("\n", " ")));
              }
         }
@@ -193,10 +304,25 @@ pub async fn propose_automation(params: AgentProposeParams) -> Result<Vec<Automa
     }).collect();
     let context_text = context_items.join("\n");
 
+    // 使用 Prompt Template 渲染提示词
+    let template = PromptTemplate::new(
+        "基于以下活动上下文, 分析用户的主要任务并生成自动化建议。\n\n\
+         ## 活动上下文\n{{context}}\n\n\
+         ## 当前时间\n{{time}}\n\n\
+         ## 任务要求\n\
+         1. 识别用户正在进行的任务\n\
+         2. 提取相关的 URL、文件路径和应用程序\n\
+         3. 忽略系统进程和无关活动"
+    );
+    let mut vars = HashMap::new();
+    vars.insert("context".to_string(), context_text.clone());
+    vars.insert("time".to_string(), chrono::Local::now().to_rfc3339());
+    let prompt = template.render(&vars);
+
     let mut proposals: Vec<AutomationProposalDto> = Vec::new();
 
     tracing::info!("agent propose: start ai analysis (context chars={})", context_text.len());
-    match tokio::time::timeout(Duration::from_secs(60), crate::ai::analyze_for_proposals(&context_text)).await {
+    match tokio::time::timeout(Duration::from_secs(60), crate::ai::analyze_for_proposals(&prompt)).await {
         Ok(Ok(analysis)) => {
             tracing::info!("agent propose: ai analysis ok, tasks={}", analysis.tasks.len());
             
@@ -623,68 +749,22 @@ fn steps_action_summary(steps: &[AutomationStep]) -> String {
     parts.join(" + ")
 }
 
-async fn execute_step(step: &AutomationStep, app_handle: &tauri::AppHandle) -> Result<()> {
-    match step {
-        AutomationStep::OpenUrl { url } => {
-            app_handle
-                .opener()
-                .open_url(url, None::<&str>)
-                .map_err(|e| anyhow!(e))?;
-            Ok(())
-        }
-        AutomationStep::OpenFile { path } => {
-            app_handle
-                .opener()
-                .open_path(path, None::<&str>)
-                .map_err(|e| anyhow!(e))?;
-            Ok(())
-        }
-        AutomationStep::OpenApp { path } => {
-            app_handle
-                .opener()
-                .open_path(path, None::<&str>)
-                .map_err(|e| anyhow!(e))?;
-            Ok(())
-        }
-        AutomationStep::CopyToClipboard { text } => {
-            let mut clipboard =
-                arboard::Clipboard::new().map_err(|e| anyhow!("clipboard init failed: {}", e))?;
-            clipboard
-                .set_text(text.clone())
-                .map_err(|e| anyhow!("clipboard write failed: {}", e))?;
-            Ok(())
-        }
-        AutomationStep::CreateNote { content } => {
-            // 实现：写入到 documents 目录下的 memflow_notes.md
-            use std::io::Write;
-            
-            let data_dir = app_handle
-                .path()
-                .document_dir()
-                .map_err(|e| anyhow!("failed to get document dir: {}", e))?;
-            
-            let notes_path = data_dir.join("memflow_notes.md");
-            
-            // 确保目录存在
-            if let Some(parent) = notes_path.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| anyhow!("failed to create notes dir: {}", e))?;
-            }
+async fn execute_step(step: &AutomationStep, _app_handle: &tauri::AppHandle) -> Result<()> {
+    // 将 AutomationStep 转换为工具调用
+    let (tool_name, args) = match step {
+        AutomationStep::OpenUrl { url } => ("open_url", serde_json::json!({"url": url})),
+        AutomationStep::OpenFile { path } => ("open_file", serde_json::json!({"path": path})),
+        AutomationStep::OpenApp { path } => ("open_app", serde_json::json!({"path": path})),
+        AutomationStep::CopyToClipboard { text } => ("copy_to_clipboard", serde_json::json!({"text": text})),
+        AutomationStep::CreateNote { content } => ("create_note", serde_json::json!({"content": content})),
+    };
 
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&notes_path)
-                .map_err(|e| anyhow!("failed to open notes file: {}", e))?;
-            
-            let now = chrono::Local::now();
-            let header = format!("\n\n## 📝 自动记录 ({})\n\n", now.format("%Y-%m-%d %H:%M:%S"));
-            
-            file.write_all(header.as_bytes())?;
-            file.write_all(content.as_bytes())?;
-            
-            tracing::info!("笔记已保存到: {:?}", notes_path);
-            Ok(())
-        }
+    // 动态执行工具
+    if let Some(tool) = TOOL_REGISTRY.get(tool_name) {
+        tracing::info!("Executing tool: {}", tool_name);
+        tool.execute(args).await?;
+        Ok(())
+    } else {
+        Err(anyhow!("未知的工具: {}", tool_name))
     }
 }

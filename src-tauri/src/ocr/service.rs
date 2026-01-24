@@ -14,27 +14,101 @@ use tauri::{AppHandle, Manager};
 /// OCR 服务默认端口
 pub const OCR_SERVICE_PORT: u16 = 9003;
 
+/// OCR 服务启动失败的具体原因
+#[derive(Debug, Clone)]
+pub enum OcrStartupError {
+    /// Python 解释器未找到
+    PythonNotFound(String),
+    /// OCR 服务脚本不存在
+    ScriptNotFound(String),
+    /// Python 依赖缺失（如 rapidocr 未安装）
+    MissingDependency(String),
+    /// 端口被占用
+    PortInUse(u16),
+    /// 服务启动超时
+    StartupTimeout,
+    /// 进程异常退出
+    ProcessExited(String),
+    /// 其他错误
+    Other(String),
+}
+
+impl std::fmt::Display for OcrStartupError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OcrStartupError::PythonNotFound(detail) => {
+                write!(f, "未找到 Python 解释器: {}", detail)
+            }
+            OcrStartupError::ScriptNotFound(detail) => {
+                write!(f, "OCR 服务脚本不存在: {}", detail)
+            }
+            OcrStartupError::MissingDependency(detail) => {
+                write!(f, "Python 依赖缺失: {}", detail)
+            }
+            OcrStartupError::PortInUse(port) => {
+                write!(f, "端口 {} 已被占用，请检查是否有其他 OCR 服务实例", port)
+            }
+            OcrStartupError::StartupTimeout => {
+                write!(f, "OCR 服务启动超时，可能是依赖加载缓慢或初始化失败")
+            }
+            OcrStartupError::ProcessExited(status) => {
+                write!(f, "OCR 服务进程异常退出: {}", status)
+            }
+            OcrStartupError::Other(msg) => write!(f, "{}", msg),
+        }
+    }
+}
+
+impl std::error::Error for OcrStartupError {}
+
 /// OCR 服务进程句柄
 static OCR_PROCESS: Lazy<Mutex<Option<Child>>> = Lazy::new(|| Mutex::new(None));
 
 /// 启动 OCR 服务
+/// 
+/// 返回 Ok(()) 即使服务未完全就绪（允许后台初始化），
+/// 但会记录详细的诊断信息便于排查问题。
 pub fn start_service(app_handle: &AppHandle) -> Result<()> {
-    // 检查服务是否已经在运行
-    if is_service_running() {
-        tracing::info!("OCR 服务已在运行");
-        return Ok(());
+    // 检查端口是否被占用（可能是其他 OCR 实例或服务）
+    if is_port_in_use(OCR_SERVICE_PORT) {
+        if is_service_responding() {
+            tracing::info!("OCR 服务已在运行（端口 {} 响应正常）", OCR_SERVICE_PORT);
+            return Ok(());
+        } else {
+            let err = OcrStartupError::PortInUse(OCR_SERVICE_PORT);
+            tracing::error!("{}", err);
+            return Err(err.into());
+        }
     }
     
     tracing::info!("准备查找 OCR 服务脚本路径...");
     // 获取 Python 脚本路径
-    let script_path = get_ocr_server_path(app_handle);
-    tracing::info!("get_ocr_server_path 结果: {:?}", script_path);
-    let script_path = script_path?;
-
-    tracing::info!("启动 OCR 服务: {}", script_path.display());
+    let script_path = match get_ocr_server_path(app_handle) {
+        Ok(path) => {
+            tracing::info!("找到 OCR 脚本: {}", path.display());
+            path
+        }
+        Err(e) => {
+            let err = OcrStartupError::ScriptNotFound(e.to_string());
+            tracing::error!("{}", err);
+            return Err(err.into());
+        }
+    };
 
     // 查找 Python 解释器
-    let python = find_python()?;
+    let python = match find_python() {
+        Ok(path) => {
+            tracing::info!("找到 Python 解释器: {}", path.display());
+            path
+        }
+        Err(e) => {
+            let err = OcrStartupError::PythonNotFound(e.to_string());
+            tracing::error!("{}", err);
+            return Err(err.into());
+        }
+    };
+
+    tracing::info!("启动 OCR 服务: {} {}", python.display(), script_path.display());
 
     let log_path = app_handle
         .path()
@@ -48,7 +122,7 @@ pub fn start_service(app_handle: &AppHandle) -> Result<()> {
             .create(true)
             .append(true)
             .open(log_path)
-            .and_then(|mut f| writeln!(f, "\n--- OCR server start ---"))
+            .and_then(|mut f| writeln!(f, "\n--- OCR server start at {} ---", chrono::Local::now()))
             .ok();
         OpenOptions::new()
             .create(true)
@@ -78,21 +152,40 @@ pub fn start_service(app_handle: &AppHandle) -> Result<()> {
             )
         })?;
 
-    let quick_check = wait_for_service_with_child(&mut child, Duration::from_secs(3));
+    let quick_check = wait_for_service_with_child(&mut child, Duration::from_secs(5));
 
     // 保存进程句柄
     *OCR_PROCESS.lock().unwrap() = Some(child);
 
     if let Err(e) = quick_check {
-        if let Some(log_path) = log_path {
-            if let Some(reason) = summarize_log_error(&log_path) {
-                tracing::warn!("OCR 服务启动未就绪: {} ({}) (log: {})", e, reason, log_path.display());
-            } else {
-            tracing::warn!("OCR 服务启动未就绪: {} (log: {})", e, log_path.display());
+        // 分析日志以提供更详细的错误诊断
+        let diagnosis = log_path
+            .as_ref()
+            .and_then(|p| diagnose_startup_failure(p));
+        
+        match diagnosis {
+            Some(OcrStartupError::MissingDependency(dep)) => {
+                tracing::error!(
+                    "OCR 服务启动失败: Python 依赖缺失 - {}。\n\
+                    请运行: pip install rapidocr-onnxruntime",
+                    dep
+                );
             }
-        } else {
-            tracing::warn!("OCR 服务启动未就绪: {}", e);
+            Some(err) => {
+                tracing::error!("OCR 服务启动失败: {}", err);
+            }
+            None => {
+                if let Some(log_path) = &log_path {
+                    tracing::warn!(
+                        "OCR 服务启动未就绪: {} (详情请查看日志: {})",
+                        e, log_path.display()
+                    );
+                } else {
+                    tracing::warn!("OCR 服务启动未就绪: {}", e);
+                }
+            }
         }
+        // 即使启动未就绪也返回 Ok，允许后台继续初始化
         return Ok(());
     }
 
@@ -170,6 +263,81 @@ fn wait_for_service_with_child(child: &mut Child, timeout: Duration) -> Result<(
     Err(anyhow::anyhow!("OCR 服务启动超时"))
 }
 
+/// 分析日志文件，诊断启动失败的具体原因
+fn diagnose_startup_failure(log_path: &Path) -> Option<OcrStartupError> {
+    let content = std::fs::read_to_string(log_path).ok()?;
+    
+    // 从后往前查找错误信息（最近的错误）
+    for line in content.lines().rev().take(200) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        
+        // 检测依赖缺失
+        if trimmed.contains("ModuleNotFoundError") || trimmed.contains("No module named") {
+            // 提取缺失的模块名
+            if let Some(module) = extract_missing_module(trimmed) {
+                return Some(OcrStartupError::MissingDependency(format!(
+                    "缺少 Python 模块: {}",
+                    module
+                )));
+            }
+            return Some(OcrStartupError::MissingDependency(trimmed.to_string()));
+        }
+        
+        if trimmed.contains("ImportError:") {
+            return Some(OcrStartupError::MissingDependency(trimmed.to_string()));
+        }
+        
+        // 检测端口绑定失败
+        if trimmed.contains("Address already in use") || trimmed.contains("bind failed") {
+            return Some(OcrStartupError::PortInUse(OCR_SERVICE_PORT));
+        }
+        
+        // 检测权限问题
+        if trimmed.contains("Permission denied") {
+            return Some(OcrStartupError::Other(format!(
+                "权限被拒绝: {}",
+                trimmed
+            )));
+        }
+    }
+    
+    None
+}
+
+/// 从错误信息中提取缺失的模块名
+fn extract_missing_module(error_line: &str) -> Option<String> {
+    // 尝试匹配 "No module named 'xxx'" 或 "ModuleNotFoundError: No module named 'xxx'"
+    if let Some(start) = error_line.find("No module named '") {
+        let after_quote = &error_line[start + 17..];
+        if let Some(end) = after_quote.find('\'') {
+            return Some(after_quote[..end].to_string());
+        }
+    }
+    // 尝试匹配 "No module named xxx"（无引号）
+    if let Some(start) = error_line.find("No module named ") {
+        let after = &error_line[start + 16..];
+        let module = after.split_whitespace().next()?;
+        return Some(module.trim_matches(|c| c == '\'' || c == '"').to_string());
+    }
+    None
+}
+
+/// 检查端口是否被占用
+fn is_port_in_use(port: u16) -> bool {
+    use std::net::TcpListener;
+    TcpListener::bind(("127.0.0.1", port)).is_err()
+}
+
+/// 检查 OCR 服务是否响应（健康检查）
+fn is_service_responding() -> bool {
+    // 简单的 TCP 连接检查
+    is_service_running()
+}
+
+#[allow(dead_code)]
 fn summarize_log_error(log_path: &Path) -> Option<String> {
     let content = std::fs::read_to_string(log_path).ok()?;
     let mut last_match: Option<&str> = None;
@@ -259,6 +427,7 @@ fn find_python() -> Result<std::path::PathBuf> {
         请安装 Python 3.8+ 并确保在系统 PATH 中"
     ))
 }
+
 
 
 

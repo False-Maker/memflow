@@ -61,11 +61,8 @@ impl OcrEngine for RapidOcrEngine {
             return Err(anyhow::anyhow!("图片文件不存在: {}", image_path.display()));
         }
 
-        // 读取图片文件 (async read would be better, but file is local, spawn_blocking or std::fs::read is okay for small files)
-        // However, better to use tokio::fs if we are fully async, or just std::fs::read since it's fast on SSD usually.
-        // For correctness in async context, let's use tokio::fs or just keep std::fs::read but wrap if needed.
-        // reqwest multipart expects a stream or bytes.
-        let image_bytes = std::fs::read(image_path)
+        let image_bytes = tokio::fs::read(image_path)
+            .await
             .with_context(|| format!("读取图片失败: {}", image_path.display()))?;
 
         // 获取文件名
@@ -75,11 +72,24 @@ impl OcrEngine for RapidOcrEngine {
             .unwrap_or("image.png")
             .to_string();
 
+        let ext = image_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        let mime = match ext.as_str() {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "webp" => "image/webp",
+            _ => "application/octet-stream",
+        };
+
         // 构建 multipart 表单
         // reqwest async multipart
         let part = multipart::Part::bytes(image_bytes)
             .file_name(filename)
-            .mime_str("image/png")?;
+            .mime_str(mime)?;
 
         let form = multipart::Form::new().part("image", part);
 
