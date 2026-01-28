@@ -1,4 +1,6 @@
-use crate::agent;
+use memflow_core::agent;
+use crate::desktop_context::TauriContext;
+use std::sync::Arc;
 use crate::ai;
 use crate::ai::provider::{
     chat_with_anthropic, chat_with_openai, embedding_with_openai, ProviderConfig,
@@ -12,17 +14,8 @@ use crate::recorder;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ActivityLog {
-    pub id: i64,
-    pub timestamp: i64,
-    pub app_name: String,
-    pub window_title: String,
-    pub image_path: String,
-    pub ocr_text: Option<String>,
-    pub phash: Option<String>,
-}
+// ActivityLog is imported from crate::db (re-exported from memflow_core)
+pub use crate::db::ActivityLog;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -156,13 +149,8 @@ fn default_enable_proactive_assistant() -> bool {
     false
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Stats {
-    pub total_activities: i64,
-    pub total_hours: f64,
-    pub top_app: String,
-}
+// Stats is imported from crate::db (re-exported from memflow_core)
+pub use crate::db::Stats;
 
 #[tauri::command]
 pub async fn start_recording() -> Result<(), String> {
@@ -805,8 +793,10 @@ pub async fn get_user_feedbacks(limit: Option<i64>) -> Result<Vec<chat::UserFeed
 #[tauri::command]
 pub async fn agent_propose_automation(
     params: Option<agent::AgentProposeParams>,
+    app_handle: tauri::AppHandle,
 ) -> Result<Vec<agent::AutomationProposalDto>, String> {
-    agent::propose_automation(params.unwrap_or_default())
+    let ctx = Arc::new(TauriContext::new(app_handle));
+    agent::propose_automation(params.unwrap_or_default(), ctx)
         .await
         .map_err(|e| e.to_string())
 }
@@ -820,7 +810,8 @@ pub async fn agent_execute_automation(
         "agent_execute_automation called: proposal_id={}",
         proposal_id
     );
-    agent::execute_automation(proposal_id, app_handle)
+    let ctx = Arc::new(TauriContext::new(app_handle));
+    agent::execute_automation(proposal_id, ctx)
         .await
         .map_err(|e| e.to_string())
 }

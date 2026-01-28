@@ -419,7 +419,7 @@ async fn capture_and_save() -> Result<()> {
             timestamp,
             app_name: window_info.process_name.clone(),
             window_title: window_info.title.clone(),
-            image_path: filename.clone(),
+            image_path: Some(filename.clone()),
             ocr_text: None, // OCR 是异步的，稍后会更新
             phash: Some(phash_str.clone()),
         };

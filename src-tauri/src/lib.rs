@@ -1,4 +1,4 @@
-pub mod agent;
+pub mod desktop_context;
 pub mod ai;
 pub mod app_config;
 pub mod chat;

@@ -1,163 +1,18 @@
+//! Vector database module - Tauri wrapper for memflow-core vector_db
+//!
+//! Re-exports from memflow_core::vector_db and provides the
+//! generate_embedding function that requires config/API keys.
+
+// Re-export everything from memflow-core vector_db
+pub use memflow_core::vector_db::*;
+
 use crate::ai::provider::{embedding_with_openai, ProviderConfig};
-use crate::db;
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
-use sqlx::Row;
 
-// 向量维度（可以根据实际嵌入模型调整）
-const EMBEDDING_DIM: usize = 384; // 使用较小的模型，如 all-MiniLM-L6-v2
-
-/// 计算余弦相似度
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
-    if a.len() != b.len() {
-        return 0.0;
-    }
-
-    let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-
-    if norm_a == 0.0 || norm_b == 0.0 {
-        return 0.0;
-    }
-
-    (dot_product / (norm_a * norm_b)) as f64
-}
-
-/// 插入向量嵌入
-pub async fn insert_embedding(activity_id: i64, embedding: Vec<f32>) -> Result<()> {
-    if embedding.len() != EMBEDDING_DIM {
-        return Err(anyhow::anyhow!(
-            "向量维度不匹配: 期望 {}, 实际 {}",
-            EMBEDDING_DIM,
-            embedding.len()
-        ));
-    }
-
-    // 将向量序列化为 JSON 存储
-    let embedding_json = serde_json::to_string(&embedding)?;
-
-    // 存储到数据库
-    let pool = db::get_pool().await?;
-
-    sqlx::query("INSERT OR REPLACE INTO vector_embeddings (activity_id, embedding) VALUES (?, ?)")
-        .bind(activity_id)
-        .bind(embedding_json)
-        .execute(&pool)
-        .await?;
-
-    Ok(())
-}
-
-/// 搜索相似向量（全表扫描版本，保留用于向后兼容）
-pub async fn search_similar(query: Vec<f32>, limit: usize) -> Result<Vec<SearchResult>> {
-    // 无候选集限制，搜索所有向量
-    search_similar_with_candidates(query, limit, None).await
-}
-
-/// 搜索相似向量（带候选集过滤，性能优化版本）
-/// 
-/// # 参数
-/// - `query`: 查询向量
-/// - `limit`: 返回结果数量上限
-/// - `candidate_ids`: 可选的候选 activity_id 集合，仅在这些 ID 中搜索
-/// 
-/// # 性能说明
-/// 当提供候选集时，只对候选集中的向量计算余弦相似度，
-/// 将时间复杂度从 O(N) 降为 O(|candidates|)
-pub async fn search_similar_with_candidates(
-    query: Vec<f32>,
-    limit: usize,
-    candidate_ids: Option<&[i64]>,
-) -> Result<Vec<SearchResult>> {
-    if query.len() != EMBEDDING_DIM {
-        return Err(anyhow::anyhow!(
-            "查询向量维度不匹配: 期望 {}, 实际 {}",
-            EMBEDDING_DIM,
-            query.len()
-        ));
-    }
-
-    let pool = db::get_pool().await?;
-
-    // 根据是否有候选集构建不同的查询
-    let rows = match candidate_ids {
-        Some(ids) if !ids.is_empty() => {
-            // 有候选集：只查询候选 ID 的向量
-            let mut builder =
-                sqlx::QueryBuilder::new("SELECT activity_id, embedding FROM vector_embeddings WHERE activity_id IN (");
-            let mut separated = builder.separated(", ");
-            for id in ids {
-                separated.push_bind(*id);
-            }
-            separated.push_unseparated(")");
-            builder.build().fetch_all(&pool).await?
-        }
-        _ => {
-            // 无候选集：全表扫描（原有行为）
-            sqlx::query("SELECT activity_id, embedding FROM vector_embeddings")
-                .fetch_all(&pool)
-                .await?
-        }
-    };
-
-    let mut results = Vec::new();
-
-    for row in rows {
-        let activity_id: i64 = row.get(0);
-        let embedding_json: String = row.get(1);
-
-        let embedding: Vec<f32> = serde_json::from_str(&embedding_json)?;
-
-        let similarity = cosine_similarity(&query, &embedding);
-
-        results.push(SearchResult {
-            id: activity_id,
-            score: similarity,
-        });
-    }
-
-    // 按相似度排序
-    results.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    // 返回前 limit 个结果
-    results.truncate(limit);
-
-    Ok(results)
-}
-
-/// 获取活动的向量嵌入
-pub async fn get_embedding(activity_id: i64) -> Result<Option<Vec<f32>>> {
-    let pool = db::get_pool().await?;
-
-    let row = sqlx::query("SELECT embedding FROM vector_embeddings WHERE activity_id = ?")
-        .bind(activity_id)
-        .fetch_optional(&pool)
-        .await?;
-
-    if let Some(row) = row {
-        let embedding_json: String = row.get(0);
-        let embedding: Vec<f32> = serde_json::from_str(&embedding_json)?;
-        Ok(Some(embedding))
-    } else {
-        Ok(None)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchResult {
-    pub id: i64,
-    pub score: f64,
-}
-
-/// 生成文本嵌入向量
-/// 优先使用 OpenAI Embeddings API，如果未配置则使用占位实现
+/// Generate embedding using configured AI provider
+/// This is Tauri-specific as it uses app_config and secure_storage
 pub async fn generate_embedding(text: &str) -> Result<Vec<f32>> {
-    // 获取配置
+    // Get config
     let config = crate::app_config::get_config().await.unwrap_or_else(|_| {
         let mut cfg: crate::commands::AppConfig = serde_json::from_str("{}").unwrap();
         cfg.ocr_enabled = true;
@@ -166,9 +21,9 @@ pub async fn generate_embedding(text: &str) -> Result<Vec<f32>> {
 
     let model_id = &config.embedding_model;
 
-    // 嵌入模型使用 OpenAI 兼容 Embeddings API（Anthropic 不支持嵌入模型）
-    // - 如果 embedding_use_shared_key=true：复用 openai key
-    // - 否则：使用独立的 embedding key
+    // Embedding uses OpenAI-compatible API (Anthropic doesn't support embeddings)
+    // - If embedding_use_shared_key=true: reuse openai key
+    // - Otherwise: use dedicated embedding key
     let key_service = if config.embedding_use_shared_key {
         "openai"
     } else {
@@ -185,7 +40,7 @@ pub async fn generate_embedding(text: &str) -> Result<Vec<f32>> {
             "https://api.openai.com/v1",
         );
 
-        // 使用 OpenAI Embeddings API
+        // Use OpenAI Embeddings API
         match embedding_with_openai(text, model_id, &provider_config).await {
             Ok(embedding) => {
                 tracing::debug!(
@@ -193,7 +48,7 @@ pub async fn generate_embedding(text: &str) -> Result<Vec<f32>> {
                     model_id,
                     embedding.len()
                 );
-                // 处理维度适配
+                // Handle dimension adaptation
                 if embedding.len() != EMBEDDING_DIM {
                     if embedding.len() > EMBEDDING_DIM {
                         return Ok(embedding[..EMBEDDING_DIM].to_vec());
@@ -219,28 +74,6 @@ pub async fn generate_embedding(text: &str) -> Result<Vec<f32>> {
         );
     }
 
-    // 占位实现：使用简单的哈希生成向量
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = DefaultHasher::new();
-    text.hash(&mut hasher);
-    let hash = hasher.finish();
-
-    // 生成一个简单的向量（实际应该使用嵌入模型）
-    let mut embedding = vec![0.0f32; EMBEDDING_DIM];
-    for i in 0..EMBEDDING_DIM {
-        let seed = (hash as u64).wrapping_mul(i as u64 + 1);
-        embedding[i] = ((seed % 1000) as f32 / 1000.0 - 0.5) * 2.0;
-    }
-
-    // 归一化
-    let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if norm > 0.0 {
-        for e in &mut embedding {
-            *e /= norm;
-        }
-    }
-
-    Ok(embedding)
+    // Fallback to placeholder implementation from core
+    Ok(generate_placeholder_embedding(text))
 }

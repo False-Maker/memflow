@@ -19,9 +19,9 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::Manager;
-use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
+
+use crate::context::RuntimeContext;
 
 use crate::ai::prompts::get_agent_config;
 use crate::db::get_pool;
@@ -187,7 +187,10 @@ pub struct ExecutionResultDto {
 // Public APIs
 // ============================================
 
-pub async fn propose_automation(params: AgentProposeParams) -> Result<Vec<AutomationProposalDto>> {
+pub async fn propose_automation(
+    params: AgentProposeParams,
+    ctx: Arc<dyn RuntimeContext>,
+) -> Result<Vec<AutomationProposalDto>> {
     let pool = get_pool().await?;
     let now = chrono::Utc::now().timestamp();
     let time_window_hours = params.time_window_hours.unwrap_or(24).max(1).min(24 * 30);
@@ -322,7 +325,7 @@ pub async fn propose_automation(params: AgentProposeParams) -> Result<Vec<Automa
     let mut proposals: Vec<AutomationProposalDto> = Vec::new();
 
     tracing::info!("agent propose: start ai analysis (context chars={})", context_text.len());
-    match tokio::time::timeout(Duration::from_secs(60), crate::ai::analyze_for_proposals(&prompt)).await {
+    match tokio::time::timeout(Duration::from_secs(60), ctx.analyze_for_proposals(&prompt)).await {
         Ok(Ok(analysis)) => {
             tracing::info!("agent propose: ai analysis ok, tasks={}", analysis.tasks.len());
             
@@ -515,7 +518,7 @@ pub async fn list_executions(limit: i64, offset: i64) -> Result<Vec<ExecutionDto
 
 pub async fn execute_automation(
     proposal_id: i64,
-    app_handle: tauri::AppHandle,
+    ctx: Arc<dyn RuntimeContext>,
 ) -> Result<ExecutionResultDto> {
     let pool = get_pool().await?;
     let now = chrono::Utc::now().timestamp();
@@ -572,7 +575,7 @@ pub async fn execute_automation(
     // 后台执行（命令立即返回 running，便于前端取消/轮询）
     let steps_total = steps.len() as i64;
     let pool_bg = pool.clone();
-    let app_handle_bg = app_handle.clone();
+    let ctx_bg = ctx.clone();
     let steps_bg = steps.clone();
     let cancel_flag_bg = cancel_flag.clone();
 
@@ -585,7 +588,7 @@ pub async fn execute_automation(
                     return Err(anyhow!("AGENT_EXECUTION_CANCELLED"));
                 }
 
-                if let Err(e) = execute_step(step, &app_handle_bg).await {
+                if let Err(e) = execute_step(step, &ctx_bg).await {
                     return Err(e);
                 }
                 steps_success += 1;
@@ -749,7 +752,7 @@ fn steps_action_summary(steps: &[AutomationStep]) -> String {
     parts.join(" + ")
 }
 
-async fn execute_step(step: &AutomationStep, _app_handle: &tauri::AppHandle) -> Result<()> {
+async fn execute_step(step: &AutomationStep, _ctx: &Arc<dyn RuntimeContext>) -> Result<()> {
     // 将 AutomationStep 转换为工具调用
     let (tool_name, args) = match step {
         AutomationStep::OpenUrl { url } => ("open_url", serde_json::json!({"url": url})),

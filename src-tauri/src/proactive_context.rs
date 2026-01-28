@@ -219,7 +219,9 @@ async fn load_related_memories(
     app_name: &str,
 ) -> anyhow::Result<(Vec<RelatedMemory>, Vec<crate::commands::ActivityLog>)> {
     let searcher = HybridSearch::new();
-    let results = searcher.search(query, 5).await;
+    // HybridSearch from core requires explicit embedding
+    let embedding = crate::vector_db::generate_embedding(query).await?;
+    let results = searcher.search_with_embedding(query, embedding, 5).await;
     match results {
         Ok(items) => {
             let mut related = Vec::new();

@@ -1,3 +1,19 @@
+//! AI module - Tauri-specific AI functionality
+//!
+//! Re-exports core AI types from memflow_core::ai and provides
+//! Tauri-specific chat and analysis functions with config loading.
+
+// Re-export core types from memflow-core
+pub use memflow_core::ai::{
+    strip_json_code_fence,
+    fallback_filter_params,
+    FilterParams,
+    PromptTemplate,
+    PromptsConfig,
+    AgentConfig,
+};
+
+// Keep local submodules (they wrap/extend memflow-core modules)
 pub mod nlp;
 pub mod prompt_engine;
 pub mod prompts;
@@ -177,7 +193,9 @@ pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
     // 如果还没有上下文（意图解析未返回时间范围，或者时间范围搜索为空），则使用混合检索
     if context_count == 0 {
          let searcher = HybridSearch::new();
-         let results = searcher.search(query, 5).await?;
+         // HybridSearch from core requires explicit embedding
+         let embedding = crate::vector_db::generate_embedding(query).await?;
+         let results = searcher.search_with_embedding(query, embedding, 5).await?;
         
          for result in results {
             if let Ok(activity) = crate::db::get_activity_by_id(result.id).await {
@@ -341,7 +359,9 @@ where
     // 如果还没有上下文，回退到 HybridSearch
     if context_count == 0 {
          let searcher = HybridSearch::new();
-         let results = searcher.search(query, 5).await?;
+         // HybridSearch from core requires explicit embedding
+         let embedding = crate::vector_db::generate_embedding(query).await?;
+         let results = searcher.search_with_embedding(query, embedding, 5).await?;
         
          for result in results {
             if let Ok(activity) = crate::db::get_activity_by_id(result.id).await {
@@ -537,30 +557,7 @@ pub async fn analyze_for_proposals(context_text: &str) -> Result<AiAnalysisResul
     Ok(result)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FilterParams {
-    pub app_name: Option<String>,
-    pub keywords: Vec<String>,
-    pub date_range: Option<String>, // "today", "yesterday", "this_week", "last_week"
-    pub has_ocr: Option<bool>,
-}
-
-fn strip_json_code_fence(input: &str) -> &str {
-    let s = input.trim();
-    if s.starts_with("```json") {
-        return s
-            .trim_start_matches("```json")
-            .trim_end_matches("```")
-            .trim();
-    }
-    if s.starts_with("```") {
-        return s
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim();
-    }
-    s
-}
+// FilterParams and strip_json_code_fence are imported from memflow_core::ai
 
 fn parse_filter_params_from_llm_response(response: &str) -> Result<FilterParams> {
     let json_str = strip_json_code_fence(response);
@@ -569,52 +566,7 @@ fn parse_filter_params_from_llm_response(response: &str) -> Result<FilterParams>
     Ok(params)
 }
 
-fn fallback_filter_params(query: &str) -> FilterParams {
-    let q = query.trim();
-    let lower = q.to_lowercase();
-
-    let mut date_range = None;
-    if lower.contains("yesterday") {
-        date_range = Some("yesterday".to_string());
-    } else if lower.contains("today") {
-        date_range = Some("today".to_string());
-    } else if lower.contains("last week") || lower.contains("last_week") {
-        date_range = Some("last_week".to_string());
-    } else if lower.contains("this week") || lower.contains("this_week") {
-        date_range = Some("this_week".to_string());
-    } else if lower.contains("this month") || lower.contains("this_month") {
-        date_range = Some("this_month".to_string());
-    }
-
-    let has_ocr = if lower.contains("ocr")
-        || lower.contains("content")
-        || lower.contains("text")
-        || lower.contains("内容")
-        || lower.contains("文本")
-    {
-        Some(true)
-    } else {
-        None
-    };
-
-    let keywords = q
-        .split_whitespace()
-        .filter_map(|w| {
-            let trimmed = w.trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '-');
-            if trimmed.is_empty() {
-                return None;
-            }
-            Some(trimmed.to_string())
-        })
-        .collect::<Vec<_>>();
-
-    FilterParams {
-        app_name: None,
-        keywords,
-        date_range,
-        has_ocr,
-    }
-}
+// fallback_filter_params is imported from memflow_core::ai
 
 pub async fn parse_query_intent(query: &str) -> Result<FilterParams> {
     let config = crate::app_config::get_config().await.unwrap_or_else(|_| {
