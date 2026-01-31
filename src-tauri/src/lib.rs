@@ -178,6 +178,7 @@ pub fn run() {
         .on_window_event(|_window, event| {
             // 应用退出时停止 OCR 服务
             if let tauri::WindowEvent::Destroyed = event {
+                let _ = recorder::stop();
                 ocr::service::stop_service();
             }
         })

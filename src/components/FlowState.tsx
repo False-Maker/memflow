@@ -153,7 +153,7 @@ export default function FlowState() {
             <div className="text-3xl font-bold text-white">
               {stats.totalHours < 1
                 ? `${Math.round(stats.totalHours * 60)}m`
-                : `${stats.totalHours.toFixed(1)}h`}
+                : `${(stats.totalHours || 0).toFixed(1)}h`}
             </div>
           )}
         </div>

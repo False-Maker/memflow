@@ -10,6 +10,7 @@ use std::time::Duration;
 
 /// Activity log entry representing a recorded desktop activity
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ActivityLog {
     pub id: i64,
     pub timestamp: i64,
@@ -25,6 +26,7 @@ pub struct ActivityLog {
 
 /// Statistics summary for the activity logs
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Stats {
     pub total_activities: i64,
     pub total_hours: f64,
@@ -538,7 +540,7 @@ async fn try_connect_and_migrate(options: SqliteConnectOptions) -> Result<Sqlite
     ensure_agent_automation_schema(&pool).await?;
 
     // 执行完整性检查 (使用 integrity_check 以检测 FTS5 等虚拟表的损坏)
-    println!("Executing database integrity check...");
+
     tracing::info!("执行数据库完整性检查...");
     let check_result: (String,) = sqlx::query_as("PRAGMA integrity_check")
         .fetch_one(&pool)
@@ -546,7 +548,7 @@ async fn try_connect_and_migrate(options: SqliteConnectOptions) -> Result<Sqlite
         .map_err(|e| anyhow::anyhow!("Integrity check failed to execute: {}", e))?;
 
     if check_result.0 != "ok" {
-        println!("Database integrity check failed: {}", check_result.0);
+
         tracing::error!("数据库完整性检查失败: {}", check_result.0);
         return Err(anyhow::anyhow!(
             "Database integrity check failed (corrupt): {}",
@@ -556,7 +558,7 @@ async fn try_connect_and_migrate(options: SqliteConnectOptions) -> Result<Sqlite
 
     // FTS Smoke Test: 尝试写入 FTS 表以确保索引触发器未损坏
     // Note: read-only checks passed but writes failed. We must test the write path.
-    println!("Executing Aggressive Write Smoke Test...");
+
     {
         let mut transaction = pool.begin().await?;
         // 插入一条假数据来触发 FTS 索引更新
@@ -568,7 +570,7 @@ async fn try_connect_and_migrate(options: SqliteConnectOptions) -> Result<Sqlite
         .await;
 
         if let Err(e) = test_result {
-            println!("Write smoke test failed: {}", e);
+
             tracing::error!("写入冒烟测试失败 (检测到损坏): {}", e);
             return Err(anyhow::anyhow!("Database write failed (corrupt): {}", e));
         }
@@ -577,7 +579,7 @@ async fn try_connect_and_migrate(options: SqliteConnectOptions) -> Result<Sqlite
         transaction.rollback().await?;
     }
 
-    println!("Database checks passed.");
+
     tracing::info!("数据库完整性检查通过");
     Ok(pool)
 }

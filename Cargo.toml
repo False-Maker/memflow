@@ -1,3 +1,7 @@
 [workspace]
-members = ["src-tauri", "crates/memflow-core"]
+members = [
+    "src-tauri",
+    "crates/memflow-core",
+    "crates/memflow-mcp"
+]
 resolver = "2"

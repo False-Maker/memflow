@@ -181,6 +181,10 @@ pub async fn get_activities(limit: Option<i64>) -> Result<Vec<ActivityLog>, Stri
     match db::get_activities(limit).await {
         Ok(activities) => {
             tracing::info!("Returning {} activities", activities.len());
+            if let Some(first) = activities.first() {
+                println!("[DEBUG] First activity: ID={}, App={}, ImagePath={:?}", 
+                    first.id, first.app_name, first.image_path);
+            }
             Ok(activities)
         }
         Err(e) => {
@@ -298,6 +302,13 @@ pub async fn get_image_path(
 
     let screenshots_dir = app_data.join("screenshots");
     let file_path = screenshots_dir.join(&filename);
+    println!("[DEBUG] get_image_path: resolving '{}'", filename);
+    println!("[DEBUG] Full path: {:?}", file_path);
+    if file_path.exists() {
+        println!("[DEBUG] File exists!");
+    } else {
+        println!("[DEBUG] File does NOT exist!");
+    }
 
     // 返回完整路径
     file_path

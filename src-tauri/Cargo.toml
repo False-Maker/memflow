@@ -51,6 +51,7 @@ device_query = "0.2.4"
 async-trait = "0.1.89"
 jieba-rs = "0.7"
 scopeguard = "1.2.0"
+memflow-core = { path = "../crates/memflow-core" }
 
 [features]
 # 默认功能

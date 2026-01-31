@@ -1,0 +1,24 @@
+[package]
+name = "memflow-mcp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+memflow-core = { path = "../memflow-core" }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "5.0"
+chrono = "0.4"
+# Upgrading to latest fastembed to fix dependency issues
+fastembed = "4.0" 
+# Removed explicit ort dependency to test fastembed defaults
+
+
+
+[features]
+default = []
