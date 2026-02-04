@@ -239,13 +239,12 @@ function InputField({
       </div>
       {statusMessage && (
         <p
-          className={`text-xs flex items-center gap-1 ${
-            status === 'saved'
+          className={`text-xs flex items-center gap-1 ${status === 'saved'
               ? 'text-emerald-400'
               : status === 'error'
-              ? 'text-red-400'
-              : 'text-gray-400'
-          }`}
+                ? 'text-red-400'
+                : 'text-gray-400'
+            }`}
         >
           {status === 'saved' && <Check className="w-3 h-3" />}
           {status === 'error' && <AlertCircle className="w-3 h-3" />}
@@ -319,7 +318,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
       checkApiKeys()
       setDraftConfig(state.config)
       loadBlocklist()
-      
+
       // 检查 dialog 插件可用性
       checkDialogPlugin().then((available) => {
         if (!available) {
@@ -327,7 +326,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           setBlocklistError('文件选择功能可能不可用，请检查应用权限')
         }
       })
-      
+
       // Reset form to current config
       formDispatch({
         type: 'RESET_FORM',
@@ -520,8 +519,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           provider === 'custom'
             ? formState.chat.baseUrl
             : provider === 'anthropic'
-            ? state.config.anthropicBaseUrl
-            : state.config.openaiBaseUrl
+              ? state.config.anthropicBaseUrl
+              : state.config.openaiBaseUrl
 
         await invoke('test_chat_connection', {
           params: {
@@ -548,8 +547,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
 
         const apiKey =
           !useSharedKey &&
-          formState.embedding.apiKey &&
-          formState.embedding.apiKey !== '••••••••••••••••'
+            formState.embedding.apiKey &&
+            formState.embedding.apiKey !== '••••••••••••••••'
             ? formState.embedding.apiKey
             : undefined
 
@@ -617,7 +616,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     try {
       setBlocklistError(null)
       console.log('[黑名单] 正在打开文件选择对话框...')
-      
+
       const selected = await openFileDialog({
         multiple: false,
         directory: false,
@@ -626,13 +625,13 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           extensions: ['exe', 'lnk', 'app']
         }]
       })
-      
+
       console.log('[黑名单] 文件选择结果:', selected)
 
       if (selected && typeof selected === 'string') {
         const fileName = selected.split(/[/\\]/).pop()
         console.log('[黑名单] 提取的文件名:', fileName)
-        
+
         if (fileName) {
           try {
             setBlocklistError(null)
@@ -660,7 +659,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
       const errorMsg = e instanceof Error ? e.message : String(e)
       console.error('[黑名单] 选择文件失败:', e)
       setBlocklistError(`选择文件失败: ${errorMsg}`)
-      
+
       // 检查是否是权限问题
       if (errorMsg.includes('permission') || errorMsg.includes('权限') || errorMsg.includes('denied')) {
         setBlocklistError('文件选择权限被拒绝，请检查应用权限设置')
@@ -746,22 +745,20 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           <div className="w-48 border-r border-glass-border/50 bg-surface/30 p-4 space-y-2">
             <button
               onClick={() => setActiveTab('general')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'general'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'general'
                   ? 'bg-neon-blue/20 text-neon-blue'
                   : 'text-gray-400 hover:bg-white/5 hover:text-white'
-              }`}
+                }`}
             >
               <Bot className="w-4 h-4" />
               模型设置
             </button>
             <button
               onClick={() => setActiveTab('privacy')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'privacy'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'privacy'
                   ? 'bg-neon-blue/20 text-neon-blue'
                   : 'text-gray-400 hover:bg-white/5 hover:text-white'
-              }`}
+                }`}
             >
               <Shield className="w-4 h-4" />
               隐私与屏蔽
@@ -790,18 +787,48 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                           aiEnabled: !prev.aiEnabled,
                         }))
                       }
-                      className={`w-12 h-6 rounded-full transition-colors relative ${
-                        draftConfig.aiEnabled ? 'bg-neon-blue' : 'bg-gray-600'
-                      }`}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.aiEnabled ? 'bg-neon-blue' : 'bg-gray-600'
+                        }`}
                     >
                       <div
-                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                          draftConfig.aiEnabled ? 'translate-x-6' : 'translate-x-0'
-                        }`}
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${draftConfig.aiEnabled ? 'translate-x-6' : 'translate-x-0'
+                          }`}
                       />
                     </button>
                   </div>
                 </section>
+
+                {/* Proactive Context Assistant Toggle (only when AI is enabled) */}
+                {draftConfig.aiEnabled && (
+                  <section className="space-y-4">
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-surface/30 border border-glass-border/30">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-neon-purple/20 text-neon-purple flex items-center justify-center">
+                          <Sparkles className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-white">上下文助理</h4>
+                          <p className="text-xs text-gray-400">检测窗口切换时主动推送 AI 建议</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() =>
+                          setDraftConfig((prev) => ({
+                            ...prev,
+                            enableProactiveAssistant: !prev.enableProactiveAssistant,
+                          }))
+                        }
+                        className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.enableProactiveAssistant ? 'bg-neon-purple' : 'bg-gray-600'
+                          }`}
+                      >
+                        <div
+                          className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${draftConfig.enableProactiveAssistant ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                        />
+                      </button>
+                    </div>
+                  </section>
+                )}
 
                 {/* ==================== Chat Model Section ==================== */}
                 <section className="space-y-4">
@@ -996,13 +1023,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                       </button>
                       {testState.chat.message && (
                         <span
-                          className={`text-sm flex items-center gap-1 ${
-                            testState.chat.result === 'success'
+                          className={`text-sm flex items-center gap-1 ${testState.chat.result === 'success'
                               ? 'text-emerald-400'
                               : testState.chat.result === 'error'
-                              ? 'text-red-400'
-                              : 'text-gray-400'
-                          }`}
+                                ? 'text-red-400'
+                                : 'text-gray-400'
+                            }`}
                         >
                           {testState.chat.result === 'success' && <Check className="w-4 h-4" />}
                           {testState.chat.result === 'error' && <AlertCircle className="w-4 h-4" />}
@@ -1052,14 +1078,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                             payload: !formState.embedding.useSharedKey,
                           })
                         }
-                        className={`w-10 h-6 rounded-full transition-colors relative ${
-                          formState.embedding.useSharedKey ? 'bg-neon-blue' : 'bg-gray-600'
-                        }`}
+                        className={`w-10 h-6 rounded-full transition-colors relative ${formState.embedding.useSharedKey ? 'bg-neon-blue' : 'bg-gray-600'
+                          }`}
                       >
                         <div
-                          className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                            formState.embedding.useSharedKey ? 'translate-x-4' : 'translate-x-0'
-                          }`}
+                          className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${formState.embedding.useSharedKey ? 'translate-x-4' : 'translate-x-0'
+                            }`}
                         />
                       </button>
                       <span className="text-sm text-gray-300">
@@ -1148,13 +1172,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                       </button>
                       {testState.embedding.message && (
                         <span
-                          className={`text-sm flex items-center gap-1 ${
-                            testState.embedding.result === 'success'
+                          className={`text-sm flex items-center gap-1 ${testState.embedding.result === 'success'
                               ? 'text-emerald-400'
                               : testState.embedding.result === 'error'
-                              ? 'text-red-400'
-                              : 'text-gray-400'
-                          }`}
+                                ? 'text-red-400'
+                                : 'text-gray-400'
+                            }`}
                         >
                           {testState.embedding.result === 'success' && <Check className="w-4 h-4" />}
                           {testState.embedding.result === 'error' && <AlertCircle className="w-4 h-4" />}
@@ -1187,14 +1210,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                           ocrRedactionEnabled: !prev.ocrRedactionEnabled,
                         }))
                       }
-                      className={`w-12 h-6 rounded-full transition-colors relative ${
-                        draftConfig.ocrRedactionEnabled ? 'bg-emerald-500' : 'bg-gray-600'
-                      }`}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.ocrRedactionEnabled ? 'bg-emerald-500' : 'bg-gray-600'
+                        }`}
                     >
                       <div
-                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                          draftConfig.ocrRedactionEnabled ? 'translate-x-6' : 'translate-x-0'
-                        }`}
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${draftConfig.ocrRedactionEnabled ? 'translate-x-6' : 'translate-x-0'
+                          }`}
                       />
                     </button>
                   </div>
@@ -1210,11 +1231,10 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                               ocrRedactionLevel: 'basic',
                             }))
                           }
-                          className={`p-3 rounded-lg border text-left transition-colors ${
-                            draftConfig.ocrRedactionLevel === 'basic'
+                          className={`p-3 rounded-lg border text-left transition-colors ${draftConfig.ocrRedactionLevel === 'basic'
                               ? 'bg-emerald-500/20 border-emerald-500'
                               : 'border-glass-border hover:bg-surface/80'
-                          }`}
+                            }`}
                         >
                           <div className="font-medium text-white mb-1">基础模式</div>
                           <div className="text-xs text-gray-400">
@@ -1228,11 +1248,10 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                               ocrRedactionLevel: 'strict',
                             }))
                           }
-                          className={`p-3 rounded-lg border text-left transition-colors ${
-                            draftConfig.ocrRedactionLevel === 'strict'
+                          className={`p-3 rounded-lg border text-left transition-colors ${draftConfig.ocrRedactionLevel === 'strict'
                               ? 'bg-emerald-500/20 border-emerald-500'
                               : 'border-glass-border hover:bg-surface/80'
-                          }`}
+                            }`}
                         >
                           <div className="font-medium text-white mb-1">严格模式</div>
                           <div className="text-xs text-gray-400">
@@ -1268,14 +1287,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                             : undefined,
                         }))
                       }
-                      className={`w-12 h-6 rounded-full transition-colors relative ${
-                        draftConfig.privacyModeEnabled ? 'bg-amber-500' : 'bg-gray-600'
-                      }`}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.privacyModeEnabled ? 'bg-amber-500' : 'bg-gray-600'
+                        }`}
                     >
                       <div
-                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                          draftConfig.privacyModeEnabled ? 'translate-x-6' : 'translate-x-0'
-                        }`}
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${draftConfig.privacyModeEnabled ? 'translate-x-6' : 'translate-x-0'
+                          }`}
                       />
                     </button>
                   </div>
@@ -1297,13 +1314,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                                 privacyModeUntil: Date.now() + opt.val,
                               }))
                             }
-                            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                              draftConfig.privacyModeUntil &&
-                              draftConfig.privacyModeUntil - Date.now() <= opt.val &&
-                              draftConfig.privacyModeUntil - Date.now() > opt.val - 3600 * 1000 // Rough check
+                            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${draftConfig.privacyModeUntil &&
+                                draftConfig.privacyModeUntil - Date.now() <= opt.val &&
+                                draftConfig.privacyModeUntil - Date.now() > opt.val - 3600 * 1000 // Rough check
                                 ? 'bg-amber-500/20 border-amber-500 text-amber-500'
                                 : 'border-glass-border hover:bg-surface/80 text-gray-300'
-                            }`}
+                              }`}
                           >
                             {opt.label}
                           </button>
@@ -1333,14 +1349,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                           enableProactiveAssistant: !prev.enableProactiveAssistant,
                         }))
                       }
-                      className={`w-12 h-6 rounded-full transition-colors relative ${
-                        draftConfig.enableProactiveAssistant ? 'bg-neon-blue' : 'bg-gray-600'
-                      }`}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.enableProactiveAssistant ? 'bg-neon-blue' : 'bg-gray-600'
+                        }`}
                     >
                       <div
-                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                          draftConfig.enableProactiveAssistant ? 'translate-x-6' : 'translate-x-0'
-                        }`}
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${draftConfig.enableProactiveAssistant ? 'translate-x-6' : 'translate-x-0'
+                          }`}
                       />
                     </button>
                   </div>
@@ -1368,14 +1382,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                           enableFocusAnalytics: !prev.enableFocusAnalytics,
                         }))
                       }
-                      className={`w-12 h-6 rounded-full transition-colors relative ${
-                        draftConfig.enableFocusAnalytics ? 'bg-purple-500' : 'bg-gray-600'
-                      }`}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.enableFocusAnalytics ? 'bg-purple-500' : 'bg-gray-600'
+                        }`}
                     >
                       <div
-                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                          draftConfig.enableFocusAnalytics ? 'translate-x-6' : 'translate-x-0'
-                        }`}
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${draftConfig.enableFocusAnalytics ? 'translate-x-6' : 'translate-x-0'
+                          }`}
                       />
                     </button>
                   </div>
@@ -1402,14 +1414,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                           blocklistEnabled: !prev.blocklistEnabled,
                         }))
                       }
-                      className={`w-12 h-6 rounded-full transition-colors relative ${
-                        draftConfig.blocklistEnabled ? 'bg-red-500' : 'bg-gray-600'
-                      }`}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.blocklistEnabled ? 'bg-red-500' : 'bg-gray-600'
+                        }`}
                     >
                       <div
-                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                          draftConfig.blocklistEnabled ? 'translate-x-6' : 'translate-x-0'
-                        }`}
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${draftConfig.blocklistEnabled ? 'translate-x-6' : 'translate-x-0'
+                          }`}
                       />
                     </button>
                   </div>

@@ -40,6 +40,7 @@ static SCREENSHOTS_DIR: once_cell::sync::Lazy<tokio::sync::Mutex<Option<PathBuf>
     once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(None));
 
 // 恢复操作互斥锁，确保一次只有一个恢复操作
+#[allow(dead_code)]
 static RECOVERY_LOCK: once_cell::sync::Lazy<tokio::sync::Mutex<()>> =
     once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(()));
 
@@ -47,6 +48,34 @@ static SKIPPED_STATS: once_cell::sync::Lazy<tokio::sync::Mutex<HashMap<String, i
     once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
 static SKIPPED_STATS_FLUSH_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Sanitize user input for SQLite FTS5 MATCH queries.
+/// Removes or escapes special characters that could cause FTS5 syntax errors.
+pub fn sanitize_fts_query(input: &str) -> String {
+    let mut sanitized = String::with_capacity(input.len());
+    
+    for c in input.chars() {
+        match c {
+            // Skip FTS5 special characters that could break parsing
+            '"' | '*' | '(' | ')' | ':' | '^' | '[' | ']' => {
+                // Replace with space to preserve word boundaries
+                sanitized.push(' ');
+            }
+            '-' if sanitized.is_empty() || sanitized.ends_with(' ') => {
+                // Skip leading minus (NOT operator in FTS5)
+            }
+            _ => sanitized.push(c),
+        }
+    }
+    
+    // Split and filter out boolean keywords that could cause issues
+    let terms: Vec<&str> = sanitized
+        .split_whitespace()
+        .filter(|t| !matches!(t.to_uppercase().as_str(), "AND" | "OR" | "NOT" | "NEAR"))
+        .collect();
+    
+    terms.join(" ")
+}
 
 /// Initialize database with explicit paths (Tauri-independent)
 ///
@@ -327,7 +356,9 @@ pub async fn search_activities_impl(
     offset: Option<i64>,
     order_by: Option<String>,
 ) -> Result<(Vec<ActivityLog>, i64)> {
-    let has_query = query.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
+    // Sanitize the query for FTS5 to prevent syntax errors from special characters
+    let sanitized_query = query.map(|q| sanitize_fts_query(&q)).filter(|q| !q.is_empty());
+    let has_query = sanitized_query.is_some();
 
     // 构建 COUNT 查询以获取 total
     let total = {
@@ -341,7 +372,7 @@ pub async fn search_activities_impl(
 
         if has_query {
             count_builder.push("AND activity_logs_fts MATCH ");
-            count_builder.push_bind(query.as_ref().unwrap().clone());
+            count_builder.push_bind(sanitized_query.as_ref().unwrap().clone());
             count_builder.push(" ");
         }
 
@@ -394,7 +425,7 @@ pub async fn search_activities_impl(
 
     if has_query {
         builder.push("AND activity_logs_fts MATCH ");
-        builder.push_bind(query.unwrap());
+        builder.push_bind(sanitized_query.clone().unwrap());
         builder.push(" ");
     }
 

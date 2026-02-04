@@ -41,23 +41,12 @@ pub struct TaskContext {
 }
 
 /// Filter parameters for activity search (parsed from user query)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FilterParams {
     pub app_name: Option<String>,
     pub keywords: Vec<String>,
     pub date_range: Option<String>,
     pub has_ocr: Option<bool>,
-}
-
-impl Default for FilterParams {
-    fn default() -> Self {
-        Self {
-            app_name: None,
-            keywords: Vec::new(),
-            date_range: None,
-            has_ocr: None,
-        }
-    }
 }
 
 /// Strip JSON code fence markers from LLM response

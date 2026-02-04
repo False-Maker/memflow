@@ -1,0 +1,1319 @@
+﻿cargo :     Checking memflow-core 
+v0.1.0 (D:\Demo\memflow\crates\mem
+flow-core)
+所在位置 行:1 字符: 1
++ cargo clippy --all-targets --all
+-features 2>&1 | Out-File -FilePat
+h " ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo          : Not 
+   Specified: (    Checking me..  
+  .s\memflow-core):String) [],    
+ RemoteException
+    + FullyQualifiedErrorId : Nat 
+   iveCommandError
+ 
+warning: this function has too man
+y arguments (8/7)
+   --> crates\memflow-core\src\db.
+rs:333:1
+    |
+333 | / pub async fn search_activi
+ties(
+334 | |     query: Option<String>,
+335 | |     app_name: Option<Strin
+g>,
+336 | |     from_ts: Option<i64>,
+...   |
+341 | |     order_by: Option<Strin
+g>,
+342 | | ) -> Result<(Vec<ActivityL
+og>, i64)> {
+    | |___________________________
+_________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#too_many_arguments
+    = note: `#[warn(clippy::too_ma
+ny_arguments)]` on by default
+
+warning: this function has too man
+y arguments (9/7)
+   --> crates\memflow-core\src\db.
+rs:348:1
+    |
+348 | / pub async fn search_activi
+ties_impl(
+349 | |     pool: &SqlitePool,
+350 | |     query: Option<String>,
+351 | |     app_name: Option<Strin
+g>,
+...   |
+357 | |     order_by: Option<Strin
+g>,
+358 | | ) -> Result<(Vec<ActivityL
+og>, i64)> {
+    | |___________________________
+_________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#too_many_arguments
+
+warning: `memflow-core` (lib) gene
+rated 2 warnings
+    Checking memflow v0.1.0 (D:\De
+mo\memflow\src-tauri)
+warning: unneeded `return` stateme
+nt
+   --> src-tauri\src\ai\mod.rs:265
+:25
+    |
+265 |                         retu
+rn Ok(answer);
+    |                         ^^^^
+^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#needless_return
+    = note: `#[warn(clippy::needle
+ss_return)]` on by default
+help: remove `return`
+    |
+265 -                         retu
+rn Ok(answer);
+265 +                         Ok(a
+nswer)
+    |
+
+warning: unneeded `return` stateme
+nt
+   --> src-tauri\src\ai\mod.rs:272
+:25
+    |
+272 | / ...   return Ok(format!(
+273 | | ...       "鈿狅笍 Anthropic A
+PI 璋冪敤澶辫触\n\n閿欒淇℃伅锛歿}\n\n璇锋鏌ワ細\n
+1. API Key 鏄惁鏈夋晥\n2. 缃戠粶杩炴帴鏄惁姝ｅ父
+\n3. 妯″瀷鍚嶇О鏄惁姝ｇ‘锛堝綋鍓? {}锛?,
+274 | | ...       crate::redact::r
+edact_secrets(&e.to_string()),
+275 | | ...       model_id
+276 | | ...   ));
+    | |________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#needless_return
+help: remove `return`
+    |
+272 ~                         Ok(f
+ormat!(
+273 ~                             
+"鈿狅笍 Anthropic API 璋冪敤澶辫触\n\n閿欒淇℃
+伅锛歿}\n\n璇锋鏌ワ細\n1. API Key 鏄惁鏈夋晥\
+n2. 缃戠粶杩炴帴鏄惁姝ｅ父\n3. 妯″瀷鍚嶇О鏄惁姝ｇ‘锛
+堝綋鍓? {}锛?,
+274 +                             
+crate::redact::redact_secrets(&e.t
+o_string()),
+275 +                             
+model_id
+276 ~                         ))
+    |
+
+warning: unneeded `return` stateme
+nt
+   --> src-tauri\src\ai\mod.rs:282
+:17
+    |
+282 | / ...   return Ok(format!(
+283 | | ...       "鈿狅笍 鏈厤缃?Anthro
+pic API Key\n\n褰撳墠閫夋嫨鐨勬ā鍨嬫槸 {}锛岄渶瑕
+?Anthropic API Key銆俓n\n璇峰湪銆岃缃€嶄腑
+閰嶇疆 Anthropic API Key 鍚庡啀璇曘€?,
+284 | | ...       model_id
+285 | | ...   ));
+    | |________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#needless_return
+help: remove `return`
+    |
+282 ~                 Ok(format!(
+283 ~                     "鈿狅笍 鏈厤
+缃?Anthropic API Key\n\n褰撳墠閫夋嫨鐨勬ā鍨嬫
+槸 {}锛岄渶瑕?Anthropic API Key銆俓n\n璇峰湪
+銆岃缃€嶄腑閰嶇疆 Anthropic API Key 鍚庡啀璇
+曘€?,
+284 +                     model_id
+285 ~                 ))
+    |
+
+warning: unneeded `return` stateme
+nt
+   --> src-tauri\src\ai\mod.rs:289
+:17
+    |
+289 | /                 return Ok(
+format!(
+290 | |                     "鈿狅笍 鑾
+峰彇 API Key 澶辫触锛歿}",
+291 | |                     crate:
+:redact::redact_secrets(&e.to_stri
+ng())
+292 | |                 ));
+    | |__________________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#needless_return
+help: remove `return`
+    |
+289 ~                 Ok(format!(
+290 ~                     "鈿狅笍 鑾峰彇
+ API Key 澶辫触锛歿}",
+291 +                     crate::r
+edact::redact_secrets(&e.to_string
+())
+292 ~                 ))
+    |
+
+warning: unneeded `return` stateme
+nt
+   --> src-tauri\src\ai\mod.rs:308
+:25
+    |
+308 |                         retu
+rn Ok(answer);
+    |                         ^^^^
+^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#needless_return
+help: remove `return`
+    |
+308 -                         retu
+rn Ok(answer);
+308 +                         Ok(a
+nswer)
+    |
+
+warning: unneeded `return` stateme
+nt
+   --> src-tauri\src\ai\mod.rs:315
+:25
+    |
+315 | / ...   return Ok(format!(
+316 | | ...       "鈿狅笍 OpenAI API 
+璋冪敤澶辫触\n\n閿欒淇℃伅锛歿}\n\n璇锋鏌ワ細\n1. 
+API Key 鏄惁鏈夋晥\n2. 缃戠粶杩炴帴鏄惁姝ｅ父\n3
+. 妯″瀷鍚嶇О鏄惁姝ｇ‘锛堝綋鍓? {}锛塡n4. 濡傛灉浣跨敤
+鑷畾涔?Base URL锛岃纭鍦板潃姝ｇ‘",
+317 | | ...       crate::redact::r
+edact_secrets(&e.to_string()),
+318 | | ...       model_id
+319 | | ...   ));
+    | |________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#needless_return
+help: remove `return`
+    |
+315 ~                         Ok(f
+ormat!(
+316 ~                             
+"鈿狅笍 OpenAI API 璋冪敤澶辫触\n\n閿欒淇℃伅锛歿
+}\n\n璇锋鏌ワ細\n1. API Key 鏄惁鏈夋晥\n2.
+ 缃戠粶杩炴帴鏄惁姝ｅ父\n3. 妯″瀷鍚嶇О鏄惁姝ｇ‘锛堝綋鍓
+? {}锛塡n4. 濡傛灉浣跨敤鑷畾涔?Base URL锛岃纭
+鍦板潃姝ｇ‘",
+317 +                             
+crate::redact::redact_secrets(&e.t
+o_string()),
+318 +                             
+model_id
+319 ~                         ))
+    |
+
+warning: unneeded `return` stateme
+nt
+   --> src-tauri\src\ai\mod.rs:325
+:17
+    |
+325 | / ...   return Ok(format!(
+326 | | ...       "鈿狅笍 鏈厤缃?OpenAI
+ API Key\n\n褰撳墠閫夋嫨鐨勬ā鍨嬫槸 {}锛岄渶瑕?Op
+enAI API Key銆俓n\n璇峰湪銆岃缃€嶄腑閰嶇疆 Op
+enAI API Key 鍚庡啀璇曘€?,
+327 | | ...       model_id
+328 | | ...   ));
+    | |________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#needless_return
+help: remove `return`
+    |
+325 ~                 Ok(format!(
+326 ~                     "鈿狅笍 鏈厤
+缃?OpenAI API Key\n\n褰撳墠閫夋嫨鐨勬ā鍨嬫槸 {
+}锛岄渶瑕?OpenAI API Key銆俓n\n璇峰湪銆岃缃€
+嶄腑閰嶇疆 OpenAI API Key 鍚庡啀璇曘€?,
+327 +                     model_id
+328 ~                 ))
+    |
+
+warning: unneeded `return` stateme
+nt
+   --> src-tauri\src\ai\mod.rs:332
+:17
+    |
+332 | /                 return Ok(
+format!(
+333 | |                     "鈿狅笍 鑾
+峰彇 API Key 澶辫触锛歿}",
+334 | |                     crate:
+:redact::redact_secrets(&e.to_stri
+ng())
+335 | |                 ));
+    | |__________________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#needless_return
+help: remove `return`
+    |
+332 ~                 Ok(format!(
+333 ~                     "鈿狅笍 鑾峰彇
+ API Key 澶辫触锛歿}",
+334 +                     crate::r
+edact::redact_secrets(&e.to_string
+())
+335 ~                 ))
+    |
+
+warning: this function has too man
+y arguments (8/7)
+   --> src-tauri\src\commands.rs:1
+98:1
+    |
+198 | / pub async fn search_activi
+ties(
+199 | |     query: Option<String>,
+200 | |     app_name: Option<Strin
+g>,
+201 | |     from_ts: Option<i64>,
+...   |
+206 | |     order_by: Option<Strin
+g>,
+207 | | ) -> Result<serde_json::Va
+lue, String> {
+    | |___________________________
+___________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#too_many_arguments
+    = note: `#[warn(clippy::too_ma
+ny_arguments)]` on by default
+
+warning: redundant closure
+   --> src-tauri\src\graph.rs:135:
+76
+    |
+135 |             DateTime::from_t
+imestamp(activity.timestamp, 0).un
+wrap_or_else(|| Utc::now());
+    |                             
+                                  
+             ^^^^^^^^^^^^^ help: r
+eplace the closure with the associ
+ated function itself: `Utc::now`
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#redundant_closure
+    = note: `#[warn(clippy::redund
+ant_closure)]` on by default
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:4
+80:9
+    |
+480 |         assert_eq!(cfg.ocr_e
+nabled, false);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+    = note: `#[warn(clippy::bool_a
+ssert_comparison)]` on by default
+help: replace it with `assert!(..)
+`
+    |
+480 -         assert_eq!(cfg.ocr_e
+nabled, false);
+480 +         assert!(!cfg.ocr_ena
+bled);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:4
+82:9
+    |
+482 |         assert_eq!(cfg.ai_en
+abled, false);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+482 -         assert_eq!(cfg.ai_en
+abled, false);
+482 +         assert!(!cfg.ai_enab
+led);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:4
+87:9
+    |
+487 |         assert_eq!(cfg.embed
+ding_use_shared_key, true);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+487 -         assert_eq!(cfg.embed
+ding_use_shared_key, true);
+487 +         assert!(cfg.embeddin
+g_use_shared_key);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:4
+90:9
+    |
+490 |         assert_eq!(cfg.enabl
+e_focus_analytics, true); // 淇锛氶
+粯璁ゅ€煎簲涓?true
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+490 -         assert_eq!(cfg.enabl
+e_focus_analytics, true); // 淇锛氶
+粯璁ゅ€煎簲涓?true
+490 +         assert!(cfg.enable_f
+ocus_analytics); // 淇锛氶粯璁ゅ€煎簲涓?t
+rue
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:4
+91:9
+    |
+491 |         assert_eq!(cfg.enabl
+e_proactive_assistant, false);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+491 -         assert_eq!(cfg.enabl
+e_proactive_assistant, false);
+491 +         assert!(!cfg.enable_
+proactive_assistant);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:4
+92:9
+    |
+492 |         assert_eq!(cfg.block
+list_enabled, false);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+492 -         assert_eq!(cfg.block
+list_enabled, false);
+492 +         assert!(!cfg.blockli
+st_enabled);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:4
+94:9
+    |
+494 |         assert_eq!(cfg.priva
+cy_mode_enabled, false);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+494 -         assert_eq!(cfg.priva
+cy_mode_enabled, false);
+494 +         assert!(!cfg.privacy
+_mode_enabled);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:4
+95:9
+    |
+495 |         assert_eq!(cfg.ocr_r
+edaction_enabled, true);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+495 -         assert_eq!(cfg.ocr_r
+edaction_enabled, true);
+495 +         assert!(cfg.ocr_reda
+ction_enabled);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:4
+97:9
+    |
+497 |         assert_eq!(cfg.ocr_p
+reprocess_enabled, true);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+497 -         assert_eq!(cfg.ocr_p
+reprocess_enabled, true);
+497 +         assert!(cfg.ocr_prep
+rocess_enabled);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:5
+10:9
+    |
+510 |         assert_eq!(cfg.ocr_e
+nabled, true);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+510 -         assert_eq!(cfg.ocr_e
+nabled, true);
+510 +         assert!(cfg.ocr_enab
+led);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:5
+14:9
+    |
+514 |         assert_eq!(cfg.ai_en
+abled, false);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+514 -         assert_eq!(cfg.ai_en
+abled, false);
+514 +         assert!(!cfg.ai_enab
+led);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:5
+16:9
+    |
+516 |         assert_eq!(cfg.enabl
+e_focus_analytics, true);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+516 -         assert_eq!(cfg.enabl
+e_focus_analytics, true);
+516 +         assert!(cfg.enable_f
+ocus_analytics);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:5
+18:9
+    |
+518 |         assert_eq!(cfg.ocr_p
+reprocess_enabled, true);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+518 -         assert_eq!(cfg.ocr_p
+reprocess_enabled, true);
+518 +         assert!(cfg.ocr_prep
+rocess_enabled);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:5
+43:9
+    |
+543 |         assert_eq!(cfg.ocr_e
+nabled, true);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+543 -         assert_eq!(cfg.ocr_e
+nabled, true);
+543 +         assert!(cfg.ocr_enab
+led);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:5
+45:9
+    |
+545 |         assert_eq!(cfg.ai_en
+abled, true);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+545 -         assert_eq!(cfg.ai_en
+abled, true);
+545 +         assert!(cfg.ai_enabl
+ed);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:5
+53:9
+    |
+553 |         assert_eq!(cfg.embed
+ding_use_shared_key, false);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+553 -         assert_eq!(cfg.embed
+ding_use_shared_key, false);
+553 +         assert!(!cfg.embeddi
+ng_use_shared_key);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:5
+62:9
+    |
+562 |         assert_eq!(cfg.enabl
+e_focus_analytics, true);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+562 -         assert_eq!(cfg.enabl
+e_focus_analytics, true);
+562 +         assert!(cfg.enable_f
+ocus_analytics);
+    |
+
+warning: used `assert_eq!` with a 
+literal bool
+   --> src-tauri\src\commands.rs:5
+63:9
+    |
+563 |         assert_eq!(cfg.ocr_p
+reprocess_enabled, true);
+    |         ^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#bool_assert_comparison
+help: replace it with `assert!(..)
+`
+    |
+563 -         assert_eq!(cfg.ocr_p
+reprocess_enabled, true);
+563 +         assert!(cfg.ocr_prep
+rocess_enabled);
+    |
+
+warning: clamp-like pattern withou
+t using clamp function
+   --> src-tauri\src\recorder.rs:1
+21:26
+    |
+121 |     let heartbeat_secs = (co
+nfig.recording_interval / 1000).ma
+x(10).min(60);
+    |                          ^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^ help: replace with c
+lamp: `(config.recording_interval 
+/ 1000).clamp(10, 60)`
+    |
+    = note: clamp will panic if ma
+x < min
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#manual_clamp
+    = note: `#[warn(clippy::manual
+_clamp)]` on by default
+
+warning: non-binding `let` on a fu
+ture
+   --> src-tauri\src\recorder.rs:2
+06:17
+    |
+206 | /                 let _ = to
+kio::spawn(async {
+207 | |                     let _ 
+= db::increment_skipped_stat("priv
+acy_mode").await;
+208 | |                 });
+    | |___________________^
+    |
+    = help: consider awaiting the 
+future or dropping explicitly with
+ `std::mem::drop`
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#let_underscore_future
+    = note: `#[warn(clippy::let_un
+derscore_future)]` on by default
+
+warning: non-binding `let` on a fu
+ture
+   --> src-tauri\src\recorder.rs:2
+13:13
+    |
+213 | /             let _ = tokio:
+:spawn(async {
+214 | |                 let _ = db
+::increment_skipped_stat("privacy_
+mode").await;
+215 | |             });
+    | |_______________^
+    |
+    = help: consider awaiting the 
+future or dropping explicitly with
+ `std::mem::drop`
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#let_underscore_future
+
+warning: non-binding `let` on a fu
+ture
+   --> src-tauri\src\recorder.rs:2
+40:17
+    |
+240 | /                 let _ = to
+kio::spawn(async {
+241 | |                     let _ 
+= db::increment_skipped_stat("bloc
+klist").await;
+242 | |                 });
+    | |___________________^
+    |
+    = help: consider awaiting the 
+future or dropping explicitly with
+ `std::mem::drop`
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#let_underscore_future
+
+warning: this `if` statement can b
+e collapsed
+   --> src-tauri\src\recorder.rs:2
+45:16
+    |
+245 |           } else if config.b
+locklist_mode == "allowlist" {
+    |  ________________^
+246 | |             if !is_blocked
+ {
+247 | |                 tracing::d
+ebug!(
+248 | |                     "App {
+} is not in allowlist, skipping",
+...   |
+256 | |         }
+    | |_________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#collapsible_if
+    = note: `#[warn(clippy::collap
+sible_if)]` on by default
+help: collapse nested if block
+    |
+245 ~         } else if config.blo
+cklist_mode == "allowlist"
+246 ~             && !is_blocked {
+247 |                 tracing::deb
+ug!(
+...
+254 |                 return Ok(()
+);
+255 ~             }
+    |
+
+warning: non-binding `let` on a fu
+ture
+   --> src-tauri\src\recorder.rs:2
+51:17
+    |
+251 | /                 let _ = to
+kio::spawn(async {
+252 | |                     let _ 
+= db::increment_skipped_stat("allo
+wlist_miss").await;
+253 | |                 });
+    | |___________________^
+    |
+    = help: consider awaiting the 
+future or dropping explicitly with
+ `std::mem::drop`
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#let_underscore_future
+
+warning: using `clone` on type `Op
+tion<u64>` which implements the `C
+opy` trait
+   --> src-tauri\src\recorder.rs:3
+15:26
+    |
+315 |     let last_text_hash = LAS
+T_TEXT_HASH.lock().await.clone();
+    |                          ^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ h
+elp: try dereferencing it: `*LAST_
+TEXT_HASH.lock().await`
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#clone_on_copy
+    = note: `#[warn(clippy::clone_
+on_copy)]` on by default
+
+warning: non-binding `let` on a fu
+ture
+   --> src-tauri\src\recorder.rs:3
+40:9
+    |
+340 | /         let _ = tokio::spa
+wn(async {
+341 | |             let _ = db::in
+crement_skipped_stat("duplicate_fr
+ame").await;
+342 | |         });
+    | |___________^
+    |
+    = help: consider awaiting the 
+future or dropping explicitly with
+ `std::mem::drop`
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#let_underscore_future
+
+warning: redundant redefinition of
+ a binding `min_x`
+   --> src-tauri\src\recorder.rs:5
+42:13
+    |
+542 |             let min_x = min_
+x;
+    |             ^^^^^^^^^^^^^^^^
+^^
+    |
+help: `min_x` is initially defined
+ here
+   --> src-tauri\src\recorder.rs:5
+20:9
+    |
+520 |     let min_x = monitors.ite
+r().map(|m| m.x()).min().unwrap_or
+(0);
+    |         ^^^^^
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#redundant_locals
+    = note: `#[warn(clippy::redund
+ant_locals)]` on by default
+
+warning: redundant redefinition of
+ a binding `min_y`
+   --> src-tauri\src\recorder.rs:5
+43:13
+    |
+543 |             let min_y = min_
+y;
+    |             ^^^^^^^^^^^^^^^^
+^^
+    |
+help: `min_y` is initially defined
+ here
+   --> src-tauri\src\recorder.rs:5
+21:9
+    |
+521 |     let min_y = monitors.ite
+r().map(|m| m.y()).min().unwrap_or
+(0);
+    |         ^^^^^
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#redundant_locals
+
+warning: comparing with null is be
+tter expressed by the `.is_null()`
+ method
+  --> src-tauri\src\window_info.rs
+:17:12
+   |
+17 |         if hwnd.0 == std::ptr
+::null_mut() {
+   |            ^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^ help: try: `hwnd.0.is
+_null()`
+   |
+   = help: for further information
+ visit https://rust-lang.github.io
+/rust-clippy/rust-1.91.0/index.htm
+l#cmp_null
+   = note: `#[warn(clippy::cmp_nul
+l)]` on by default
+
+warning: redundant redefinition of
+ a binding `preprocess_enabled`
+  --> src-tauri\src\ocr_worker.rs:
+95:17
+   |
+95 |                 let preproces
+s_enabled = preprocess_enabled;
+   |                 ^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: `preprocess_enabled` is init
+ially defined here
+  --> src-tauri\src\ocr_worker.rs:
+62:13
+   |
+62 |         let preprocess_enable
+d = config.ocr_preprocess_enabled;
+   |             ^^^^^^^^^^^^^^^^^
+^
+   = help: for further information
+ visit https://rust-lang.github.io
+/rust-clippy/rust-1.91.0/index.htm
+l#redundant_locals
+
+warning: redundant redefinition of
+ a binding `preprocess_target_widt
+h`
+  --> src-tauri\src\ocr_worker.rs:
+96:17
+   |
+96 |                 let preproces
+s_target_width = preprocess_target
+_width;
+   |                 ^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^
+   |
+help: `preprocess_target_width` is
+ initially defined here
+  --> src-tauri\src\ocr_worker.rs:
+63:13
+   |
+63 |         let preprocess_target
+_width = config.ocr_preprocess_tar
+get_width;
+   |             ^^^^^^^^^^^^^^^^^
+^^^^^^
+   = help: for further information
+ visit https://rust-lang.github.io
+/rust-clippy/rust-1.91.0/index.htm
+l#redundant_locals
+
+warning: redundant redefinition of
+ a binding `preprocess_max_pixels`
+  --> src-tauri\src\ocr_worker.rs:
+97:17
+   |
+97 |                 let preproces
+s_max_pixels = preprocess_max_pixe
+ls;
+   |                 ^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^
+   |
+help: `preprocess_max_pixels` is i
+nitially defined here
+  --> src-tauri\src\ocr_worker.rs:
+64:13
+   |
+64 |         let preprocess_max_pi
+xels = config.ocr_preprocess_max_p
+ixels;
+   |             ^^^^^^^^^^^^^^^^^
+^^^^
+   = help: for further information
+ visit https://rust-lang.github.io
+/rust-clippy/rust-1.91.0/index.htm
+l#redundant_locals
+
+warning: comparing with null is be
+tter expressed by the `.is_null()`
+ method
+   --> src-tauri\src\uia.rs:221:12
+    |
+221 |         if hwnd.0 == std::pt
+r::null_mut() {
+    |            ^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^ help: try: `hwnd.0.i
+s_null()`
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#cmp_null
+
+warning: `memflow` (lib) generated
+ 25 warnings (run `cargo clippy --
+fix --lib -p memflow` to apply 13 
+suggestions)
+warning: `memflow` (lib test) gene
+rated 43 warnings (25 duplicates) 
+(run `cargo clippy --fix --lib -p 
+memflow --tests` to apply 18 sugge
+stions)
+warning: this import is redundant
+ --> src-tauri\examples\test_ocr_s
+imple.rs:3:1
+  |
+3 | use image;
+  | ^^^^^^^^^^ help: remove it ent
+irely
+  |
+  = help: for further information 
+visit https://rust-lang.github.io/
+rust-clippy/rust-1.91.0/index.html
+#single_component_path_imports
+  = note: `#[warn(clippy::single_c
+omponent_path_imports)]` on by def
+ault
+
+warning: `memflow` (example "test_
+ocr_simple") generated 1 warning (
+run `cargo clippy --fix --example 
+"test_ocr_simple"` to apply 1 sugg
+estion)
+warning: used `unwrap()` on `Some`
+ value
+  --> src-tauri\examples\reproduce
+_filter.rs:67:27
+   |
+67 |         builder.push_bind(que
+ry_str.unwrap());
+   |                           ^^^
+^^^^^^^^^^^^^^^
+   |
+help: remove the `Some` and `unwra
+p()`
+  --> src-tauri\examples\reproduce
+_filter.rs:49:21
+   |
+49 |     let query_str = Some("Fil
+e".to_string());
+   |                     ^^^^^^^^^
+^^^^^^^^^^^^^^^
+   = help: for further information
+ visit https://rust-lang.github.io
+/rust-clippy/rust-1.91.0/index.htm
+l#unnecessary_literal_unwrap
+   = note: `#[warn(clippy::unneces
+sary_literal_unwrap)]` on by defau
+lt
+
+warning: length comparison to zero
+  --> src-tauri\examples\reproduce
+_filter.rs:96:8
+   |
+96 |     if rows.len() == 0 {
+   |        ^^^^^^^^^^^^^^^ help: 
+using `is_empty` is clearer and mo
+re explicit: `rows.is_empty()`
+   |
+   = help: for further information
+ visit https://rust-lang.github.io
+/rust-clippy/rust-1.91.0/index.htm
+l#len_zero
+   = note: `#[warn(clippy::len_zer
+o)]` on by default
+
+warning: length comparison to zero
+   --> src-tauri\examples\test_fts
+.rs:162:12
+    |
+162 |         if results.len() > 0
+ {
+    |            ^^^^^^^^^^^^^^^^^
+ help: using `!is_empty` is cleare
+r and more explicit: `!results.is_
+empty()`
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#len_zero
+    = note: `#[warn(clippy::len_ze
+ro)]` on by default
+
+warning: `memflow` (example "test_
+fts") generated 1 warning (run `ca
+rgo clippy --fix --example "test_f
+ts"` to apply 1 suggestion)
+warning: `memflow` (example "repro
+duce_filter") generated 2 warnings
+ (run `cargo clippy --fix --exampl
+e "reproduce_filter"` to apply 1 s
+uggestion)
+warning: unnecessary `if let` sinc
+e only the `Ok` variant of the ite
+rator element is used
+  --> src-tauri\examples\test_ocr_
+batch.rs:55:13
+   |
+55 | /             for entry in en
+tries {
+56 | |                 if let Ok(e
+ntry) = entry {
+57 | |                     let pat
+h = entry.path();
+58 | |                     if path
+.is_file() {
+...  |
+66 | |             }
+   | |_____________^
+   |
+help: try `.flatten()` and remove 
+the `if let` statement in the for 
+loop
+  --> src-tauri\examples\test_ocr_
+batch.rs:56:17
+   |
+56 | /                 if let Ok(e
+ntry) = entry {
+57 | |                     let pat
+h = entry.path();
+58 | |                     if path
+.is_file() {
+59 | |                         if 
+let Some(ext) = path.extension().a
+nd_then(|e| e.to_str()) {
+...  |
+65 | |                 }
+   | |_________________^
+   = help: for further information
+ visit https://rust-lang.github.io
+/rust-clippy/rust-1.91.0/index.htm
+l#manual_flatten
+   = note: `#[warn(clippy::manual_
+flatten)]` on by default
+help: try
+   |
+55 ~             for entry in entr
+ies.flatten() {
+56 +                 let path = en
+try.path();
+57 +                 if path.is_fi
+le() {
+58 +                     if let So
+me(ext) = path.extension().and_the
+n(|e| e.to_str()) {
+59 +                         if im
+age_extensions.contains(&ext.to_lo
+wercase().as_str()) {
+60 +                             i
+mage_files.push(path);
+61 +                         }
+62 +                     }
+63 +                 }
+64 +             }
+   |
+
+warning: the borrowed expression i
+mplements the required traits
+  --> src-tauri\examples\test_ocr_
+batch.rs:96:39
+   |
+96 |     let mut output = fs::File
+::create(&output_file)?;
+   |                              
+         ^^^^^^^^^^^^ help: change
+ this to: `output_file`
+   |
+   = help: for further information
+ visit https://rust-lang.github.io
+/rust-clippy/rust-1.91.0/index.htm
+l#needless_borrows_for_generic_arg
+s
+   = note: `#[warn(clippy::needles
+s_borrows_for_generic_args)]` on b
+y default
+
+warning: `memflow` (example "test_
+ocr_batch") generated 2 warnings (
+run `cargo clippy --fix --example 
+"test_ocr_batch"` to apply 2 sugge
+stions)
+    Finished `dev` profile [unopti
+mized + debuginfo] target(s) in 7.
+97s

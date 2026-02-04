@@ -136,20 +136,21 @@ export default function ContextSidebar() {
     <>
       <AgentModal open={isAgentOpen} onClose={() => setIsAgentOpen(false)} />
       <aside
-        className={`h-full border-l border-glass-border bg-[#0f0f12] transition-all duration-300 ${open ? 'w-[320px]' : 'w-[52px]'
-          } flex flex-col shrink-0 z-20 shadow-[-5px_0_20px_rgba(0,0,0,0.3)]`}
+        className={`h-full border-l border-zinc-800 bg-void transition-all duration-300 ${open ? 'w-[320px]' : 'w-[52px]'
+          } flex flex-col shrink-0 z-20`}
       >
         <div className="h-full flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-3 border-b border-glass-border bg-surface/50 backdrop-blur-sm">
+          <div className="flex items-center justify-between px-3 py-3 border-b border-zinc-800 bg-zinc-900/30">
             <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-8 h-8 rounded-lg bg-neon-blue/10 text-neon-blue flex items-center justify-center shrink-0 border border-neon-blue/20 ${!open && 'mx-auto'}`}>
-                <Lightbulb className="w-5 h-5" />
+              {/* Technical Monogram Logo (Mini) */}
+              <div className={`w-8 h-8 flex items-center justify-center border border-zinc-700 bg-void transition-all duration-300 hover:border-signal shrink-0 ${!open && 'mx-auto'}`}>
+                <span className="font-mono font-bold text-lg text-zinc-100 transition-colors duration-300 hover:text-signal">E</span>
               </div>
               {open && (
                 <div className="min-w-0 flex-1 animate-in fade-in slide-in-from-left-2 duration-200">
-                  <div className="text-sm font-semibold text-white truncate">{headerTitle}</div>
+                  <div className="text-xs font-bold text-zinc-100 uppercase tracking-wider truncate">{headerTitle}</div>
                   {displayed && (
-                    <div className="text-xs text-gray-400 truncate opacity-80">{displayed.context.windowTitle}</div>
+                    <div className="text-[10px] font-mono text-zinc-500 truncate">{displayed.context.windowTitle}</div>
                   )}
                 </div>
               )}
@@ -175,22 +176,22 @@ export default function ContextSidebar() {
 
           {open && (
             <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
-              <div className="flex items-center justify-between px-1 text-[10px] text-gray-500">
-                <span>模型：{modelLabel}</span>
-                <span>{proactiveReady ? '上下文助理已启用' : disabledReason ? disabledReason : '未启用'}</span>
+              <div className="flex items-center justify-between px-1 text-[10px] font-mono text-zinc-600 uppercase tracking-wider">
+                <span>Model: {modelLabel}</span>
+                <span>{proactiveReady ? 'ACTIVE' : disabledReason ? disabledReason : 'INACTIVE'}</span>
               </div>
 
               {/* Agent Trigger */}
               <button
                 onClick={() => setIsAgentOpen(true)}
-                className="w-full flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-neon-purple/20 to-neon-blue/20 border border-neon-purple/30 hover:border-neon-purple/50 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] transition-all group"
+                className="w-full flex items-center gap-3 p-3 border border-zinc-800 hover:border-signal/50 hover:bg-zinc-900/50 transition-all group"
               >
-                <div className="p-2 rounded-lg bg-black/20 text-neon-purple group-hover:scale-110 transition-transform">
-                  <Sparkles className="w-5 h-5" />
+                <div className="p-2 bg-zinc-900 text-zinc-400 group-hover:text-signal transition-colors">
+                  <Sparkles className="w-4 h-4" />
                 </div>
                 <div className="text-left">
-                  <div className="text-sm font-bold text-white group-hover:text-neon-purple transition-colors">深度自动化</div>
-                  <div className="text-[10px] text-gray-400">生成复杂工作流提案</div>
+                  <div className="text-xs font-bold text-zinc-300 group-hover:text-signal uppercase tracking-wider transition-colors">Deep Automation</div>
+                  <div className="text-[10px] text-zinc-600 font-mono">GENERATE_WORKFLOW</div>
                 </div>
               </button>
 
@@ -212,25 +213,25 @@ export default function ContextSidebar() {
                   {/* 2. Suggested Actions */}
                   {displayed.suggestedActions.length > 0 && (
                     <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300 delay-100">
-                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">
-                        建议操作
+                      <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest px-1 font-mono">
+                        SUGGESTED_ACTIONS
                       </h3>
                       <div className="grid gap-2">
                         {displayed.suggestedActions.map((action, idx) => (
                           <button
                             key={idx}
                             onClick={() => handleAction(action, idx)}
-                            className="flex items-center gap-3 p-3 rounded-xl bg-surface/30 border border-glass-border/50 hover:bg-surface/60 hover:border-neon-blue/30 hover:shadow-lg transition-all group text-left"
+                            className="flex items-center gap-3 p-3 bg-void border border-zinc-800 hover:border-signal/50 hover:bg-zinc-900 transition-all group text-left"
                           >
-                            <div className="shrink-0 p-2 rounded-lg bg-black/20 group-hover:bg-neon-blue/10 transition-colors">
+                            <div className="shrink-0 p-2 bg-zinc-900 group-hover:bg-zinc-800 transition-colors">
                               {getActionIcon(action.action, idx)}
                             </div>
                             <div className="min-w-0">
-                              <div className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors">
+                              <div className="text-xs font-bold text-zinc-300 group-hover:text-signal transition-colors uppercase">
                                 {action.label}
                               </div>
-                              <div className="text-[10px] text-gray-500 truncate group-hover:text-gray-400">
-                                {action.action === 'open_url' ? '打开链接' : action.action === 'search' ? '搜索记忆' : '复制内容'}
+                              <div className="text-[10px] text-zinc-600 font-mono truncate">
+                                {action.action === 'open_url' ? 'LINK' : action.action === 'search' ? 'SEARCH' : 'COPY'}
                               </div>
                             </div>
                           </button>
@@ -241,11 +242,11 @@ export default function ContextSidebar() {
 
                   {/* 3. Related Memories */}
                   <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300 delay-200">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">
-                      相关记忆
+                    <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest px-1 font-mono">
+                      RELATED_MEMORIES
                     </h3>
                     {displayed.relatedMemories.length === 0 ? (
-                      <div className="text-sm text-gray-500 italic px-1">暂无相关记录</div>
+                      <div className="text-xs text-zinc-600 font-mono italic px-1">NO_DATA</div>
                     ) : (
                       <div className="space-y-2">
                         {displayed.relatedMemories.map((m) => (
@@ -253,14 +254,14 @@ export default function ContextSidebar() {
                             key={m.id}
                             type="button"
                             onClick={() => void jumpToMemory(m)}
-                            className="w-full text-left p-3 rounded-xl bg-surface/20 border border-glass-border/30 hover:bg-surface/40 hover:border-neon-blue/20 transition-all group relative overflow-hidden"
+                            className="w-full text-left p-3 bg-void border border-zinc-800 hover:border-signal/50 hover:bg-zinc-900 transition-all group relative"
                           >
-                            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-neon-blue/0 group-hover:bg-neon-blue transition-colors" />
-                            <div className="text-sm font-medium text-gray-300 group-hover:text-white truncate mb-1">
+                            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-transparent group-hover:bg-signal transition-colors" />
+                            <div className="text-xs font-bold text-zinc-300 group-hover:text-white truncate mb-1">
                               {m.windowTitle}
                             </div>
-                            <div className="flex items-center justify-between text-xs text-gray-500">
-                              <span className="truncate max-w-[70%]">{m.appName}</span>
+                            <div className="flex items-center justify-between text-[10px] text-zinc-600 font-mono">
+                              <span className="truncate max-w-[70%] uppercase">{m.appName}</span>
                               <span>{new Date(m.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                           </button>

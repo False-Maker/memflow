@@ -1,0 +1,349 @@
+﻿cargo :    Compiling memflow v0.1.
+0 (D:\Demo\memflow\src-tauri)
+所在位置 行:1 字符: 1
++ cargo clippy --all-targets --all
+-features 2>&1 | Out-File -FilePat
+h " ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo          : Not 
+   Specified: (   Compiling me..  
+  .flow\src-tauri):String) [],    
+ RemoteException
+    + FullyQualifiedErrorId : Nat 
+   iveCommandError
+ 
+    Checking memflow-core v0.1.0 (
+D:\Demo\memflow\crates\memflow-cor
+e)
+warning: field `finish_reason` is 
+never read
+   --> crates\memflow-core\src\ai\
+provider.rs:354:9
+    |
+352 |     struct StreamChoice {
+    |            ------------ fiel
+d in this struct
+353 |         delta: StreamDelta,
+354 |         finish_reason: Optio
+n<String>,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `StreamChoice` has a d
+erived impl for the trait `Debug`,
+ but this is intentionally ignored
+ during dead code analysis
+    = note: `#[warn(dead_code)]` (
+part of `#[warn(unused)]`) on by d
+efault
+
+warning: static `RECOVERY_LOCK` is
+ never used
+  --> crates\memflow-core\src\db.r
+s:43:8
+   |
+43 | static RECOVERY_LOCK: once_ce
+ll::sync::Lazy<tokio::sync::Mutex<
+()>> =
+   |        ^^^^^^^^^^^^^
+
+warning: clamp-like pattern withou
+t using clamp function
+   --> crates\memflow-core\src\age
+nt\mod.rs:196:29
+    |
+196 |     let time_window_hours = 
+params.time_window_hours.unwrap_or
+(24).max(1).min(24 * 30);
+    |                             
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^ help: rep
+lace with clamp: `params.time_wind
+ow_hours.unwrap_or(24).clamp(1, 24
+ * 30)`
+    |
+    = note: clamp will panic if ma
+x < min
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#manual_clamp
+    = note: `#[warn(clippy::manual
+_clamp)]` on by default
+
+warning: clamp-like pattern withou
+t using clamp function
+   --> crates\memflow-core\src\age
+nt\mod.rs:197:17
+    |
+197 |     let limit = params.limit
+.unwrap_or(10).max(1).min(50);
+    |                 ^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help
+: replace with clamp: `params.limi
+t.unwrap_or(10).clamp(1, 50)`
+    |
+    = note: clamp will panic if ma
+x < min
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#manual_clamp
+
+warning: clamp-like pattern withou
+t using clamp function
+   --> crates\memflow-core\src\age
+nt\mod.rs:482:17
+    |
+482 |     let limit = limit.max(1)
+.min(200);
+    |                 ^^^^^^^^^^^^
+^^^^^^^^^ help: replace with clamp
+: `limit.clamp(1, 200)`
+    |
+    = note: clamp will panic if ma
+x < min
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#manual_clamp
+
+warning: this block may be rewritt
+en with the `?` operator
+   --> crates\memflow-core\src\age
+nt\mod.rs:591:17
+    |
+591 | /                 if let Err
+(e) = execute_step(step, &ctx_bg).
+await {
+592 | |                     return
+ Err(e);
+593 | |                 }
+    | |_________________^ help: re
+place it with: `execute_step(step,
+ &ctx_bg).await?;`
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#question_mark
+    = note: `#[warn(clippy::questi
+on_mark)]` on by default
+
+warning: stripping a prefix manual
+ly
+   --> crates\memflow-core\src\ai\
+provider.rs:446:32
+    |
+446 |                 let json_str
+ = &line_content[6..];
+    |                             
+   ^^^^^^^^^^^^^^^^^^
+    |
+note: the prefix was tested here
+   --> crates\memflow-core\src\ai\
+provider.rs:445:13
+    |
+445 |             if line_content.
+starts_with("data: ") {
+    |             ^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#manual_strip
+    = note: `#[warn(clippy::manual
+_strip)]` on by default
+help: try using the `strip_prefix`
+ method
+    |
+445 ~             if let Some(json
+_str) = line_content.strip_prefix(
+"data: ") {
+446 ~                 if json_str 
+== "[DONE]" {
+    |
+
+warning: stripping a prefix manual
+ly
+   --> crates\memflow-core\src\ai\
+provider.rs:703:32
+    |
+703 |                 let json_str
+ = &line_content[6..];
+    |                             
+   ^^^^^^^^^^^^^^^^^^
+    |
+note: the prefix was tested here
+   --> crates\memflow-core\src\ai\
+provider.rs:702:13
+    |
+702 |             if line_content.
+starts_with("data: ") {
+    |             ^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#manual_strip
+help: try using the `strip_prefix`
+ method
+    |
+702 ~             if let Some(json
+_str) = line_content.strip_prefix(
+"data: ") {
+703 ~                 // Anthropic
+ SSE 缁撴潫浜嬩欢閫氬父鏄?event: message_sto
+p锛宒ata 閲屽彲鑳戒笉鍖呭惈 update
+    |
+
+warning: this `impl` can be derive
+d
+  --> crates\memflow-core\src\ai\m
+od.rs:52:1
+   |
+52 | / impl Default for FilterPara
+ms {
+53 | |     fn default() -> Self {
+54 | |         Self {
+55 | |             app_name: None,
+...  |
+61 | | }
+   | |_^
+   |
+   = help: for further information
+ visit https://rust-lang.github.io
+/rust-clippy/rust-1.91.0/index.htm
+l#derivable_impls
+   = note: `#[warn(clippy::derivab
+le_impls)]` on by default
+help: replace the manual implement
+ation with a derive attribute
+   |
+45 + #[derive(Default)]
+46 ~ pub struct FilterParams {
+   |
+
+warning: this function has too man
+y arguments (8/7)
+   --> crates\memflow-core\src\db.
+rs:304:1
+    |
+304 | / pub async fn search_activi
+ties(
+305 | |     query: Option<String>,
+306 | |     app_name: Option<Strin
+g>,
+307 | |     from_ts: Option<i64>,
+...   |
+312 | |     order_by: Option<Strin
+g>,
+313 | | ) -> Result<(Vec<ActivityL
+og>, i64)> {
+    | |___________________________
+_________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#too_many_arguments
+    = note: `#[warn(clippy::too_ma
+ny_arguments)]` on by default
+
+warning: this function has too man
+y arguments (9/7)
+   --> crates\memflow-core\src\db.
+rs:319:1
+    |
+319 | / pub async fn search_activi
+ties_impl(
+320 | |     pool: &SqlitePool,
+321 | |     query: Option<String>,
+322 | |     app_name: Option<Strin
+g>,
+...   |
+328 | |     order_by: Option<Strin
+g>,
+329 | | ) -> Result<(Vec<ActivityL
+og>, i64)> {
+    | |___________________________
+_________^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#too_many_arguments
+
+error: this loop never actually lo
+ops
+   --> crates\memflow-core\src\red
+act.rs:95:5
+    |
+ 95 | /     while let Some(pos) = 
+input[i..].find(prefix) {
+ 96 | |         let start = i + po
+s;
+ 97 | |         out.push_str(&inpu
+t[i..start]);
+ 98 | |         out.push_str(prefi
+x);
+...   |
+123 | |         return out;
+124 | |     }
+    | |_____^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#never_loop
+    = note: `#[deny(clippy::never_
+loop)]` on by default
+
+warning: the loop variable `i` is 
+used to index `embedding`
+   --> crates\memflow-core\src\vec
+tor_db.rs:154:14
+    |
+154 |     for i in 0..EMBEDDING_DI
+M {
+    |              ^^^^^^^^^^^^^^^
+^
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#needless_range_loop
+    = note: `#[warn(clippy::needle
+ss_range_loop)]` on by default
+help: consider using an iterator a
+nd enumerate()
+    |
+154 -     for i in 0..EMBEDDING_DI
+M {
+154 +     for (i, <item>) in embed
+ding.iter_mut().enumerate().take(E
+MBEDDING_DIM) {
+    |
+
+warning: casting to the same type 
+is unnecessary (`u64` -> `u64`)
+   --> crates\memflow-core\src\vec
+tor_db.rs:155:20
+    |
+155 |         let seed = (hash as 
+u64).wrapping_mul(i as u64 + 1);
+    |                    ^^^^^^^^^
+^^^^ help: try: `hash`
+    |
+    = help: for further informatio
+n visit https://rust-lang.github.i
+o/rust-clippy/rust-1.91.0/index.ht
+ml#unnecessary_cast
+    = note: `#[warn(clippy::unnece
+ssary_cast)]` on by default
+
+warning: `memflow-core` (lib) gene
+rated 13 warnings
+error: could not compile `memflow-
+core` (lib) due to 1 previous erro
+r; 13 warnings emitted

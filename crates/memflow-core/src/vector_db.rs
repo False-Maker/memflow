@@ -151,9 +151,9 @@ pub fn generate_placeholder_embedding(text: &str) -> Vec<f32> {
     let hash = hasher.finish();
 
     let mut embedding = vec![0.0f32; EMBEDDING_DIM];
-    for i in 0..EMBEDDING_DIM {
-        let seed = (hash as u64).wrapping_mul(i as u64 + 1);
-        embedding[i] = ((seed % 1000) as f32 / 1000.0 - 0.5) * 2.0;
+    for (i, value) in embedding.iter_mut().enumerate() {
+        let seed = hash.wrapping_mul(i as u64 + 1);
+        *value = ((seed % 1000) as f32 / 1000.0 - 0.5) * 2.0;
     }
 
     // Normalize

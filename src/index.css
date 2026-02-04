@@ -4,28 +4,64 @@
 
 @layer base {
   * {
-    @apply border-glass-border;
+    @apply border-zinc-800;
   }
-  
+
   body {
-    @apply bg-void text-white font-sans antialiased;
+    @apply bg-void text-zinc-100 font-sans antialiased selection:bg-signal selection:text-black;
     margin: 0;
     padding: 0;
     overflow: hidden;
   }
-  
+
   #root {
     @apply w-full h-screen;
+  }
+
+  /* Custom Scrollbar for Webkit */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-void;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-zinc-800;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-zinc-700;
   }
 }
 
 @layer utilities {
-  .glass {
-    @apply bg-surface/80 backdrop-blur-xl border border-glass-border;
+  .elucid-panel {
+    @apply bg-void border border-zinc-800 relative;
   }
-  
+
+  /* Legacy Compatibility - Auto-Brutalism */
+  .glass {
+    @apply bg-void border border-zinc-800 relative;
+    /* Remove blur, solid bg */
+  }
+
   .neon-glow {
-    @apply shadow-neon;
+    @apply shadow-none;
+    /* Remove glow */
+  }
+
+  .elucid-btn {
+    @apply border border-transparent hover:border-zinc-700 hover:bg-zinc-900 transition-colors duration-150 rounded-sm;
+  }
+
+  .elucid-btn-active {
+    @apply border-signal/50 bg-signal/5 text-signal;
+  }
+
+  .text-mono-small {
+    @apply font-mono text-xs tracking-wider uppercase;
   }
 }
-

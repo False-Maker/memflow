@@ -27,7 +27,9 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**"
+        ]
       }
     },
     "withGlobalTauri": false
@@ -36,7 +38,8 @@
     "active": false,
     "targets": "all",
     "icon": [
-      "icons/icon.png"
+      "icons/icon.png",
+      "icons/icon.ico"
     ],
     "resources": [],
     "externalBin": [],
@@ -47,4 +50,3 @@
   },
   "plugins": {}
 }
-

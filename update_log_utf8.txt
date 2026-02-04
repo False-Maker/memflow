@@ -1,0 +1,30 @@
+﻿cargo :     Updating crates.io ind
+ex
+所在位置 行:1 字符: 1
++ cargo update -p ort > update_log
+.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~
+    + CategoryInfo          : Not 
+   Specified: (    Updating crat  
+  es.io index:String) [], Remot   
+ eException
+    + FullyQualifiedErrorId : Nat 
+   iveCommandError
+ 
+error: failed to select a version 
+for `ort`.
+    ... required by package `memfl
+ow-mcp v0.1.0 (D:\Demo\memflow\cra
+tes\memflow-mcp)`
+versions that meet the requirement
+s `^2.0.0-rc.11` are: 2.0.0-rc.11
+
+package `memflow-mcp` depends on `
+ort` with feature `rustls` but `or
+t` does not have that feature.
+
+
+failed to select a version for `or
+t` which could resolve this confli
+ct

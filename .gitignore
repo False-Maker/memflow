@@ -26,6 +26,8 @@ dist-ssr
 
 # Tauri
 src-tauri/target
+target
+target_locked_backup
 src-tauri/Cargo.lock
 
 # Database

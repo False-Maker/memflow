@@ -7,25 +7,42 @@ export default {
   theme: {
     extend: {
       colors: {
-        void: '#050505',
-        surface: '#121214',
-        'glass-border': 'rgba(255, 255, 255, 0.08)',
-        'neon-blue': '#2DE2E6',
-        'neon-purple': '#9D4EDD',
-        'neon-pink': '#F72585',
-        'neon-red': '#FF3864',
-        'neon-green': '#02C39A',
+        void: '#050505', // Deep Matte Black
+        surface: '#18181B', // Zinc 900
+        signal: '#F59E0B', // Amber 500
+        muted: '#71717A', // Zinc 500
+        border: '#27272A', // Zinc 800
+
+        // Legacy Compatibility (Mapped to Elucid)
+        'neon-blue': '#F59E0B', // Map to Signal
+        'neon-purple': '#A1A1AA', // Zinc 400
+        'neon-green': '#10B981', // Emerald 500
+        'neon-red': '#EF4444', // Red 500
+        'neon-pink': '#EC4899', // Pink 500
+        'glass-border': '#27272A', // Map to Border
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
-      boxShadow: {
-        'neon': '0 0 10px rgba(45, 226, 230, 0.5)', // 发光效果
+      borderRadius: {
+        'none': '0',
+        'sm': '2px', // Very slight radius for "engineered" look
       },
       animation: {
-        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite', // 呼吸灯
-      }, 
+        'scan': 'scan 2s linear infinite',
+        'blink': 'blink 1s steps(2, start) infinite',
+      },
+      keyframes: {
+        scan: {
+          '0%': { backgroundPosition: '0% 0%' },
+          '100%': { backgroundPosition: '0% 100%' },
+        },
+        blink: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0' },
+        }
+      }
     },
   },
   plugins: [],

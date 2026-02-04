@@ -8,7 +8,7 @@ import ActivityHeatmap from './ActivityHeatmap'
 import ContextSidebar from './ContextSidebar'
 import ImmersiveReplay from './ImmersiveReplay'
 import { useApp } from '../contexts/AppContext'
-import { Play, Pause, Settings, Zap, History, MessageSquare, BarChart3, Calendar, X } from 'lucide-react'
+import { Settings, Zap, History, MessageSquare, BarChart3, Calendar, X } from 'lucide-react'
 
 interface LayoutProps {
   onOpenSettings: () => void
@@ -56,148 +56,121 @@ export default function Layout({
   const currentView = state.currentView as string
 
   return (
-    <div className="flex flex-col h-screen bg-void">
-      {/* 顶部工具栏 */}
-      <header className="glass border-b border-glass-border px-4 py-3 flex items-center justify-between">
-        {/* ... (Logo and Recording controls unchanged) */}
+    <div className="flex flex-col h-screen bg-void font-sans selection:bg-signal selection:text-black">
+      {/* 顶部工具栏 - Technical Brutalism Header */}
+      <header className="bg-void border-b border-zinc-800 px-4 py-3 flex items-center justify-between z-50 relative">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-neon-blue">MemFlow</h1>
-
-          {/* 录制控制 */}
-          <button
-            onClick={state.isRecording ? stopRecording : startRecording}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${state.isRecording
-                ? 'bg-neon-red/20 text-neon-red hover:bg-neon-red/30'
-                : 'bg-neon-green/20 text-neon-green hover:bg-neon-green/30'
-              }`}
-          >
-            {state.isRecording ? (
-              <>
-                <Pause className="w-4 h-4" />
-                <span>停止录制</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4" />
-                <span>开始录制</span>
-              </>
-            )}
-          </button>
-
-          {/* 状态指示器 */}
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-2 h-2 rounded-full ${state.isRecording ? 'bg-neon-red animate-pulse-slow' : 'bg-gray-500'
-                }`}
-            />
-            <span className="text-sm text-gray-400">
-              {state.isRecording ? '录制中' : '已停止'}
+          <div className="flex items-center gap-3 group cursor-pointer">
+            {/* Technical Monogram Logo */}
+            <div className="w-8 h-8 flex items-center justify-center border border-zinc-700 bg-void transition-all duration-300 group-hover:border-signal group-hover:shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+              <span className="font-mono font-bold text-lg text-zinc-100 transition-colors duration-300 group-hover:text-signal">E</span>
+            </div>
+            {/* Brand Text */}
+            <span className="text-sm font-bold font-mono tracking-widest text-zinc-100 transition-colors duration-300 group-hover:text-zinc-300">
+              MEMFLOW
             </span>
+          </div>
+
+          {/* 录制控制 - Mechanical Switch */}
+          <div className="flex items-center gap-3 pl-6 border-l border-zinc-800 h-8">
+            <button
+              onClick={state.isRecording ? stopRecording : startRecording}
+              className={`flex items-center gap-2 px-3 py-1 text-xs font-mono tracking-wider uppercase transition-all border ${state.isRecording
+                ? 'bg-signal text-black border-signal hover:bg-amber-400'
+                : 'bg-transparent text-zinc-400 border-zinc-700 hover:border-zinc-500 hover:text-zinc-200'
+                }`}
+            >
+              {state.isRecording ? (
+                <>
+                  <span className="w-2 h-2 bg-black"></span>
+                  <span>STOP REC</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 border border-current"></span>
+                  <span>START REC</span>
+                </>
+              )}
+            </button>
+
+            {/* 状态指示器 - Blinking Cursor */}
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-2 h-4 ${state.isRecording ? 'bg-signal animate-blink' : 'bg-zinc-800'}`}
+              />
+              <span className={`text-xs font-mono ${state.isRecording ? 'text-signal' : 'text-zinc-600'}`}>
+                {state.isRecording ? 'RECORDING_ACTIVE' : 'SYSTEM_IDLE'}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* 视图切换 */}
-        <div className="flex items-center gap-2">
-          {/* ... (view buttons unchanged) */}
-          <button
-            onClick={() => setCurrentView('timeline')}
-            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'timeline'
-                ? 'bg-neon-blue/20 text-neon-blue'
-                : 'text-gray-400 hover:text-white'
-              }`}
-          >
-            时间轴
-          </button>
-          <button
-            onClick={() => setCurrentView('gallery')}
-            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'gallery'
-                ? 'bg-neon-pink/20 text-neon-pink'
-                : 'text-gray-400 hover:text-white'
-              }`}
-          >
-            画廊
-          </button>
-          <button
-            onClick={() => setCurrentView('replay')}
-            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'replay'
-                ? 'bg-neon-blue/20 text-neon-blue'
-                : 'text-gray-400 hover:text-white'
-              }`}
-          >
-            时光机
-          </button>
-          <button
-            onClick={() => setCurrentView('graph')}
-            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'graph'
-                ? 'bg-neon-purple/20 text-neon-purple'
-                : 'text-gray-400 hover:text-white'
-              }`}
-          >
-            知识图谱
-          </button>
-          <button
-            onClick={() => setCurrentView('stats')}
-            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'stats'
-                ? 'bg-neon-green/20 text-neon-green'
-                : 'text-gray-400 hover:text-white'
-              }`}
-          >
-            统计
-          </button>
-          <button
-            onClick={() => setCurrentView('qa')}
-            className={`px-3 py-2 rounded-lg transition-all ${currentView === 'qa'
-                ? 'bg-neon-blue/20 text-neon-blue'
-                : 'text-gray-400 hover:text-white'
-              }`}
-          >
-            问答
-          </button>
+        {/* 视图切换 - Tab Bar */}
+        <div className="flex items-center gap-1">
+          {[
+            { id: 'timeline', label: 'TIMELINE' },
+            { id: 'gallery', label: 'GALLERY' },
+            { id: 'replay', label: 'REPLAY' },
+            { id: 'graph', label: 'GRAPH' },
+            { id: 'stats', label: 'STATS' },
+            { id: 'qa', label: 'Q&A' },
+          ].map((view) => (
+            <button
+              key={view.id}
+              onClick={() => setCurrentView(view.id as any)}
+              className={`px-4 py-2 text-xs font-mono border-b-2 transition-all ${currentView === view.id
+                ? 'border-signal text-signal bg-zinc-900/50'
+                : 'border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/30'
+                }`}
+            >
+              {view.label}
+            </button>
+          ))}
         </div>
 
-        {/* 右侧操作按钮 */}
-        <div className="flex items-center gap-2">
+        {/* 右侧操作按钮 - Minimal Icons */}
+        <div className="flex items-center gap-1">
           <button
             onClick={() => setHeatmapOpen(true)}
-            className="p-2 rounded-lg text-gray-400 hover:text-neon-blue hover:bg-neon-blue/10 transition-all"
-            title="活动热力图"
+            className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
+            title="Activity"
           >
-            <Calendar className="w-5 h-5" />
+            <Calendar className="w-4 h-4" />
           </button>
           <button
             onClick={onOpenAgentProposal}
-            className="p-2 rounded-lg text-gray-400 hover:text-neon-blue hover:bg-neon-blue/10 transition-all"
-            title="自动化动作"
+            className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
+            title="Agents"
           >
-            <Zap className="w-5 h-5" />
+            <Zap className="w-4 h-4" />
           </button>
           <button
             onClick={onOpenChatHistory}
-            className="p-2 rounded-lg text-gray-400 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
-            title="对话历史"
+            className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
+            title="History"
           >
-            <History className="w-5 h-5" />
+            <History className="w-4 h-4" />
           </button>
           <button
             onClick={onOpenPerformance}
-            className="p-2 rounded-lg text-gray-400 hover:text-neon-green hover:bg-neon-green/10 transition-all"
-            title="性能监控"
+            className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
+            title="Performance"
           >
-            <BarChart3 className="w-5 h-5" />
+            <BarChart3 className="w-4 h-4" />
           </button>
           <button
             onClick={onOpenFeedback}
-            className="p-2 rounded-lg text-gray-400 hover:text-neon-blue hover:bg-neon-blue/10 transition-all"
-            title="反馈"
+            className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
+            title="Feedback"
           >
-            <MessageSquare className="w-5 h-5" />
+            <MessageSquare className="w-4 h-4" />
           </button>
           <button
             onClick={onOpenSettings}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-surface transition-all"
-            title="设置"
+            className="p-2 text-zinc-500 hover:text-zinc-100 hover:bg-zinc-900 transition-all rounded-sm"
+            title="Settings"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-4 h-4" />
           </button>
         </div>
       </header>
@@ -224,16 +197,16 @@ export default function Layout({
 
         {/* Heatmap Modal Overlay */}
         {heatmapOpen && (
-          <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center pt-20">
-            <div className="bg-[#121214] border border-glass-border rounded-lg shadow-2xl w-[800px] max-w-[90vw] animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-glass-border">
-                <h3 className="text-lg font-semibold text-neon-blue flex items-center gap-2">
-                  <Calendar className="w-5 h-5" />
-                  活动热力图
+          <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center">
+            <div className="bg-void border border-zinc-800 w-[800px] max-w-[90vw] shadow-2xl">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/30">
+                <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-widest flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-signal" />
+                  Activity_Heatmap
                 </h3>
                 <button
                   onClick={() => setHeatmapOpen(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-zinc-500 hover:text-signal transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>

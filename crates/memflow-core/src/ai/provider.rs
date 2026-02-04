@@ -351,6 +351,7 @@ where
     #[derive(Deserialize, Debug)]
     struct StreamChoice {
         delta: StreamDelta,
+        #[allow(dead_code)]
         finish_reason: Option<String>,
     }
 
@@ -442,8 +443,7 @@ where
                 continue;
             }
 
-            if line_content.starts_with("data: ") {
-                let json_str = &line_content[6..];
+            if let Some(json_str) = line_content.strip_prefix("data: ") {
                 if json_str == "[DONE]" {
                     break;
                 }
@@ -699,8 +699,7 @@ where
                 continue;
             }
 
-            if line_content.starts_with("data: ") {
-                let json_str = &line_content[6..];
+            if let Some(json_str) = line_content.strip_prefix("data: ") {
                 // Anthropic SSE 结束事件通常是 event: message_stop，data 里可能不包含 update
                 // 这里我们解析每个 event data
                 

@@ -119,8 +119,8 @@ where
             k += c.len_utf8();
         }
         out.push_str("[REDACTED]");
-        out.push_str(&input[k..]);
-        return out;
+        // Continue searching from after the redacted content
+        i = k;
     }
     out.push_str(&input[i..]);
     out

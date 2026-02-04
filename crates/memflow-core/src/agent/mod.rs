@@ -193,8 +193,8 @@ pub async fn propose_automation(
 ) -> Result<Vec<AutomationProposalDto>> {
     let pool = get_pool().await?;
     let now = chrono::Utc::now().timestamp();
-    let time_window_hours = params.time_window_hours.unwrap_or(24).max(1).min(24 * 30);
-    let limit = params.limit.unwrap_or(10).max(1).min(50);
+    let time_window_hours = params.time_window_hours.unwrap_or(24).clamp(1, 24 * 30);
+    let limit = params.limit.unwrap_or(10).clamp(1, 50);
     let since_ts = now - time_window_hours * 3600;
 
     tracing::info!(
@@ -479,7 +479,7 @@ pub async fn propose_automation(
 
 pub async fn list_executions(limit: i64, offset: i64) -> Result<Vec<ExecutionDto>> {
     let pool = get_pool().await?;
-    let limit = limit.max(1).min(200);
+    let limit = limit.clamp(1, 200);
     let offset = offset.max(0);
 
     let rows = sqlx::query(
@@ -588,9 +588,7 @@ pub async fn execute_automation(
                     return Err(anyhow!("AGENT_EXECUTION_CANCELLED"));
                 }
 
-                if let Err(e) = execute_step(step, &ctx_bg).await {
-                    return Err(e);
-                }
+                execute_step(step, &ctx_bg).await?;
                 steps_success += 1;
             }
             Ok(())

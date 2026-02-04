@@ -1,0 +1,84 @@
+﻿ort v2.0.0-rc.11
+鈹溾攢鈹€ ndarray v0.17.2
+鈹?  鈹溾攢鈹€ matrixmultiply v0.3.10
+鈹?  鈹?  鈹斺攢鈹€ rawpointer v0.2.1
+鈹?  鈹?  [build-dependencies]
+鈹?  鈹?  鈹斺攢鈹€ autocfg v1.5.0
+鈹?  鈹溾攢鈹€ num-complex v0.4.6
+鈹?  鈹?  鈹斺攢鈹€ num-traits v0.2.19
+鈹?  鈹?      [build-dependencies]
+鈹?  鈹?      鈹斺攢鈹€ autocfg v1.5.0
+鈹?  鈹溾攢鈹€ num-integer v0.1.46
+鈹?  鈹?  鈹斺攢鈹€ num-traits v0.2.19 (*)
+鈹?  鈹溾攢鈹€ num-traits v0.2.19 (*)
+鈹?  鈹斺攢鈹€ rawpointer v0.2.1
+鈹溾攢鈹€ ort-sys v2.0.0-rc.11
+鈹?  [build-dependencies]
+鈹?  鈹溾攢鈹€ hmac-sha256 v1.1.13
+鈹?  鈹溾攢鈹€ lzma-rust2 v0.15.7
+鈹?  鈹斺攢鈹€ ureq v3.1.4
+鈹?      鈹溾攢鈹€ base64 v0.22.1
+鈹?      鈹溾攢鈹€ der v0.7.10
+鈹?      鈹?  鈹溾攢鈹€ pem-rfc7468 v0.7.0
+鈹?      鈹?  鈹?  鈹斺攢鈹€ base64ct v1.8.3
+鈹?      鈹?  鈹斺攢鈹€ zeroize v1.8.2
+鈹?      鈹溾攢鈹€ log v0.4.29
+鈹?      鈹溾攢鈹€ native-tls v0.2.14
+鈹?      鈹?  鈹斺攢鈹€ schannel v0.1.28
+鈹?      鈹?      鈹斺攢鈹€ windows-sys v0.61.2
+鈹?      鈹?          鈹斺攢鈹€ windows-link v0.2.1
+鈹?      鈹溾攢鈹€ percent-encoding v2.3.2
+鈹?      鈹溾攢鈹€ rustls v0.23.36
+鈹?      鈹?  鈹溾攢鈹€ log v0.4.29
+鈹?      鈹?  鈹溾攢鈹€ once_cell v1.21.3
+鈹?      鈹?  鈹溾攢鈹€ ring v0.17.14
+鈹?      鈹?  鈹?  鈹溾攢鈹€ cfg-if v1.0.4
+鈹?      鈹?  鈹?  鈹溾攢鈹€ getrandom v0.2.17
+鈹?      鈹?  鈹?  鈹?  鈹斺攢鈹€ cfg-if v1.0.4
+鈹?      鈹?  鈹?  鈹斺攢鈹€ untrusted v0.9.0
+鈹?      鈹?  鈹?  [build-dependencies]
+鈹?      鈹?  鈹?  鈹斺攢鈹€ cc v1.2.54
+鈹?      鈹?  鈹?      鈹溾攢鈹€ find-msvc-tools v0.1.8
+鈹?      鈹?  鈹?      鈹溾攢鈹€ jobserver v0.1.34
+鈹?      鈹?  鈹?      鈹?  鈹斺攢鈹€ getrandom v0.3.4
+鈹?      鈹?  鈹?      鈹?      鈹斺攢鈹€ cfg-if v1.0.4
+鈹?      鈹?  鈹?      鈹斺攢鈹€ shlex v1.3.0
+鈹?      鈹?  鈹溾攢鈹€ rustls-pki-types v1.14.0
+鈹?      鈹?  鈹?  鈹斺攢鈹€ zeroize v1.8.2
+鈹?      鈹?  鈹溾攢鈹€ rustls-webpki v0.103.9
+鈹?      鈹?  鈹?  鈹溾攢鈹€ ring v0.17.14 (*)
+鈹?      鈹?  鈹?  鈹溾攢鈹€ rustls-pki-types v1.14.0 (*)
+鈹?      鈹?  鈹?  鈹斺攢鈹€ untrusted v0.9.0
+鈹?      鈹?  鈹溾攢鈹€ subtle v2.6.1
+鈹?      鈹?  鈹斺攢鈹€ zeroize v1.8.2
+鈹?      鈹溾攢鈹€ rustls-pki-types v1.14.0 (*)
+鈹?      鈹溾攢鈹€ socks v0.3.4
+鈹?      鈹?  鈹溾攢鈹€ byteorder v1.5.0
+鈹?      鈹?  鈹斺攢鈹€ winapi v0.3.9
+鈹?      鈹溾攢鈹€ ureq-proto v0.5.3
+鈹?      鈹?  鈹溾攢鈹€ base64 v0.22.1
+鈹?      鈹?  鈹溾攢鈹€ http v1.4.0
+鈹?      鈹?  鈹?  鈹溾攢鈹€ bytes v1.11.0
+鈹?      鈹?  鈹?  鈹斺攢鈹€ itoa v1.0.17
+鈹?      鈹?  鈹溾攢鈹€ httparse v1.10.1
+鈹?      鈹?  鈹斺攢鈹€ log v0.4.29
+鈹?      鈹溾攢鈹€ utf-8 v0.7.6
+鈹?      鈹溾攢鈹€ webpki-root-certs v1.0.5
+鈹?      鈹?  鈹斺攢鈹€ rustls-pki-types v1.14.0 (*)
+鈹?      鈹斺攢鈹€ webpki-roots v1.0.5
+鈹?          鈹斺攢鈹€ rustls-pki-types v1.14.0 (*)
+鈹溾攢鈹€ smallvec v1.15.1
+鈹斺攢鈹€ tracing v0.1.44
+    鈹溾攢鈹€ log v0.4.29
+    鈹溾攢鈹€ pin-project-lite v0.2.16
+    鈹溾攢鈹€ tracing-attributes v0.1.31 (proc-macro)
+    鈹?  鈹溾攢鈹€ proc-macro2 v1.0.106
+    鈹?  鈹?  鈹斺攢鈹€ unicode-ident v1.0.22
+    鈹?  鈹溾攢鈹€ quote v1.0.44
+    鈹?  鈹?  鈹斺攢鈹€ proc-macro2 v1.0.106 (*)
+    鈹?  鈹斺攢鈹€ syn v2.0.114
+    鈹?      鈹溾攢鈹€ proc-macro2 v1.0.106 (*)
+    鈹?      鈹溾攢鈹€ quote v1.0.44 (*)
+    鈹?      鈹斺攢鈹€ unicode-ident v1.0.22
+    鈹斺攢鈹€ tracing-core v0.1.36
+        鈹斺攢鈹€ once_cell v1.21.3

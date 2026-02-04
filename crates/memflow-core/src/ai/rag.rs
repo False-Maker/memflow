@@ -125,7 +125,13 @@ impl HybridSearch {
     async fn bm25_search(&self, query: &str, limit: usize) -> Result<Vec<HybridSearchResult>> {
         let pool = db::get_pool().await?;
 
-        let query_terms: Vec<&str> = query.split_whitespace().collect();
+        // Sanitize the query to prevent FTS5 syntax errors
+        let sanitized = db::sanitize_fts_query(query);
+        if sanitized.is_empty() {
+            return Ok(Vec::new());
+        }
+        
+        let query_terms: Vec<&str> = sanitized.split_whitespace().collect();
         let fts_query = query_terms.join(" OR ");
 
         let rows = sqlx::query(
