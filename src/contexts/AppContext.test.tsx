@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
-import { render } from '@testing-library/react'
 import { AppProvider, useApp } from './AppContext'
-import type { AppState, ActivityLog, AppConfig, SearchParams } from './AppContext'
+import type { ActivityLog, AppConfig, SearchParams } from './AppContext'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
@@ -31,27 +30,6 @@ describe('AppContext', () => {
   })
 
   describe('appReducer', () => {
-    const initialState: AppState = {
-      isRecording: false,
-      activities: [],
-      currentView: 'timeline',
-      config: {
-        recordingInterval: 5000,
-        ocrEnabled: true,
-        ocrRedactionEnabled: true,
-        ocrRedactionLevel: 'basic',
-        aiEnabled: false,
-        enableFocusAnalytics: false,
-        enableProactiveAssistant: false,
-        retentionDays: 30,
-        blocklistEnabled: false,
-        blocklistMode: 'blocklist',
-        privacyModeEnabled: false,
-      },
-      configLoaded: false,
-      configError: null,
-    }
-
     it('应该设置录制状态', () => {
       const { result } = renderHook(() => useApp(), {
         wrapper: AppProvider,
@@ -302,43 +280,7 @@ describe('AppContext', () => {
     })
 
     it('应该监听后端事件', async () => {
-      let recordingCallback: (event: { payload: boolean }) => void
-      let activityCallback: (event: { payload: ActivityLog }) => void
-      let ocrCallback: (event: { payload: { id: number; ocrText: string } }) => void
-
-      mockListen.mockImplementation((eventName: string) => {
-        if (eventName === 'recording-status') {
-          return Promise.resolve(() => {
-            if (recordingCallback) recordingCallback({ payload: true })
-          })
-        }
-        if (eventName === 'new-activity') {
-          return Promise.resolve(() => {
-            if (activityCallback) {
-              activityCallback({
-                payload: {
-                  id: 1,
-                  timestamp: Date.now(),
-                  appName: 'Test',
-                  windowTitle: 'Test',
-                  imagePath: '/test.png',
-                },
-              })
-            }
-          })
-        }
-        if (eventName === 'ocr-updated') {
-          return Promise.resolve(() => {
-            if (ocrCallback) {
-              ocrCallback({ payload: { id: 1, ocrText: 'updated' } })
-            }
-          })
-        }
-        if (eventName === 'backend-log') {
-          return Promise.resolve(() => {})
-        }
-        return Promise.resolve(() => {})
-      })
+      mockListen.mockImplementation(() => Promise.resolve(() => {}))
 
       mockInvoke.mockResolvedValue([])
 

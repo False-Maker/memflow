@@ -19,7 +19,7 @@ const mockListen = vi.mocked(listen)
 
 describe('AppContext Integration Tests', () => {
   let unlistenFunctions: (() => void)[] = []
-  let eventHandlers: Record<string, (event: { payload: unknown }) => void> = {}
+  let eventHandlers: Record<string, (event: any) => void> = {}
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -27,7 +27,7 @@ describe('AppContext Integration Tests', () => {
     eventHandlers = {}
 
     // Mock listen to capture event handlers
-    mockListen.mockImplementation((eventName: string, handler: (event: { payload: unknown }) => void) => {
+    mockListen.mockImplementation((eventName, handler) => {
       eventHandlers[eventName] = handler
       const unlisten = () => {
         delete eventHandlers[eventName]

@@ -16,7 +16,7 @@ mod context;
 use context::McpContext;
 
 // Global model instance
-static EMBEDDING_MODEL: OnceLock<TextEmbedding> = OnceLock::new();
+static EMBEDDING_MODEL: OnceLock<std::sync::Mutex<TextEmbedding>> = OnceLock::new();
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -103,7 +103,7 @@ async fn main() -> Result<()> {
 
     match TextEmbedding::try_new(model_opts) {
         Ok(model) => {
-            if EMBEDDING_MODEL.set(model).is_err() {
+            if EMBEDDING_MODEL.set(std::sync::Mutex::new(model)).is_err() {
                 error!("Failed to set global embedding model");
             } else {
                 info!("Embedding Model initialized successfully.");
@@ -255,8 +255,10 @@ async fn call_search_memory(query: &str, limit: usize) -> Result<String> {
     info!("Searching for: {} (limit: {})", query, limit);
 
     // Check if model is available
-    let embedding = if let Some(model) = EMBEDDING_MODEL.get() {
+    let embedding = if let Some(model_lock) = EMBEDDING_MODEL.get() {
         info!("Generating embedding for query...");
+        // Mutex lock
+        let mut model = model_lock.lock().map_err(|_| anyhow::anyhow!("Failed to lock embedding model"))?;
         let embeddings = model.embed(vec![query], None)?;
         // fastembed returns Vec<Vec<f32>>, we take the first one
         if let Some(vec) = embeddings.into_iter().next() {

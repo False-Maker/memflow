@@ -149,7 +149,6 @@ describe('Timeline', () => {
     const user = userEvent.setup()
     render(<Timeline />, { wrapper: Wrapper })
 
-    const filterButton = screen.getByRole('button', { name: '' })
     const buttons = screen.getAllByRole('button')
     const filterBtn = buttons.find((btn) =>
       btn.querySelector('svg')?.classList.contains('lucide-filter')

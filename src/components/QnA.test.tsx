@@ -51,9 +51,9 @@ describe('QnA', () => {
 
   it('应该发送消息并显示回复', async () => {
     const user = userEvent.setup()
-    mockListen.mockImplementationOnce(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+    mockListen.mockImplementationOnce(async (eventName, handler) => {
       if (eventName === 'ai-chat-chunk') {
-        handler({ payload: '这是AI回复' })
+        handler({ event: eventName, id: 0, payload: '这是AI回复' })
       }
       return () => {}
     })
@@ -93,9 +93,9 @@ describe('QnA', () => {
 
   it('应该在发送后清空输入框', async () => {
     const user = userEvent.setup()
-    mockListen.mockImplementationOnce(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+    mockListen.mockImplementationOnce(async (eventName, handler) => {
       if (eventName === 'ai-chat-chunk') {
-        handler({ payload: '回复' })
+        handler({ event: eventName, id: 0, payload: '回复' })
       }
       return () => {}
     })
@@ -129,9 +129,9 @@ describe('QnA', () => {
 
   it('应该允许使用 Enter 键发送消息', async () => {
     const user = userEvent.setup()
-    mockListen.mockImplementationOnce(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+    mockListen.mockImplementationOnce(async (eventName, handler) => {
       if (eventName === 'ai-chat-chunk') {
-        handler({ payload: '回复' })
+        handler({ event: eventName, id: 0, payload: '回复' })
       }
       return () => {}
     })
@@ -198,9 +198,9 @@ describe('QnA', () => {
 
   it('应该能够开始新对话', async () => {
     const user = userEvent.setup()
-    mockListen.mockImplementationOnce(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+    mockListen.mockImplementationOnce(async (eventName, handler) => {
       if (eventName === 'ai-chat-chunk') {
-        handler({ payload: '回复' })
+        handler({ event: eventName, id: 0, payload: '回复' })
       }
       return () => {}
     })
@@ -308,9 +308,9 @@ describe('QnA', () => {
     const user = userEvent.setup()
     const onSessionCreated = vi.fn()
 
-    mockListen.mockImplementationOnce(async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+    mockListen.mockImplementationOnce(async (eventName, handler) => {
       if (eventName === 'ai-chat-chunk') {
-        handler({ payload: '回复' })
+        handler({ event: eventName, id: 0, payload: '回复' })
       }
       return () => {}
     })
