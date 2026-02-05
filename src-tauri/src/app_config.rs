@@ -52,6 +52,8 @@ pub async fn init_config(app_handle: AppHandle) -> Result<()> {
             ocr_preprocess_target_width: 1280,
             ocr_preprocess_max_pixels: 3_000_000,
             agent_note_path: None,
+            compression_quality: 80,
+            target_resolution_scale: 1.0,
         };
         save_config_internal(&config_path, &default_config).await?;
         *CONFIG.write().await = Some(default_config);

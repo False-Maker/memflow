@@ -27,7 +27,7 @@ type ContextSuggestionPayload = {
   suggestedActions: SuggestedAction[]
 }
 
-export default function ContextSidebar() {
+export default function ContextSidebar({ onSendToQA }: { onSendToQA?: (text: string) => void }) {
   const { state, dispatch, searchActivities } = useApp()
   const [open, setOpen] = useState(true)
   const [displayed, setDisplayed] = useState<ContextSuggestionPayload | null>(null)
@@ -134,7 +134,7 @@ export default function ContextSidebar() {
 
   return (
     <>
-      <AgentModal open={isAgentOpen} onClose={() => setIsAgentOpen(false)} />
+      <AgentModal open={isAgentOpen} onClose={() => setIsAgentOpen(false)} onSendToQA={onSendToQA} />
       <aside
         className={`h-full border-l border-zinc-800 bg-void transition-all duration-300 ${open ? 'w-[320px]' : 'w-[52px]'
           } flex flex-col shrink-0 z-20`}

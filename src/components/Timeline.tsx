@@ -167,7 +167,11 @@ export default function Timeline() {
 
   const handleSmartSearch = async () => {
     const trimmedQuery = query.trim()
-    if (!trimmedQuery) return
+    if (!trimmedQuery) {
+      setSmartSearchError('请输入描述，例如“查找昨天看过的 React 文档”')
+      setTimeout(() => setSmartSearchError(null), 3000)
+      return
+    }
 
     setIsParsingIntent(true)
     setSmartSearchError(null)
@@ -422,8 +426,8 @@ export default function Timeline() {
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`p-2 rounded-sm border transition-all ${showFilters
-                ? 'bg-zinc-800 border-signal text-signal'
-                : 'border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+              ? 'bg-zinc-800 border-signal text-signal'
+              : 'border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200'
               }`}
           >
             <Filter className="w-4 h-4" />
@@ -431,10 +435,10 @@ export default function Timeline() {
 
           <button
             onClick={handleSmartSearch}
-            disabled={isParsingIntent || !query.trim()}
+            disabled={isParsingIntent}
             className={`p-2 rounded-sm border transition-all ${isParsingIntent
-                ? 'bg-zinc-800 border-signal text-signal animate-pulse'
-                : 'border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-signal'
+              ? 'bg-zinc-800 border-signal text-signal animate-pulse cursor-wait'
+              : 'border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-signal'
               }`}
             title="AI Smart Search"
           >
@@ -459,8 +463,8 @@ export default function Timeline() {
         {(smartSearchNotice || smartSearchError) && (
           <div
             className={`text-xs px-3 py-2 rounded-lg border ${smartSearchError
-                ? 'border-neon-red/30 bg-neon-red/10 text-neon-red'
-                : 'border-neon-purple/30 bg-neon-purple/10 text-neon-purple'
+              ? 'border-neon-red/30 bg-neon-red/10 text-neon-red'
+              : 'border-neon-purple/30 bg-neon-purple/10 text-neon-purple'
               }`}
           >
             {smartSearchError ?? smartSearchNotice}

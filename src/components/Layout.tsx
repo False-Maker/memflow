@@ -8,11 +8,10 @@ import ActivityHeatmap from './ActivityHeatmap'
 import ContextSidebar from './ContextSidebar'
 import ImmersiveReplay from './ImmersiveReplay'
 import { useApp } from '../contexts/AppContext'
-import { Settings, Zap, History, MessageSquare, BarChart3, Calendar, X } from 'lucide-react'
+import { Settings, History, MessageSquare, BarChart3, Calendar, X } from 'lucide-react'
 
 interface LayoutProps {
   onOpenSettings: () => void
-  onOpenAgentProposal: () => void
   onOpenChatHistory: () => void
   onOpenFeedback: () => void
   onOpenPerformance: () => void
@@ -23,12 +22,12 @@ interface LayoutProps {
   onSessionCreated?: (sessionId: number) => void
   onStartNewChat?: () => void
   qaDraft?: string | null
+  onSendToQA?: (text: string) => void
 }
 
 export default function Layout({
   // ... (props unchanged)
   onOpenSettings,
-  onOpenAgentProposal,
   onOpenChatHistory,
   onOpenFeedback,
   onOpenPerformance,
@@ -37,6 +36,7 @@ export default function Layout({
   onViewSwitched,
   onSessionCreated,
   qaDraft,
+  onSendToQA,
 }: LayoutProps) {
   const { state, dispatch, startRecording, stopRecording } = useApp()
   const [heatmapOpen, setHeatmapOpen] = useState(false)
@@ -138,13 +138,6 @@ export default function Layout({
             <Calendar className="w-4 h-4" />
           </button>
           <button
-            onClick={onOpenAgentProposal}
-            className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
-            title="Agents"
-          >
-            <Zap className="w-4 h-4" />
-          </button>
-          <button
             onClick={onOpenChatHistory}
             className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
             title="History"
@@ -192,7 +185,7 @@ export default function Layout({
               />
             )}
           </div>
-          <ContextSidebar />
+          <ContextSidebar onSendToQA={onSendToQA} />
         </div>
 
         {/* Heatmap Modal Overlay */}

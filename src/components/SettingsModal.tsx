@@ -240,10 +240,10 @@ function InputField({
       {statusMessage && (
         <p
           className={`text-xs flex items-center gap-1 ${status === 'saved'
-              ? 'text-emerald-400'
-              : status === 'error'
-                ? 'text-red-400'
-                : 'text-gray-400'
+            ? 'text-emerald-400'
+            : status === 'error'
+              ? 'text-red-400'
+              : 'text-gray-400'
             }`}
         >
           {status === 'saved' && <Check className="w-3 h-3" />}
@@ -699,6 +699,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
         embeddingUseSharedKey: formState.embedding.useSharedKey,
         openaiBaseUrl:
           formState.chat.provider === 'custom' ? formState.chat.baseUrl : draftConfig.openaiBaseUrl,
+        compressionQuality: draftConfig.compressionQuality,
+        targetResolutionScale: draftConfig.targetResolutionScale,
       }
 
       await invoke('update_config', { config: updatedConfig })
@@ -746,8 +748,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
             <button
               onClick={() => setActiveTab('general')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'general'
-                  ? 'bg-neon-blue/20 text-neon-blue'
-                  : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                ? 'bg-neon-blue/20 text-neon-blue'
+                : 'text-gray-400 hover:bg-white/5 hover:text-white'
                 }`}
             >
               <Bot className="w-4 h-4" />
@@ -756,8 +758,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
             <button
               onClick={() => setActiveTab('privacy')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'privacy'
-                  ? 'bg-neon-blue/20 text-neon-blue'
-                  : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                ? 'bg-neon-blue/20 text-neon-blue'
+                : 'text-gray-400 hover:bg-white/5 hover:text-white'
                 }`}
             >
               <Shield className="w-4 h-4" />
@@ -799,11 +801,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                 </section>
 
                 {/* Proactive Context Assistant Toggle (only when AI is enabled) */}
+                {/* Proactive Context Assistant Toggle (only when AI is enabled) */}
                 {draftConfig.aiEnabled && (
                   <section className="space-y-4">
                     <div className="flex items-center justify-between p-4 rounded-xl bg-surface/30 border border-glass-border/30">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-neon-purple/20 text-neon-purple flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-neon-blue/20 text-neon-blue flex items-center justify-center">
                           <Sparkles className="w-5 h-5" />
                         </div>
                         <div>
@@ -818,7 +821,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                             enableProactiveAssistant: !prev.enableProactiveAssistant,
                           }))
                         }
-                        className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.enableProactiveAssistant ? 'bg-neon-purple' : 'bg-gray-600'
+                        className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.enableProactiveAssistant ? 'bg-neon-blue' : 'bg-gray-600'
                           }`}
                       >
                         <div
@@ -829,6 +832,61 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                     </div>
                   </section>
                 )}
+
+                {/* Recording Settings */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-neon-blue/20 text-neon-blue flex items-center justify-center">
+                      <Eye className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white">录制设置</h3>
+                  </div>
+                  <div className="p-4 rounded-xl bg-surface/50 border border-glass-border/30 space-y-4">
+                    <InputField
+                      label="录制间隔 (ms)"
+                      value={String(draftConfig.recordingInterval || 5000)}
+                      onChange={(v) => {
+                        const val = parseInt(v) || 5000;
+                        setDraftConfig(prev => ({ ...prev, recordingInterval: val }));
+                      }}
+                      type="text"
+                      placeholder="5000"
+                      hint="越小越精准，但会增加存储占用 (最少 100ms)"
+                    />
+
+                    <div className="space-y-1.5 pt-2">
+                      <label className="block text-sm font-medium text-gray-300">
+                        图片质量 (压缩率) <span className="text-neon-blue ml-2">{draftConfig.compressionQuality || 80}%</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        step="10"
+                        value={draftConfig.compressionQuality || 80}
+                        onChange={(e) => setDraftConfig(prev => ({ ...prev, compressionQuality: parseInt(e.target.value) }))}
+                        className="w-full accent-neon-blue h-2 rounded-lg appearance-none cursor-pointer bg-glass-border"
+                      />
+                      <p className="text-xs text-gray-500">数值越小文件越小，但画面会变模糊 (推荐 60-80)</p>
+                    </div>
+
+                    <div className="space-y-1.5 pt-2">
+                      <label className="block text-sm font-medium text-gray-300">
+                        分辨率缩放 <span className="text-neon-blue ml-2">{draftConfig.targetResolutionScale || 1.0}x</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="1.0"
+                        step="0.1"
+                        value={draftConfig.targetResolutionScale || 1.0}
+                        onChange={(e) => setDraftConfig(prev => ({ ...prev, targetResolutionScale: parseFloat(e.target.value) }))}
+                        className="w-full accent-neon-blue h-2 rounded-lg appearance-none cursor-pointer bg-glass-border"
+                      />
+                      <p className="text-xs text-gray-500">降低分辨率可大幅减小体积 (如 0.5 表示长宽各缩小一半)</p>
+                    </div>
+                  </div>
+                </section>
 
                 {/* ==================== Chat Model Section ==================== */}
                 <section className="space-y-4">
@@ -1024,10 +1082,10 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                       {testState.chat.message && (
                         <span
                           className={`text-sm flex items-center gap-1 ${testState.chat.result === 'success'
-                              ? 'text-emerald-400'
-                              : testState.chat.result === 'error'
-                                ? 'text-red-400'
-                                : 'text-gray-400'
+                            ? 'text-emerald-400'
+                            : testState.chat.result === 'error'
+                              ? 'text-red-400'
+                              : 'text-gray-400'
                             }`}
                         >
                           {testState.chat.result === 'success' && <Check className="w-4 h-4" />}
@@ -1173,10 +1231,10 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                       {testState.embedding.message && (
                         <span
                           className={`text-sm flex items-center gap-1 ${testState.embedding.result === 'success'
-                              ? 'text-emerald-400'
-                              : testState.embedding.result === 'error'
-                                ? 'text-red-400'
-                                : 'text-gray-400'
+                            ? 'text-emerald-400'
+                            : testState.embedding.result === 'error'
+                              ? 'text-red-400'
+                              : 'text-gray-400'
                             }`}
                         >
                           {testState.embedding.result === 'success' && <Check className="w-4 h-4" />}
@@ -1232,8 +1290,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                             }))
                           }
                           className={`p-3 rounded-lg border text-left transition-colors ${draftConfig.ocrRedactionLevel === 'basic'
-                              ? 'bg-emerald-500/20 border-emerald-500'
-                              : 'border-glass-border hover:bg-surface/80'
+                            ? 'bg-emerald-500/20 border-emerald-500'
+                            : 'border-glass-border hover:bg-surface/80'
                             }`}
                         >
                           <div className="font-medium text-white mb-1">基础模式</div>
@@ -1249,8 +1307,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                             }))
                           }
                           className={`p-3 rounded-lg border text-left transition-colors ${draftConfig.ocrRedactionLevel === 'strict'
-                              ? 'bg-emerald-500/20 border-emerald-500'
-                              : 'border-glass-border hover:bg-surface/80'
+                            ? 'bg-emerald-500/20 border-emerald-500'
+                            : 'border-glass-border hover:bg-surface/80'
                             }`}
                         >
                           <div className="font-medium text-white mb-1">严格模式</div>
@@ -1315,10 +1373,10 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                               }))
                             }
                             className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${draftConfig.privacyModeUntil &&
-                                draftConfig.privacyModeUntil - Date.now() <= opt.val &&
-                                draftConfig.privacyModeUntil - Date.now() > opt.val - 3600 * 1000 // Rough check
-                                ? 'bg-amber-500/20 border-amber-500 text-amber-500'
-                                : 'border-glass-border hover:bg-surface/80 text-gray-300'
+                              draftConfig.privacyModeUntil - Date.now() <= opt.val &&
+                              draftConfig.privacyModeUntil - Date.now() > opt.val - 3600 * 1000 // Rough check
+                              ? 'bg-amber-500/20 border-amber-500 text-amber-500'
+                              : 'border-glass-border hover:bg-surface/80 text-gray-300'
                               }`}
                           >
                             {opt.label}

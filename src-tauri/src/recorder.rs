@@ -23,10 +23,20 @@ static LAST_TEXT_HASH: once_cell::sync::Lazy<Arc<tokio::sync::Mutex<Option<u64>>
 static APP_HANDLE: once_cell::sync::Lazy<Arc<tokio::sync::Mutex<Option<AppHandle>>>> =
     once_cell::sync::Lazy::new(|| Arc::new(tokio::sync::Mutex::new(None)));
 
-static HEARTBEAT_SECS: AtomicU64 = AtomicU64::new(60);
+// 当前心跳间隔 (毫秒)
+static HEARTBEAT_MS: AtomicU64 = AtomicU64::new(5000);
+// 基础配置间隔 (毫秒)
+static BASE_INTERVAL_MS: AtomicU64 = AtomicU64::new(5000);
 
 pub fn init(app_handle: AppHandle) {
     *APP_HANDLE.blocking_lock() = Some(app_handle);
+}
+
+pub fn set_base_interval(ms: u64) {
+    BASE_INTERVAL_MS.store(ms, Ordering::Relaxed);
+    // 重置心跳为基础间隔
+    HEARTBEAT_MS.store(ms, Ordering::Relaxed);
+    tracing::info!("Recording interval updated to {}ms", ms);
 }
 
 pub fn start() -> Result<()> {
@@ -67,16 +77,25 @@ fn normalize_app_name(name: &str) -> String {
 }
 
 fn adjust_heartbeat(on_duplicate: bool) {
-    let (min, max) = (10_u64, 60_u64);
-    let step = 5_u64;
+    let base = BASE_INTERVAL_MS.load(Ordering::Relaxed);
+    let max = 60_000_u64; // Max 60s
+    let step = 500_u64; // Step 500ms (was 5s)
+    
     loop {
-        let current = HEARTBEAT_SECS.load(Ordering::Relaxed);
+        let current = HEARTBEAT_MS.load(Ordering::Relaxed);
         let next = if on_duplicate {
             (current + step).min(max)
         } else {
-            current.saturating_sub(step).max(min)
+            // Restore towards base interval properly
+            // If current > base, decrease. If current < base (shouldn't happen), set to base.
+            if current > base {
+                 current.saturating_sub(step).max(base)
+            } else {
+                base
+            }
         };
-        if HEARTBEAT_SECS
+        
+        if HEARTBEAT_MS
             .compare_exchange(current, next, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
@@ -117,9 +136,9 @@ async fn recording_loop() {
         }
     };
 
-    // 心跳间隔：使用配置的录制间隔作为最大兜底时间，最小 10 秒，最大 60 秒
-    let heartbeat_secs = (config.recording_interval / 1000).max(10).min(60);
-    HEARTBEAT_SECS.store(heartbeat_secs, Ordering::Relaxed);
+    // 初始化间隔
+    let initial_interval = config.recording_interval.max(100); // 最小 100ms
+    set_base_interval(initial_interval);
     
     // 初始化事件驱动录制器
     let event_config = EventLoopConfig {
@@ -136,15 +155,15 @@ async fn recording_loop() {
     let debounce_duration = Duration::from_millis(500);
 
     log_to_frontend(&format!(
-        "Event-driven recording started (heartbeat: {}s, debounce: 500ms)",
-        HEARTBEAT_SECS.load(Ordering::Relaxed)
+        "Event-driven recording started (heartbeat: {}ms, debounce: 500ms)",
+        HEARTBEAT_MS.load(Ordering::Relaxed)
     ))
     .await;
 
     while RECORDING.load(Ordering::SeqCst) {
-        let sleep_secs = HEARTBEAT_SECS.load(Ordering::Relaxed);
+        let sleep_ms = HEARTBEAT_MS.load(Ordering::Relaxed);
         tokio::select! {
-            // A. 响应系统事件（窗口切换）
+             // A. 响应系统事件（窗口切换）
             Some(event) = event_rx.recv() => {
                 if let WindowEvent::ForegroundChanged { hwnd: _ } = event {
                     // 防抖检查：500ms 内不重复处理
@@ -163,9 +182,9 @@ async fn recording_loop() {
                 }
             }
             // B. 兜底心跳（定时采样，防止静止场景漏录）
-            _ = tokio::time::sleep(Duration::from_secs(sleep_secs)) => {
+            _ = tokio::time::sleep(Duration::from_millis(sleep_ms)) => {
                 if RECORDING.load(Ordering::SeqCst) {
-                    tracing::debug!("心跳触发录制 ({}s)", sleep_secs);
+                    tracing::debug!("心跳触发录制 ({}ms)", sleep_ms);
                     match capture_and_save().await {
                         Ok(_) => {}
                         Err(e) => {
@@ -285,14 +304,26 @@ async fn capture_and_save() -> Result<()> {
     let uia_ms = t_uia.elapsed().as_millis();
 
     let t_capture = std::time::Instant::now();
-    let (webp_bytes, current_hash) = tokio::task::spawn_blocking(|| -> Result<(Vec<u8>, u64)> {
+    let (webp_bytes, current_hash) = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, u64)> {
         let screenshot = capture_screen()?;
         let current_hash = calculate_phash_u64(&screenshot)?;
 
-        let rgba_image = screenshot.to_rgba8();
+        // Resolution Scaling
+        let scale = config.target_resolution_scale;
+        let final_image = if (scale - 1.0).abs() > 0.01 && scale > 0.0 && scale < 1.0 {
+             let new_width = (screenshot.width() as f32 * scale) as u32;
+             let new_height = (screenshot.height() as f32 * scale) as u32;
+             screenshot.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
+        } else {
+             screenshot
+        };
+
+        let rgba_image = final_image.to_rgba8();
         let encoder =
             webp::Encoder::from_rgba(&rgba_image, rgba_image.width(), rgba_image.height());
-        let webp_memory = encoder.encode(80.0);
+        
+        let quality = config.compression_quality as f32;
+        let webp_memory = encoder.encode(quality);
 
         Ok((webp_memory.to_vec(), current_hash))
     })

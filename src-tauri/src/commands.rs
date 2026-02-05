@@ -73,10 +73,7 @@ pub struct AppConfig {
     pub ocr_redaction_enabled: bool,
     #[serde(default = "default_ocr_redaction_level", alias = "ocr_redaction_level")]
     pub ocr_redaction_level: String,
-    #[serde(
-        default = "default_ocr_preprocess_enabled",
-        alias = "ocr_preprocess_enabled"
-    )]
+    #[serde(default, alias = "ocr_preprocess_enabled")]
     pub ocr_preprocess_enabled: bool,
     #[serde(
         default = "default_ocr_preprocess_target_width",
@@ -91,6 +88,13 @@ pub struct AppConfig {
     /// Agent 生成笔记的保存路径（可选，默认为文档目录）
     #[serde(default, alias = "agent_note_path")]
     pub agent_note_path: Option<String>,
+    #[serde(default = "default_compression_quality", alias = "compression_quality")]
+    pub compression_quality: u8,
+    #[serde(
+        default = "default_target_resolution_scale",
+        alias = "target_resolution_scale"
+    )]
+    pub target_resolution_scale: f32,
 }
 
 fn default_recording_interval() -> u64 {
@@ -119,6 +123,14 @@ fn default_ocr_preprocess_target_width() -> u32 {
 
 fn default_ocr_preprocess_max_pixels() -> u64 {
     3_000_000
+}
+
+fn default_compression_quality() -> u8 {
+    80
+}
+
+fn default_target_resolution_scale() -> f32 {
+    1.0
 }
 
 fn default_ocr_engine() -> String {
@@ -265,9 +277,14 @@ pub async fn get_config() -> Result<AppConfig, String> {
 
 #[tauri::command]
 pub async fn update_config(config: AppConfig, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let interval = config.recording_interval;
     app_config::update_config(config, app_handle)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    
+    // Notify recorder of the new interval
+    recorder::set_base_interval(interval);
+    Ok(())
 }
 
 #[tauri::command]
@@ -286,7 +303,13 @@ pub async fn set_privacy_mode(
 
 #[tauri::command]
 pub async fn get_stats() -> Result<Stats, String> {
-    db::get_stats().await.map_err(|e| e.to_string())
+    let config = app_config::get_config().await.map_err(|e| e.to_string())?;
+    // Config interval is in ms, convert to seconds
+    let interval = config.recording_interval as f64 / 1000.0;
+    // Sanity check: ensure interval is positive, default to 5s if invalid
+    let interval = if interval <= 0.0 { 5.0 } else { interval };
+    
+    db::get_stats(interval).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

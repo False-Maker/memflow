@@ -272,20 +272,20 @@ pub async fn get_recording_stats(limit: i64) -> Result<Vec<RecordingStat>> {
     Ok(stats)
 }
 
-pub async fn get_stats() -> Result<Stats> {
+pub async fn get_stats(interval_seconds: f64) -> Result<Stats> {
     let pool = get_pool().await?;
 
     let total_activities: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM activity_logs")
         .fetch_one(&pool)
         .await?;
 
-    // 根据时间范围计算累计时长（最大时间戳 - 最小时间戳）
-    let total_hours: f64 = sqlx::query_scalar::<_, Option<f64>>(
-        "SELECT CAST((MAX(timestamp) - MIN(timestamp)) AS REAL) / 3600.0 FROM activity_logs",
+    // 根据记录数量估算累计时长（每条记录代表 interval_seconds 秒）
+    let total_hours: f64 = sqlx::query_scalar::<_, f64>(
+        "SELECT CAST(COUNT(*) * ? AS REAL) / 3600.0 FROM activity_logs",
     )
+    .bind(interval_seconds)
     .fetch_one(&pool)
-    .await?
-    .unwrap_or(0.0);
+    .await?;
 
     let top_app: String = sqlx::query_scalar::<_, String>(
         "SELECT app_name FROM activity_logs 

@@ -64,7 +64,7 @@ export default function KnowledgeGraph() {
     // 延迟执行以确保 DOM 已完成布局
     const timer = setTimeout(updateDimensions, 100)
     window.addEventListener('resize', updateDimensions)
-    
+
     // 使用 ResizeObserver 监听容器尺寸变化
     const resizeObserver = new ResizeObserver(() => {
       // 防抖处理
@@ -122,6 +122,12 @@ export default function KnowledgeGraph() {
   // 当图谱数据变化时，延迟后自动缩放适应
   useEffect(() => {
     if (graphRef.current && graphData.nodes.length > 0) {
+      // Apply custom forces for "Spaced Out" Industrial Look
+      // Strong repulsion to prevent "hairball"
+      graphRef.current.d3Force('charge').strength(-400).distanceMax(300)
+      // Longer links for cleaner structure
+      graphRef.current.d3Force('link').distance(80)
+
       // 等待图谱渲染完成后缩放
       const timer = setTimeout(() => {
         graphRef.current?.zoomToFit(400, 50)
@@ -179,26 +185,36 @@ export default function KnowledgeGraph() {
           graphData={graphData}
           nodeLabel={(node: any) => node.name}
           nodeColor={(node: any) => {
+            // Industrial Minimalist Palette (Zinc Scale)
             const colors: Record<string, string> = {
-              app: '#2DE2E6',
-              doc: '#9D4EDD',
-              time: '#02C39A',
+              app: '#f4f4f5', // zinc-100 (Brightest, Focal points)
+              doc: '#a1a1aa', // zinc-400 (Mid-tone, Content)
+              time: '#3f3f46', // zinc-700 (Dark, Structural/Background)
             }
-            return colors[node.group] || '#666'
+            return colors[node.group] || '#71717a' // zinc-500 fallback
           }}
-          nodeVal={(node: any) => Math.sqrt(node.size || 1) * 5}
-          linkColor={() => 'rgba(255, 255, 255, 0.2)'}
-          linkWidth={(link: any) => Math.sqrt(link.value || 1)}
-          backgroundColor="#0a0a0a"
+          // Increase node size difference for hierarchy
+          nodeVal={(node: any) => {
+            const base = Math.sqrt(node.size || 1);
+            return node.group === 'app' ? base * 8 : base * 4;
+          }}
+          // Subtle, structural links
+          linkColor={() => 'rgba(63, 63, 70, 0.2)'} // zinc-700 with opacity
+          linkWidth={() => 1} // Thin, precise lines
+          backgroundColor="#0a0a0a" // Deep void
           width={dimensions.width}
           height={dimensions.height}
-          minZoom={0.1}
-          maxZoom={10}
+          minZoom={0.5} // Prevent zooming too far out
+          maxZoom={4}   // Prevent zooming too far in
+          d3AlphaDecay={0.02} // Slower decay = clearer layout settling
+          d3VelocityDecay={0.3} // High friction for stable movement
           onEngineStop={() => {
             if (graphRef.current) {
               graphRef.current.zoomToFit(400, 50)
             }
           }}
+          // Custom Forces for "Spaced Out" Industrial Look
+          cooldownTicks={100}
         />
       )
     }
@@ -236,9 +252,9 @@ export default function KnowledgeGraph() {
         </div>
       )}
 
-      <div 
-        ref={containerRef} 
-        className="flex-1 relative bg-[#0a0a0a]" 
+      <div
+        ref={containerRef}
+        className="flex-1 relative bg-[#0a0a0a]"
         style={{ minHeight: 0, overflow: 'hidden' }}
       >
         {renderContent()}

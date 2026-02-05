@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react'
 import Layout from './components/Layout'
 import SettingsModal from './components/SettingsModal'
-import AgentProposalModal from './components/AgentProposalModal'
 import ChatHistoryModal from './components/ChatHistoryModal'
 import FeedbackModal from './components/FeedbackModal'
 import PerformanceModal from './components/PerformanceModal'
@@ -9,7 +8,6 @@ import { AppProvider } from './contexts/AppContext'
 
 function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [agentProposalOpen, setAgentProposalOpen] = useState(false)
   const [chatHistoryOpen, setChatHistoryOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [performanceOpen, setPerformanceOpen] = useState(false)
@@ -44,14 +42,12 @@ function App() {
     setQaDraft(text)
     setCurrentSessionId(null)
     setShouldSwitchToQA(true)
-    setAgentProposalOpen(false)
   }, [])
 
   return (
     <AppProvider>
       <Layout
         onOpenSettings={() => setSettingsOpen(true)}
-        onOpenAgentProposal={() => setAgentProposalOpen(true)}
         onOpenChatHistory={() => setChatHistoryOpen(true)}
         onOpenFeedback={() => setFeedbackOpen(true)}
         onOpenPerformance={() => setPerformanceOpen(true)}
@@ -61,30 +57,27 @@ function App() {
         onSessionCreated={handleSessionCreated}
         onStartNewChat={handleStartNewChat}
         qaDraft={qaDraft}
-      />
-      
-      <SettingsModal 
-        open={settingsOpen} 
-        onClose={() => setSettingsOpen(false)} 
-      />
-      <AgentProposalModal 
-        open={agentProposalOpen} 
-        onClose={() => setAgentProposalOpen(false)} 
         onSendToQA={handleSendToQA}
       />
-      <ChatHistoryModal 
-        open={chatHistoryOpen} 
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
+
+      <ChatHistoryModal
+        open={chatHistoryOpen}
         onClose={() => setChatHistoryOpen(false)}
         onContinueChat={handleContinueChat}
       />
-      <FeedbackModal 
-        open={feedbackOpen} 
+      <FeedbackModal
+        open={feedbackOpen}
         onClose={() => setFeedbackOpen(false)}
         currentSessionId={currentSessionId}
       />
-      <PerformanceModal 
-        open={performanceOpen} 
-        onClose={() => setPerformanceOpen(false)} 
+      <PerformanceModal
+        open={performanceOpen}
+        onClose={() => setPerformanceOpen(false)}
       />
     </AppProvider>
   )
