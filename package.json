@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "pnpm build && pnpm build:mcp:release && tauri build",
+    "tauri:build:win": "pnpm build && pnpm build:mcp:win && tauri build --target x86_64-pc-windows-msvc",
+    "tauri:build:mac": "pnpm build && pnpm build:mcp:mac && tauri build --target aarch64-apple-darwin",
+    "tauri:build:linux": "pnpm build && pnpm build:mcp:linux && tauri build --target x86_64-unknown-linux-gnu",
     "dev:all": "dev.bat",
     "dev:all:ps1": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1",
     "test:setup": "powershell -ExecutionPolicy Bypass -File ./scripts/test.ps1 || bash ./scripts/test.sh",
@@ -30,7 +33,11 @@
     "version:minor": "bash scripts/version.sh minor || powershell -ExecutionPolicy Bypass -File scripts/version.ps1 minor",
     "version:major": "bash scripts/version.sh major || powershell -ExecutionPolicy Bypass -File scripts/version.ps1 major",
     "download:rapidocr": "powershell -ExecutionPolicy Bypass -File ./scripts/download_rapidocr.ps1",
-    "test:ocr": "powershell -ExecutionPolicy Bypass -File ./scripts/test_ocr.ps1"
+    "test:ocr": "powershell -ExecutionPolicy Bypass -File ./scripts/test_ocr.ps1",
+    "build:mcp:release": "cargo build -p memflow-mcp --release",
+    "build:mcp:win": "cargo build -p memflow-mcp --release --target x86_64-pc-windows-msvc",
+    "build:mcp:mac": "cargo build -p memflow-mcp --release --target aarch64-apple-darwin",
+    "build:mcp:linux": "cargo build -p memflow-mcp --release --target x86_64-unknown-linux-gnu"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

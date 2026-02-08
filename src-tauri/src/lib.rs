@@ -22,12 +22,201 @@ pub mod win_event;
 
 use tracing_subscriber::prelude::*;
 use tauri::Manager;
+use tauri::tray::TrayIconBuilder;
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::image::Image;
+use tauri::{AppHandle, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use std::time::Duration;
 
 static LOG_GUARD: once_cell::sync::Lazy<std::sync::Mutex<Option<tracing_appender::non_blocking::WorkerGuard>>> =
     once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RunMode {
+    Ui,
+    TrayOnly,
+    Headless,
+}
+
+fn parse_run_mode() -> RunMode {
+    let mut selected: Option<RunMode> = None;
+    for arg in std::env::args().skip(1) {
+        match arg.as_str() {
+            "--headless" => selected = Some(RunMode::Headless),
+            "--tray-only" => selected = Some(RunMode::TrayOnly),
+            "--ui" => selected = Some(RunMode::Ui),
+            _ => {}
+        }
+    }
+    selected.unwrap_or(RunMode::TrayOnly)
+}
+
+fn show_or_create_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return;
+    }
+
+    let window = WebviewWindowBuilder::new(
+        app,
+        "main",
+        WebviewUrl::App("index.html".into()),
+    )
+    .title("MemFlow")
+    .inner_size(1200.0, 800.0)
+    .min_inner_size(800.0, 600.0)
+    .resizable(true)
+    .build();
+
+    if let Ok(win) = window {
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
+
+fn show_or_create_debug_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("debug") {
+        let _ = win.show();
+        let _ = win.set_focus();
+        return;
+    }
+
+    let window = WebviewWindowBuilder::new(
+        app,
+        "debug",
+        WebviewUrl::App("index.html?debug=1".into()),
+    )
+    .title("MemFlow Debug")
+    .inner_size(860.0, 680.0)
+    .min_inner_size(680.0, 520.0)
+    .resizable(true)
+    .build();
+
+    if let Ok(win) = window {
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
+
+fn mcp_heartbeat_path(app_handle: &AppHandle) -> Option<std::path::PathBuf> {
+    let tauri_hb = app_handle
+        .path()
+        .app_data_dir()
+        .map(|d| d.join("mcp_heartbeat.json"))
+        .ok();
+    let alt_hb = dirs::data_dir().map(|d| d.join("com.memflow.app").join("mcp_heartbeat.json"));
+    tauri_hb.filter(|p| p.exists()).or_else(|| alt_hb.filter(|p| p.exists()))
+}
+
+fn mcp_heartbeat_online(app_handle: &AppHandle) -> bool {
+    let max_age_secs = 8;
+    if let Some(path) = mcp_heartbeat_path(app_handle) {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                let status = val.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+                let ts = val.get("ts").and_then(|v| v.as_i64()).unwrap_or(0);
+                let now = chrono::Local::now().timestamp();
+                let delta = now - ts;
+                return status == "online" && delta >= 0 && delta <= max_age_secs;
+            }
+        }
+        if let Ok(meta) = std::fs::metadata(&path) {
+            if let Ok(modified) = meta.modified() {
+                if let Ok(elapsed) = modified.elapsed() {
+                    return elapsed.as_secs() <= max_age_secs as u64;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn status_label(value: bool) -> &'static str {
+    if value {
+        "Running"
+    } else {
+        "Stopped"
+    }
+}
+
+fn mcp_label(app_handle: &AppHandle) -> &'static str {
+    if mcp_heartbeat_online(app_handle) {
+        "Online"
+    } else {
+        "Offline"
+    }
+}
+
+fn format_tray_status(app_handle: &AppHandle) -> String {
+    let ocr_running = ocr::service::is_service_running_quiet();
+    let recording = recorder::is_recording();
+    format!(
+        "Status: OCR {} | MCP {} | REC {}",
+        status_label(ocr_running),
+        mcp_label(app_handle),
+        status_label(recording)
+    )
+}
+
+fn format_status_dialog(app_handle: &AppHandle) -> String {
+    let ocr_running = ocr::service::is_service_running();
+    let recording = recorder::is_recording();
+    format!(
+        "OCR: {}\nMCP: {}\nRecorder: {}",
+        status_label(ocr_running),
+        mcp_label(app_handle),
+        status_label(recording)
+    )
+}
+
+fn start_mcp_if_needed(app_handle: &AppHandle) {
+    if mcp_heartbeat_online(app_handle) {
+        return;
+    }
+    let exe_path = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(e) => {
+            tracing::warn!("Failed to resolve current exe: {}", e);
+            return;
+        }
+    };
+    let exe_dir = match exe_path.parent() {
+        Some(dir) => dir.to_path_buf(),
+        None => {
+            tracing::warn!("Failed to resolve current exe dir");
+            return;
+        }
+    };
+    let resource_dir = app_handle.path().resource_dir().ok();
+    let mut candidates = vec![exe_dir.join("memflow-mcp.exe"), exe_dir.join("memflow-mcp")];
+    if let Some(dir) = resource_dir {
+        candidates.push(dir.join("memflow-mcp.exe"));
+        candidates.push(dir.join("memflow-mcp"));
+    }
+    let candidate = candidates.into_iter().find(|p| p.exists());
+    let Some(path) = candidate else {
+        tracing::warn!("memflow-mcp binary not found near app executable");
+        return;
+    };
+    let _ = std::process::Command::new(path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    run_with_mode(parse_run_mode());
+}
+
+pub fn run_headless() {
+    run_with_mode(RunMode::Headless);
+}
+
+fn run_with_mode(run_mode: RunMode) {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
@@ -82,8 +271,9 @@ pub fn run() {
             commands::run_retention_cleanup,
             commands::get_recording_stats,
             commands::get_ocr_queue_stats,
+            commands::get_system_status,
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let mut filter = tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
 
@@ -114,6 +304,10 @@ pub fn run() {
                 .try_init();
 
             let app_handle = app.handle().clone();
+            let mcp_handle = app_handle.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                start_mcp_if_needed(&mcp_handle);
+            });
 
             let ocr_handle = app_handle.clone();
             tauri::async_runtime::spawn_blocking(move || {
@@ -132,16 +326,17 @@ pub fn run() {
             ocr_worker::spawn_ocr_worker(app_handle.clone());
             tracing::info!("ocr_worker::spawn_ocr_worker returned.");
 
+            let config_handle = app_handle.clone();
             // 初始化配置和数据库
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = app_config::init_config(app_handle.clone()).await {
+                if let Err(e) = app_config::init_config(config_handle.clone()).await {
                     tracing::error!("CRITICAL: Config init failed: {:#}", e);
                     tracing::error!("CRITICAL: Config init failed (debug): {:?}", e);
                     eprintln!("CRITICAL: Config init failed: {:#}", e);
                 }
                 
                 // 初始化 Prompts 配置（从资源目录加载）
-                let resource_path = app_handle.path().resource_dir().ok();
+                let resource_path = config_handle.path().resource_dir().ok();
                 if let Err(e) = ai::prompts::init_prompts(resource_path).await {
                     tracing::warn!("Prompts 配置初始化失败，使用默认值: {}", e);
                 } else {
@@ -149,7 +344,7 @@ pub fn run() {
                 }
 
                 tracing::info!("Starting database initialization...");
-                if let Err(e) = db::init_db(app_handle.clone()).await {
+                if let Err(e) = db::init_db(config_handle.clone()).await {
                     let error_msg = format!("CRITICAL: Database init failed: {}", e);
                     tracing::error!("{}", error_msg);
                     tracing::error!("CRITICAL: Database init failed (debug): {:?}", e);
@@ -160,7 +355,7 @@ pub fn run() {
                     eprintln!("Database init hint: {}", hint);
                      
                     // 记录详细的诊断信息
-                    if let Ok(db_path) = db::get_db_path_for_diagnostics(&app_handle) {
+                    if let Ok(db_path) = db::get_db_path_for_diagnostics(&config_handle) {
                         tracing::error!(
                             "诊断信息 - 数据库路径: {}, 请检查文件权限和是否被其他进程占用",
                             db_path.display()
@@ -173,13 +368,71 @@ pub fn run() {
                 }
             });
 
+            let status = MenuItemBuilder::with_id("status", "Status: Initializing")
+                .enabled(true)
+                .build(app)?;
+            let show = MenuItemBuilder::with_id("show", "Open Dashboard").build(app)?;
+            let quit = MenuItemBuilder::with_id("quit", "Quit Memflow").build(app)?;
+
+            let menu = MenuBuilder::new(app)
+                .items(&[&status, &show])
+                .separator()
+                .items(&[&quit])
+                .build()?;
+
+            let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))?;
+            let _tray = TrayIconBuilder::new()
+                .menu(&menu)
+                .icon(icon)
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "status" => {
+                            let message = format_status_dialog(app);
+                            app.dialog()
+                                .message(message)
+                                .title("Memflow Status")
+                                .kind(MessageDialogKind::Info)
+                                .buttons(MessageDialogButtons::Ok)
+                                .show(|_| {});
+                        }
+                        "show" => show_or_create_main_window(app),
+                        "quit" => std::process::exit(0),
+                        _ => {}
+                    }
+                })
+                .build(app)?;
+
+            let status_handle = status.clone();
+            let status_app = app_handle.clone();
+            let _ = status_handle.set_text(format_tray_status(&status_app));
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    let _ = status_handle.set_text(format_tray_status(&status_app));
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            });
+
+            if run_mode == RunMode::Headless {
+                tracing::info!("Starting in Headless Mode...");
+            } else {
+                show_or_create_main_window(&app_handle);
+            }
+
             Ok(())
         })
-        .on_window_event(|_window, event| {
-            // 应用退出时停止 OCR 服务
+        .on_window_event(move |window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if run_mode != RunMode::Ui {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    return;
+                }
+            }
             if let tauri::WindowEvent::Destroyed = event {
-                let _ = recorder::stop();
-                ocr::service::stop_service();
+                if run_mode == RunMode::Ui {
+                    let _ = recorder::stop();
+                    ocr::service::stop_service();
+                }
             }
         })
         .run(tauri::generate_context!())

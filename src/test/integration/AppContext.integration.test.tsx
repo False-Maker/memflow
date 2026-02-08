@@ -354,7 +354,7 @@ describe('AppContext Integration Tests', () => {
       })
 
       await waitFor(() => {
-        expect(result.current.state.currentView).toBe('timeline')
+        expect(result.current.state.currentView).toBe('dashboard')
       })
 
       // 切换到图形视图

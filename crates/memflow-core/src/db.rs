@@ -190,6 +190,53 @@ pub async fn get_activities(limit: i64) -> Result<Vec<ActivityLog>> {
     Ok(activities)
 }
 
+/// Get activities from the last N minutes (for MCP real-time perception)
+/// 
+/// # Arguments
+/// * `minutes` - Number of minutes to look back (clamped to 1-30)
+/// * `limit` - Maximum number of results (clamped to 1-100)
+pub async fn get_recent_activities_by_time(minutes: i64, limit: i64) -> Result<Vec<ActivityLog>> {
+    let pool = get_pool().await?;
+    
+    // Clamp parameters to reasonable bounds
+    let minutes = minutes.clamp(1, 30);
+    let limit = limit.clamp(1, 100);
+    
+    // Calculate cutoff timestamp
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let cutoff = now - (minutes * 60);
+
+    let rows = sqlx::query(
+        "SELECT id, timestamp, app_name, window_title, image_path, ocr_text, phash 
+         FROM activity_logs 
+         WHERE timestamp >= ?
+         ORDER BY timestamp DESC 
+         LIMIT ?",
+    )
+    .bind(cutoff)
+    .bind(limit)
+    .fetch_all(&pool)
+    .await?;
+
+    let activities = rows
+        .into_iter()
+        .map(|row| ActivityLog {
+            id: row.get(0),
+            timestamp: row.get(1),
+            app_name: row.get(2),
+            window_title: row.get(3),
+            image_path: row.get(4),
+            ocr_text: row.get(5),
+            phash: row.get(6),
+        })
+        .collect();
+
+    Ok(activities)
+}
+
 pub async fn get_activity_by_id(id: i64) -> Result<ActivityLog> {
     let pool = get_pool().await?;
 

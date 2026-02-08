@@ -9,20 +9,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "MemFlow",
-        "width": 1200,
-        "height": 800,
-        "minWidth": 800,
-        "minHeight": 600,
-        "resizable": true,
-        "fullscreen": false,
-        "transparent": false,
-        "decorations": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null,
       "assetProtocol": {
@@ -35,14 +22,19 @@
     "withGlobalTauri": false
   },
   "bundle": {
-    "active": false,
+    "active": true,
     "targets": "all",
     "icon": [
       "icons/icon.png",
       "icons/icon.ico"
     ],
     "resources": [],
-    "externalBin": [],
+    "externalBin": [
+      "../target/release/memflow-mcp",
+      "../target/x86_64-pc-windows-msvc/release/memflow-mcp",
+      "../target/aarch64-apple-darwin/release/memflow-mcp",
+      "../target/x86_64-unknown-linux-gnu/release/memflow-mcp"
+    ],
     "copyright": "",
     "category": "Utility",
     "shortDescription": "智能桌面活动记录与分析工具",

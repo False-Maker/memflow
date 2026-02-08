@@ -13,6 +13,7 @@ use tracing_subscriber::{fmt, EnvFilter};
 use std::sync::OnceLock;
 
 mod context;
+use memflow_mcp::prompts;
 use context::McpContext;
 
 // Global model instance
@@ -95,22 +96,31 @@ async fn main() -> Result<()> {
     info!("memflow-mcp server starting...");
     info!("Resource dir: {:?}", resource_dir);
 
-    // Initialize Embedding Model
+    // Initialize Embedding Model (with panic protection for ONNX Runtime conflicts)
     info!("Initializing Embedding Model (BGESmallENV15)...");
-    let model_opts = InitOptions::new(EmbeddingModel::BGESmallENV15)
-        .with_cache_dir(resource_dir.join("models"))
-        .with_show_download_progress(false);
+    let resource_dir_clone = resource_dir.clone();
+    
+    // Use catch_unwind to handle ONNX Runtime version conflicts that panic
+    let init_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let model_opts = InitOptions::new(EmbeddingModel::BGESmallENV15)
+            .with_cache_dir(resource_dir_clone.join("models"))
+            .with_show_download_progress(false);
+        TextEmbedding::try_new(model_opts)
+    }));
 
-    match TextEmbedding::try_new(model_opts) {
-        Ok(model) => {
+    match init_result {
+        Ok(Ok(model)) => {
             if EMBEDDING_MODEL.set(std::sync::Mutex::new(model)).is_err() {
                 error!("Failed to set global embedding model");
             } else {
                 info!("Embedding Model initialized successfully.");
             }
         },
-        Err(e) => {
-            error!("Failed to initialize Embedding Model: {}", e);
+        Ok(Err(e)) => {
+            error!("Failed to initialize Embedding Model: {}. Using placeholder embeddings.", e);
+        },
+        Err(_) => {
+            error!("Embedding Model initialization panicked (likely ONNX Runtime version conflict). Using placeholder embeddings.");
         }
     }
 
@@ -127,6 +137,26 @@ async fn main() -> Result<()> {
     });
 
     info!("memflow-mcp server loop ready.");
+
+    {
+        let hb_dir = app_dir.clone();
+        tokio::spawn(async move {
+            let hb_path = hb_dir.join("mcp_heartbeat.json");
+            loop {
+                let now = chrono::Local::now().timestamp();
+                let payload = serde_json::json!({
+                    "status": "online",
+                    "ts": now
+                });
+                if let Ok(s) = serde_json::to_string(&payload) {
+                    if let Err(e) = std::fs::write(&hb_path, s) {
+                        error!("Failed to write MCP heartbeat: {}", e);
+                    }
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        });
+    }
 
     let stdin = tokio::io::stdin();
     // We don't use stdout wrapper, just println! is fine as long as we are careful.
@@ -175,7 +205,8 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
             let capabilities = serde_json::json!({
                 "protocolVersion": "2024-11-05",
                 "capabilities": {
-                    "tools": {}
+                    "tools": {},
+                    "prompts": {}
                 },
                 "serverInfo": {
                     "name": "memflow-mcp",
@@ -191,8 +222,8 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
             let tools = serde_json::json!({
                 "tools": [
                     {
-                        "name": "search_memory",
-                        "description": "Search semantic memory for relevant information based on a query.",
+                        "name": "search_visual_memory",
+                        "description": "Search user's recorded screen history for relevant visual context. Returns OCR text, app names, and timestamps from past activities.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -207,6 +238,31 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
                             },
                             "required": ["query"]
                         }
+                    },
+                    {
+                        "name": "get_active_window_context",
+                        "description": "Get the current/latest screen context including window title, app name, and OCR text. Use this to understand what the user is currently looking at (e.g., 'help me fix this error on screen').",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {}
+                        }
+                    },
+                    {
+                        "name": "get_recent_activities",
+                        "description": "Get the user's recent activity timeline. Use this to understand 'what did I just do in the last few minutes'. Returns a chronological list of apps and windows the user interacted with.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "minutes": {
+                                    "type": "integer",
+                                    "description": "Number of minutes to look back (default: 5, max: 30)"
+                                },
+                                "limit": {
+                                    "type": "integer",
+                                    "description": "Max number of activities to return (default: 20)"
+                                }
+                            }
+                        }
                     }
                 ]
             });
@@ -217,28 +273,88 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
             let name = params["name"].as_str().context("Missing tool name")?;
             let args = &params["arguments"];
 
-            if name == "search_memory" {
-                let query = args["query"].as_str().context("Missing query argument")?;
-                let limit = args["limit"].as_u64().unwrap_or(5) as usize;
+            match name {
+                "search_visual_memory" => {
+                    let query = args["query"].as_str().context("Missing query argument")?;
+                    let limit = args["limit"].as_u64().unwrap_or(5) as usize;
 
-                match call_search_memory(query, limit).await {
-                    Ok(result_text) => {
-                         Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": result_text
-                                }
-                            ]
-                        }))))
-                    },
-                    Err(e) => {
-                        error!("Search failed: {}", e);
-                        Ok(Some(JsonRpcResponse::error(id, -32000, e.to_string())))
+                    match call_search_visual_memory(query, limit).await {
+                        Ok(result_text) => {
+                             Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": result_text
+                                    }
+                                ]
+                            }))))
+                        },
+                        Err(e) => {
+                            error!("Search failed: {}", e);
+                            Ok(Some(JsonRpcResponse::error(id, -32000, e.to_string())))
+                        }
                     }
                 }
-            } else {
-                 Ok(Some(JsonRpcResponse::error(id, -32601, format!("Tool not found: {}", name))))
+                "get_active_window_context" => {
+                    match call_get_active_window_context().await {
+                        Ok(result_text) => {
+                            Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": result_text
+                                    }
+                                ]
+                            }))))
+                        },
+                        Err(e) => {
+                            error!("Get active window context failed: {}", e);
+                            Ok(Some(JsonRpcResponse::error(id, -32000, e.to_string())))
+                        }
+                    }
+                }
+                "get_recent_activities" => {
+                    let minutes = args["minutes"].as_i64().unwrap_or(5);
+                    let limit = args["limit"].as_i64().unwrap_or(20);
+
+                    match call_get_recent_activities(minutes, limit).await {
+                        Ok(result_text) => {
+                            Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": result_text
+                                    }
+                                ]
+                            }))))
+                        },
+                        Err(e) => {
+                            error!("Get recent activities failed: {}", e);
+                            Ok(Some(JsonRpcResponse::error(id, -32000, e.to_string())))
+                        }
+                    }
+                }
+                _ => {
+                    Ok(Some(JsonRpcResponse::error(id, -32601, format!("Tool not found: {}", name))))
+                }
+            }
+        }
+        "prompts/list" => {
+            let result = prompts::list_prompts();
+            Ok(Some(JsonRpcResponse::ok(id, serde_json::to_value(result)?)))
+        }
+        "prompts/get" => {
+            let params = req.params.context("Missing params")?;
+            let name = params["name"].as_str().context("Missing prompt name")?;
+            let arguments = params.get("arguments").cloned();
+
+            match prompts::get_prompt(name, arguments) {
+                Some(result) => {
+                    Ok(Some(JsonRpcResponse::ok(id, serde_json::to_value(result)?)))
+                }
+                None => {
+                    Ok(Some(JsonRpcResponse::error(id, -32601, format!("Prompt not found: {}", name))))
+                }
             }
         }
         _ => {
@@ -251,14 +367,14 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
     }
 }
 
-async fn call_search_memory(query: &str, limit: usize) -> Result<String> {
-    info!("Searching for: {} (limit: {})", query, limit);
+async fn call_search_visual_memory(query: &str, limit: usize) -> Result<String> {
+    info!("Searching visual memory for: {} (limit: {})", query, limit);
 
     // Check if model is available
     let embedding = if let Some(model_lock) = EMBEDDING_MODEL.get() {
         info!("Generating embedding for query...");
         // Mutex lock
-        let mut model = model_lock.lock().map_err(|_| anyhow::anyhow!("Failed to lock embedding model"))?;
+        let mut model = model_lock.lock().map_err(|_| anyhow::anyhow!("Embedding model is busy. Please retry."))?;
         let embeddings = model.embed(vec![query], None)?;
         // fastembed returns Vec<Vec<f32>>, we take the first one
         if let Some(vec) = embeddings.into_iter().next() {
@@ -273,7 +389,17 @@ async fn call_search_memory(query: &str, limit: usize) -> Result<String> {
     };
 
     let searcher = HybridSearch::new();
-    let results = searcher.search_with_embedding(query, embedding, limit).await?;
+    let results = searcher.search_with_embedding(query, embedding, limit).await
+        .map_err(|e| {
+            let err_str = e.to_string();
+            if err_str.contains("database is locked") {
+                anyhow::anyhow!("Database is locked by another process (Memflow app may be recording). Please retry in a moment.")
+            } else if err_str.contains("no such table") || err_str.contains("unable to open") {
+                anyhow::anyhow!("Database not found or not initialized. Please ensure Memflow app has run at least once.")
+            } else {
+                e
+            }
+        })?;
 
     if results.is_empty() {
         return Ok("No matching results found.".to_string());
@@ -296,6 +422,106 @@ async fn call_search_memory(query: &str, limit: usize) -> Result<String> {
                 act.ocr_text.unwrap_or_default().trim()
             ));
         }
+    }
+
+    Ok(output)
+}
+
+/// Get the current/latest screen context (Phase 2: Real-time Perception)
+async fn call_get_active_window_context() -> Result<String> {
+    info!("Getting active window context...");
+
+    // Get the single most recent activity
+    let activities = db::get_activities(1).await
+        .map_err(|e| {
+            let err_str = e.to_string();
+            if err_str.contains("database is locked") {
+                anyhow::anyhow!("Database is locked by another process. Please retry.")
+            } else if err_str.contains("no such table") || err_str.contains("unable to open") {
+                anyhow::anyhow!("Database not initialized. Please ensure Memflow app has run at least once.")
+            } else {
+                e
+            }
+        })?;
+
+    if activities.is_empty() {
+        return Ok("No screen activity recorded yet. Please ensure Memflow is recording.".to_string());
+    }
+
+    let act = &activities[0];
+    use chrono::TimeZone;
+    let dt = chrono::Local.timestamp_opt(act.timestamp, 0).unwrap();
+
+    let ocr_content = act.ocr_text.as_ref()
+        .map(|t| t.trim())
+        .filter(|t| !t.is_empty())
+        .unwrap_or("[No OCR text available]");
+
+    // Truncate OCR content if too long (keep first 2000 chars)
+    let ocr_display = if ocr_content.len() > 2000 {
+        format!("{}... [truncated]", &ocr_content[..2000])
+    } else {
+        ocr_content.to_string()
+    };
+
+    let output = format!(
+        "[Current Context @ {}]\nApp: {}\nTitle: {}\n---\nOCR Content:\n{}",
+        dt.format("%Y-%m-%d %H:%M:%S"),
+        act.app_name,
+        act.window_title,
+        ocr_display
+    );
+
+    Ok(output)
+}
+
+/// Get recent activity timeline (Phase 2: Real-time Perception)
+async fn call_get_recent_activities(minutes: i64, limit: i64) -> Result<String> {
+    info!("Getting recent activities: {} minutes, limit {}", minutes, limit);
+
+    let activities = db::get_recent_activities_by_time(minutes, limit).await
+        .map_err(|e| {
+            let err_str = e.to_string();
+            if err_str.contains("database is locked") {
+                anyhow::anyhow!("Database is locked by another process. Please retry.")
+            } else if err_str.contains("no such table") || err_str.contains("unable to open") {
+                anyhow::anyhow!("Database not initialized. Please ensure Memflow app has run at least once.")
+            } else {
+                e
+            }
+        })?;
+
+    if activities.is_empty() {
+        return Ok(format!("No activities recorded in the last {} minutes.", minutes));
+    }
+
+    use chrono::TimeZone;
+    let mut output = format!("[Activity Timeline - Last {} minutes]\n\n", minutes);
+
+    for (idx, act) in activities.iter().enumerate() {
+        let dt = chrono::Local.timestamp_opt(act.timestamp, 0).unwrap();
+        
+        // Get a short preview of OCR content (first 100 chars)
+        let ocr_preview = act.ocr_text.as_ref()
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .map(|t| {
+                if t.len() > 100 {
+                    format!("{}...", &t[..100])
+                } else {
+                    t.to_string()
+                }
+            })
+            .unwrap_or_else(|| "[No OCR]".to_string());
+
+        output.push_str(&format!(
+            "{}. [{}] {} - {}\n   OCR: {}\n\n",
+            idx + 1,
+            dt.format("%H:%M:%S"),
+            act.app_name,
+            act.window_title,
+            ocr_preview.replace('\n', " ")
+        ));
     }
 
     Ok(output)

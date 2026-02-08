@@ -63,3 +63,44 @@ pub struct Tool {
 pub struct ListToolsResult {
     pub tools: Vec<Tool>,
 }
+
+// Prompts
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Prompt {
+    pub name: String,
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Vec<PromptArgument>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PromptArgument {
+    pub name: String,
+    pub description: Option<String>,
+    pub required: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListPromptsResult {
+    pub prompts: Vec<Prompt>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetPromptResult {
+    pub description: Option<String>,
+    pub messages: Vec<PromptMessage>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PromptMessage {
+    pub role: String,
+    pub content: PromptMessageContent,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PromptMessageContent {
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub text: String,
+}

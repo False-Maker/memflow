@@ -395,10 +395,10 @@ export default function Timeline() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-zinc-100 uppercase tracking-widest font-mono flex items-center gap-2">
             <Clock className="w-4 h-4 text-signal" />
-            ACTIVITY_LOG
+            活动时间轴
           </h2>
           <div className="text-xs text-zinc-500 font-mono">
-            COUNT: {state.activities?.length ?? 0}
+            共 {state.activities?.length ?? 0} 条记录
           </div>
         </div>
 
@@ -407,7 +407,7 @@ export default function Timeline() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input
               type="text"
-              placeholder="SEARCH_ACTIVITIES..."
+              placeholder="搜索活动..."
               className="w-full bg-zinc-900 border border-zinc-800 rounded-sm pl-9 pr-4 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-signal transition-colors placeholder:text-zinc-600"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -417,7 +417,7 @@ export default function Timeline() {
               <button
                 onClick={() => setQuery('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2"
-                aria-label="Clear Search"
+                aria-label="清除搜索"
               >
                 <X className="w-4 h-4 text-zinc-500 hover:text-zinc-300" />
               </button>
@@ -448,14 +448,14 @@ export default function Timeline() {
             onClick={handleSearch}
             className="px-4 py-2 bg-zinc-100 text-black text-xs font-bold uppercase tracking-wider rounded-sm hover:bg-white transition-colors border border-transparent hover:border-signal"
           >
-            SEARCH
+            搜索
           </button>
           {(query || appName || hasOcr || startDate || endDate) && (
             <button
               onClick={clearSearch}
               className="px-3 py-2 border border-zinc-800 text-zinc-500 rounded-sm hover:bg-zinc-900 hover:text-zinc-300 transition-colors text-xs font-mono uppercase"
             >
-              RESET
+              重置
             </button>
           )}
         </div>

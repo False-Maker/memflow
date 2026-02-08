@@ -2,5 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    memflow::run()
+    let is_headless = std::env::args().any(|arg| arg == "--headless");
+    if is_headless {
+        memflow::run_headless()
+    } else {
+        memflow::run()
+    }
 }

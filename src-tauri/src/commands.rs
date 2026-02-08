@@ -1,6 +1,7 @@
 use memflow_core::agent;
 use crate::desktop_context::TauriContext;
 use std::sync::Arc;
+use std::path::Path;
 use crate::ai;
 use crate::ai::provider::{
     chat_with_anthropic, chat_with_openai, embedding_with_openai, ProviderConfig,
@@ -164,6 +165,56 @@ fn default_enable_proactive_assistant() -> bool {
 // Stats is imported from crate::db (re-exported from memflow_core)
 pub use crate::db::Stats;
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LastActivity {
+    pub timestamp: i64,
+    pub app_name: String,
+    pub window_title: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemStatus {
+    pub recording: bool,
+    pub ocr_service_running: bool,
+    pub last_activity: Option<LastActivity>,
+    pub db_size_bytes: u64,
+    pub screenshots_size_bytes: u64,
+    pub ocr_queue: db::OcrQueueStats,
+    pub mcp_status: String,
+}
+
+fn dir_size_bytes(path: &Path) -> u64 {
+    let mut total = 0_u64;
+    let entries = match std::fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(_) => return 0,
+    };
+
+    for entry in entries.flatten() {
+        let entry_path = entry.path();
+        if let Ok(metadata) = entry.metadata() {
+            if metadata.is_dir() {
+                total += dir_size_bytes(&entry_path);
+            } else {
+                total += metadata.len();
+            }
+        }
+    }
+
+    total
+}
+
+fn default_ocr_queue_stats() -> db::OcrQueueStats {
+    db::OcrQueueStats {
+        pending: 0,
+        processing: 0,
+        done: 0,
+        failed: 0,
+    }
+}
+
 #[tauri::command]
 pub async fn start_recording() -> Result<(), String> {
     tracing::info!("Frontend requested start_recording");
@@ -239,6 +290,84 @@ pub async fn get_recording_stats(limit: Option<i64>) -> Result<Vec<db::Recording
 #[tauri::command]
 pub async fn get_ocr_queue_stats() -> Result<db::OcrQueueStats, String> {
     db::get_ocr_queue_stats().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_system_status(app_handle: tauri::AppHandle) -> Result<SystemStatus, String> {
+    let recording = recorder::is_recording();
+    let ocr_service_running = crate::ocr::service::is_service_running();
+
+    let db_size_bytes = match db::get_db_path_for_diagnostics(&app_handle) {
+        Ok(path) => std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
+        Err(_) => 0,
+    };
+
+    let screenshots_size_bytes = match db::get_screenshots_dir().await {
+        Some(path) => dir_size_bytes(&path),
+        None => 0,
+    };
+
+    let last_activity = match db::get_activities(1).await {
+        Ok(activities) => activities.into_iter().next().map(|activity| LastActivity {
+            timestamp: activity.timestamp,
+            app_name: activity.app_name,
+            window_title: activity.window_title,
+        }),
+        Err(_) => None,
+    };
+
+    let ocr_queue = match db::get_ocr_queue_stats().await {
+        Ok(stats) => stats,
+        Err(_) => default_ocr_queue_stats(),
+    };
+
+    Ok(SystemStatus {
+        recording,
+        ocr_service_running,
+        last_activity,
+        db_size_bytes,
+        screenshots_size_bytes,
+        ocr_queue,
+        mcp_status: detect_mcp_status(&app_handle),
+    })
+}
+
+fn detect_mcp_status(app_handle: &tauri::AppHandle) -> String {
+    let tauri_hb = app_handle
+        .path()
+        .app_data_dir()
+        .map(|d| d.join("mcp_heartbeat.json"))
+        .ok();
+    let alt_hb = dirs::data_dir().map(|d| d.join("com.memflow.app").join("mcp_heartbeat.json"));
+
+    let candidate = tauri_hb
+        .filter(|p| p.exists())
+        .or_else(|| alt_hb.filter(|p| p.exists()));
+
+    let max_age_secs = 8;
+    if let Some(path) = candidate {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                let status = val.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+                let ts = val.get("ts").and_then(|v| v.as_i64()).unwrap_or(0);
+                let now = chrono::Local::now().timestamp();
+                let delta = now - ts;
+                if status == "online" && delta >= 0 && delta <= max_age_secs {
+                    return "online".to_string();
+                }
+            }
+        }
+        if let Ok(meta) = std::fs::metadata(&path) {
+            if let Ok(modified) = meta.modified() {
+                if let Ok(elapsed) = modified.elapsed() {
+                    if elapsed.as_secs() <= max_age_secs as u64 {
+                        return "online".to_string();
+                    }
+                }
+            }
+        }
+    }
+    "offline".to_string()
 }
 
 #[tauri::command]

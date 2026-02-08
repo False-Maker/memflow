@@ -8,7 +8,27 @@ import ActivityHeatmap from './ActivityHeatmap'
 import ContextSidebar from './ContextSidebar'
 import ImmersiveReplay from './ImmersiveReplay'
 import { useApp } from '../contexts/AppContext'
+import { invoke } from '@tauri-apps/api/core'
 import { Settings, History, MessageSquare, BarChart3, Calendar, X } from 'lucide-react'
+
+interface SystemStatus {
+  recording: boolean
+  ocrServiceRunning: boolean
+  lastActivity?: {
+    timestamp: number
+    appName: string
+    windowTitle: string
+  }
+  dbSizeBytes: number
+  screenshotsSizeBytes: number
+  ocrQueue: {
+    pending: number
+    processing: number
+    done: number
+    failed: number
+  }
+  mcpStatus: string
+}
 
 interface LayoutProps {
   onOpenSettings: () => void
@@ -40,6 +60,9 @@ export default function Layout({
 }: LayoutProps) {
   const { state, dispatch, startRecording, stopRecording } = useApp()
   const [heatmapOpen, setHeatmapOpen] = useState(false)
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
+  const [statusLoading, setStatusLoading] = useState(true)
+  const [statusError, setStatusError] = useState<string | null>(null)
 
   // 当需要切换到问答视图时自动切换
   useEffect(() => {
@@ -49,11 +72,58 @@ export default function Layout({
     }
   }, [shouldSwitchToQA, onViewSwitched, dispatch])
 
-  const setCurrentView = (view: 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay') => {
+  useEffect(() => {
+    let mounted = true
+    let initial = true
+    const fetchStatus = async () => {
+      if (initial) {
+        setStatusLoading(true)
+      }
+      try {
+        const data = await invoke<SystemStatus>('get_system_status')
+        if (mounted) {
+          setSystemStatus(data)
+          setStatusError(null)
+        }
+      } catch (error) {
+        if (mounted) {
+          const message = error instanceof Error ? error.message : String(error)
+          setStatusError(message)
+        }
+      } finally {
+        if (mounted) {
+          setStatusLoading(false)
+        }
+        initial = false
+      }
+    }
+    fetchStatus()
+    const interval = setInterval(fetchStatus, 5000)
+    return () => {
+      mounted = false
+      clearInterval(interval)
+    }
+  }, [])
+
+  const setCurrentView = (view: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay') => {
     dispatch({ type: 'SET_VIEW', payload: view })
   }
 
   const currentView = state.currentView as string
+  const formatBytes = (bytes: number) => {
+    if (!Number.isFinite(bytes)) return '0 MB'
+    const mb = bytes / 1024 / 1024
+    if (mb < 1024) {
+      return `${mb.toFixed(1)} MB`
+    }
+    const gb = mb / 1024
+    return `${gb.toFixed(2)} GB`
+  }
+
+  const formatTimestamp = (ts: number) => {
+    const ms = ts < 1e12 ? ts * 1000 : ts
+    return new Date(ms).toLocaleString()
+  }
 
   return (
     <div className="flex flex-col h-screen bg-void font-sans selection:bg-signal selection:text-black">
@@ -108,6 +178,7 @@ export default function Layout({
         {/* 视图切换 - Tab Bar */}
         <div className="flex items-center gap-1">
           {[
+            { id: 'dashboard', label: 'DASHBOARD' },
             { id: 'timeline', label: 'TIMELINE' },
             { id: 'gallery', label: 'GALLERY' },
             { id: 'replay', label: 'REPLAY' },
@@ -172,6 +243,93 @@ export default function Layout({
       <main className="flex-1 overflow-hidden min-h-0 relative">
         <div className="flex h-full">
           <div className="flex-1 overflow-hidden min-h-0">
+            {currentView === 'dashboard' && (
+              <div className="h-full overflow-y-auto p-6">
+                <div className="glass border-b border-glass-border px-6 py-4 mb-6">
+                  <h2 className="text-lg font-semibold text-neon-green">系统概览</h2>
+                </div>
+                {statusLoading && (
+                  <div className="text-zinc-500">加载中...</div>
+                )}
+                {statusError && (
+                  <div className="text-red-400">状态获取失败: {statusError}</div>
+                )}
+                {systemStatus && (
+                  <>
+                    <div className="grid grid-cols-3 gap-4 mb-6">
+                      <div className="glass p-4 rounded-lg">
+                        <div className="text-sm text-gray-400 mb-1">录制状态</div>
+                        <div className={`text-xl font-semibold ${systemStatus.recording ? 'text-signal' : 'text-zinc-400'}`}>
+                          {systemStatus.recording ? '录制中' : '未录制'}
+                        </div>
+                      </div>
+                      <div className="glass p-4 rounded-lg">
+                        <div className="text-sm text-gray-400 mb-1">OCR 服务</div>
+                        <div className={`text-xl font-semibold ${systemStatus.ocrServiceRunning ? 'text-neon-green' : 'text-zinc-400'}`}>
+                          {systemStatus.ocrServiceRunning ? '运行中' : '未运行'}
+                        </div>
+                      </div>
+                      <div className="glass p-4 rounded-lg">
+                        <div className="text-sm text-gray-400 mb-1">MCP 状态</div>
+                        <div className="text-xl font-semibold text-zinc-200">
+                          {systemStatus.mcpStatus}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="glass p-4 rounded-lg mb-6">
+                      <div className="text-sm text-gray-400 mb-2">最近活动</div>
+                      {systemStatus.lastActivity ? (
+                        <div className="space-y-1">
+                          <div className="text-white font-semibold">{systemStatus.lastActivity.appName}</div>
+                          <div className="text-sm text-zinc-400 truncate">{systemStatus.lastActivity.windowTitle}</div>
+                          <div className="text-xs text-zinc-500">{formatTimestamp(systemStatus.lastActivity.timestamp)}</div>
+                        </div>
+                      ) : (
+                        <div className="text-zinc-500">暂无活动记录</div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      <div className="glass p-4 rounded-lg">
+                        <div className="text-sm text-gray-400 mb-1">数据库大小</div>
+                        <div className="text-xl font-semibold text-white">
+                          {formatBytes(systemStatus.dbSizeBytes)}
+                        </div>
+                      </div>
+                      <div className="glass p-4 rounded-lg">
+                        <div className="text-sm text-gray-400 mb-1">截图占用</div>
+                        <div className="text-xl font-semibold text-white">
+                          {formatBytes(systemStatus.screenshotsSizeBytes)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="glass p-4 rounded-lg">
+                      <div className="text-sm text-gray-400 mb-2">OCR 队列</div>
+                      <div className="grid grid-cols-4 gap-4">
+                        <div>
+                          <div className="text-xs text-zinc-500">Pending</div>
+                          <div className="text-lg font-semibold text-white">{systemStatus.ocrQueue.pending}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-zinc-500">Processing</div>
+                          <div className="text-lg font-semibold text-white">{systemStatus.ocrQueue.processing}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-zinc-500">Done</div>
+                          <div className="text-lg font-semibold text-white">{systemStatus.ocrQueue.done}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-zinc-500">Failed</div>
+                          <div className="text-lg font-semibold text-white">{systemStatus.ocrQueue.failed}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {currentView === 'timeline' && <Timeline />}
             {currentView === 'gallery' && <GalleryView />}
             {currentView === 'replay' && <ImmersiveReplay />}
@@ -185,7 +343,7 @@ export default function Layout({
               />
             )}
           </div>
-          <ContextSidebar onSendToQA={onSendToQA} />
+          {currentView !== 'dashboard' && <ContextSidebar onSendToQA={onSendToQA} />}
         </div>
 
         {/* Heatmap Modal Overlay */}

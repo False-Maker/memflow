@@ -40,7 +40,7 @@ def test_mcp():
     time.sleep(30) # Wait 30s for download/init
 
     # 2. Search
-    send({"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "search_memory", "arguments": {"query": "test", "limit": 2}}, "id": 2})
+    send({"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "search_visual_memory", "arguments": {"query": "test", "limit": 2}}, "id": 2})
     print("Sent search")
 
     # Read response

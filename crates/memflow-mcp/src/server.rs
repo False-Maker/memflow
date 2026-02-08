@@ -2,6 +2,7 @@ use crate::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse, ListToolsRe
 use crate::context::McpContext;
 use memflow_core::context::RuntimeContext;
 use memflow_core::db;
+use crate::prompts;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tracing::{error, info};
@@ -26,6 +27,8 @@ impl McpServer {
             // MCP Methods
             "tools/list" => self.list_tools().await,
             "tools/call" => self.call_tool(request.params).await,
+            "prompts/list" => self.list_prompts().await,
+            "prompts/get" => self.get_prompt(request.params).await,
             
             // Fallback
             _ => Err(JsonRpcError {
@@ -144,6 +147,36 @@ impl McpServer {
             _ => Err(JsonRpcError {
                 code: -32601,
                 message: format!("Tool {} not found", name),
+                data: None,
+            }),
+        }
+    }
+
+    async fn list_prompts(&self) -> Result<Value, JsonRpcError> {
+        let result = prompts::list_prompts();
+        Ok(serde_json::to_value(result).unwrap())
+    }
+
+    async fn get_prompt(&self, params: Option<Value>) -> Result<Value, JsonRpcError> {
+        let params = params.ok_or_else(|| JsonRpcError {
+            code: -32602,
+            message: "Missing params".to_string(),
+            data: None,
+        })?;
+
+        let name = params.get("name").and_then(|v| v.as_str()).ok_or_else(|| JsonRpcError {
+            code: -32602,
+            message: "Missing prompt name".to_string(),
+            data: None,
+        })?;
+
+        let arguments = params.get("arguments").cloned();
+
+        match prompts::get_prompt(name, arguments) {
+            Some(result) => Ok(serde_json::to_value(result).unwrap()),
+            None => Err(JsonRpcError {
+                code: -32601,
+                message: format!("Prompt {} not found", name),
                 data: None,
             }),
         }

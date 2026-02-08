@@ -213,30 +213,43 @@ pub fn stop_service() {
     }
 }
 
-/// 检查 OCR 服务是否在运行
-pub fn is_service_running() -> bool {
-    // 使用 TcpStream 检查端口是否被监听
+fn check_service_running(log: bool) -> bool {
     use std::net::TcpStream;
     let addr_str = format!("127.0.0.1:{}", OCR_SERVICE_PORT);
-    tracing::info!("Checking if service is running at: {}", addr_str);
-    
+    if log {
+        tracing::info!("Checking if service is running at: {}", addr_str);
+    }
+
     let addr = match addr_str.parse::<std::net::SocketAddr>() {
         Ok(a) => a,
         Err(e) => {
-            tracing::error!("Failed to parse address {}: {}", addr_str, e);
+            if log {
+                tracing::error!("Failed to parse address {}: {}", addr_str, e);
+            }
             return false;
         }
     };
 
     if let Ok(stream) = TcpStream::connect_timeout(&addr, Duration::from_secs(1)) {
-        // 端口已打开
         let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
         let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
-        tracing::info!("Service found running at {}", addr);
+        if log {
+            tracing::info!("Service found running at {}", addr);
+        }
         return true;
     }
-    tracing::info!("Service NOT running at {}", addr);
+    if log {
+        tracing::info!("Service NOT running at {}", addr);
+    }
     false
+}
+
+pub fn is_service_running() -> bool {
+    check_service_running(true)
+}
+
+pub fn is_service_running_quiet() -> bool {
+    check_service_running(false)
 }
 
 /// 等待服务启动

@@ -16,7 +16,7 @@ export interface ActivityLog {
 export interface AppState {
   isRecording: boolean
   activities: ActivityLog[]
-  currentView: 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay'
+  currentView: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay'
   config: AppConfig
   configLoaded: boolean
   configError: string | null
@@ -46,6 +46,8 @@ export interface AppConfig {
   privacyModeEnabled: boolean
   privacyModeUntil?: number
   intentParseTimeoutMs?: number
+  compressionQuality?: number
+  targetResolutionScale?: number
 }
 
 export interface SearchParams extends Record<string, unknown> {
@@ -64,7 +66,7 @@ type AppAction =
   | { type: 'ADD_ACTIVITY'; payload: ActivityLog }
   | { type: 'UPDATE_ACTIVITY_OCR'; payload: { id: number; ocrText: string } }
   | { type: 'SET_ACTIVITIES'; payload: ActivityLog[] }
-  | { type: 'SET_VIEW'; payload: 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay' }
+  | { type: 'SET_VIEW'; payload: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay' }
   | { type: 'SET_CONFIG'; payload: AppConfig }
   | { type: 'SET_CONFIG_ERROR'; payload: string }
   | { type: 'SET_SEARCH_PARAMS'; payload: SearchParams }
@@ -75,7 +77,7 @@ type AppAction =
 const initialState: AppState = {
   isRecording: false,
   activities: [],
-  currentView: 'timeline',
+  currentView: 'dashboard',
   config: {
     recordingInterval: 5000,
     ocrEnabled: true,
@@ -92,6 +94,8 @@ const initialState: AppState = {
     blocklistEnabled: false,
     blocklistMode: 'blocklist',
     privacyModeEnabled: false,
+    compressionQuality: 80,
+    targetResolutionScale: 1.0,
   },
   configLoaded: false,
   configError: null,
@@ -187,7 +191,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const activities = await invoke<ActivityLog[]>('get_activities', {
         limit: 100,
       })
-      dispatch({ type: 'SET_ACTIVITIES', payload: activities })
+      dispatch({
+        type: 'SET_ACTIVITIES',
+        payload: Array.isArray(activities) ? activities : [],
+      })
     } catch (error) {
       console.error('Failed to load activities:', error)
     }

@@ -51,3 +51,6 @@ config.json
 # Environment variables
 .env
 .env.local
+
+# ONNX Runtime binaries for MCP
+crates/memflow-mcp/ort/
