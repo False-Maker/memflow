@@ -30,6 +30,8 @@ export interface AppConfig {
   ocrEngine?: string
   ocrRedactionEnabled?: boolean
   ocrRedactionLevel?: 'basic' | 'strict' | string
+  compressionQuality?: number
+  targetResolutionScale?: number
   aiEnabled: boolean
   enableFocusAnalytics: boolean
   enableProactiveAssistant: boolean
@@ -82,6 +84,8 @@ const initialState: AppState = {
     ocrEngine: 'rapidocr',
     ocrRedactionEnabled: true,
     ocrRedactionLevel: 'basic',
+    compressionQuality: 80,
+    targetResolutionScale: 1.0,
     aiEnabled: false,
     enableFocusAnalytics: true, // 与后端默认值一致
     enableProactiveAssistant: false,

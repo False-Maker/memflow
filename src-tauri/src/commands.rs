@@ -73,7 +73,7 @@ pub struct AppConfig {
     pub ocr_redaction_enabled: bool,
     #[serde(default = "default_ocr_redaction_level", alias = "ocr_redaction_level")]
     pub ocr_redaction_level: String,
-    #[serde(default, alias = "ocr_preprocess_enabled")]
+    #[serde(default = "default_ocr_preprocess_enabled", alias = "ocr_preprocess_enabled")]
     pub ocr_preprocess_enabled: bool,
     #[serde(
         default = "default_ocr_preprocess_target_width",
