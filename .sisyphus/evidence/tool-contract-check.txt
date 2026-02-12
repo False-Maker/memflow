@@ -1,0 +1,7 @@
+Tool Contract Verification
+### Tool: search_memory
+### Tool: get_recent_activity
+### Tool: get_active_window_context
+### Tool: get_terminal_output
+### Tool: get_system_environment
+### Tool: get_related_context

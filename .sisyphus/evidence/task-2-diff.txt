@@ -1,0 +1,144 @@
+diff --git a/crates/memflow-mcp/src/main.rs b/crates/memflow-mcp/src/main.rs
+index 6680afb..4178a6d 100644
+--- a/crates/memflow-mcp/src/main.rs
++++ b/crates/memflow-mcp/src/main.rs
+@@ -8,6 +8,7 @@ use memflow_core::audit::{init_audit_logger, log_tool_call, flush_audit_log};
+ use memflow_core::context::RuntimeContext;
+ use memflow_core::db;
+ use memflow_core::vector_db;
++use memflow_mcp::protocol::ToolName;
+ use std::time::Instant;
+ use serde::{Deserialize, Serialize};
+ use serde_json::Value;
+@@ -380,14 +381,26 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
+             if is_read_only() && is_write_tool(name) {
+                 return Ok(Some(JsonRpcResponse::error(id, -32003, "Read-only mode".to_string())));
+             }
+-            let args = &params["arguments"];
++          let args = &params["arguments"];
++
++            // Normalize tool name using ToolName enum
++            let tool_name = match ToolName::from_str(name) {
++                Some(tool) => tool,
++                None => {
++                    return Ok(Some(JsonRpcResponse::error(
++                        id, 
++                        -32601, 
++                        format!("Tool not found: {}", name)
++                    )))
++                }
++            };
+ 
+             // Start timing and audit logging
+             let start_time = Instant::now();
+             let args_str = args.to_string();
+             
+-            let result = match name {
+-                "search_memory" => {
++            let result = match tool_name {
++                ToolName::SearchMemory => {
+                     let parsed: SearchMemoryArgs = match serde_json::from_value(args.clone()) {
+                         Ok(p) => p,
+                         Err(e) => {
+@@ -415,7 +428,7 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
+                         }
+                     }
+                 }
+-                "get_recent_activity" => {
++                ToolName::GetRecentActivity => {
+                     let parsed: RecentActivityArgs = match serde_json::from_value(args.clone()) {
+                         Ok(p) => p,
+                         Err(e) => {
+@@ -446,7 +459,7 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
+                         }
+                     }
+                 }
+-                "get_related_context" => {
++                ToolName::GetRelatedContext => {
+                     let parsed: RelatedContextArgs = match serde_json::from_value(args.clone()) {
+                         Ok(p) => p,
+                         Err(e) => {
+@@ -474,52 +487,8 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
+                         }
+                     }
+                 }
+-                "search_visual_memory" => {
+-                    let mut parsed: SearchMemoryArgs = serde_json::from_value(args.clone())
+-                        .map_err(|e| anyhow::anyhow!("Invalid arguments: {}", e))?;
+-                    if parsed.mode.is_none() {
+-                        parsed.mode = Some("hybrid".to_string());
+-                    }
+-                    match call_search_memory(parsed).await {
+-                        Ok(result_text) => {
+-                            Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
+-                                "content": [
+-                                    {
+-                                        "type": "text",
+-                                        "text": result_text
+-                                    }
+-                                ]
+-                            }))))
+-                        },
+-                        Err(e) => {
+-                            error!("Search failed: {}", e);
+-                            Ok(Some(JsonRpcResponse::error(id, -32000, e.to_string())))
+-                        }
+-                    }
+-                }
+-                "get_recent_activities" => {
+-                    let parsed: RecentActivityArgs = serde_json::from_value(args.clone())
+-                        .unwrap_or_default();
+-                    let minutes = parsed.minutes.unwrap_or(5);
+-                    let limit = parsed.limit.unwrap_or(20);
+-                    match call_get_recent_activities(minutes, limit).await {
+-                        Ok(result_text) => {
+-                            Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
+-                                "content": [
+-                                    {
+-                                        "type": "text",
+-                                        "text": result_text
+-                                    }
+-                                ]
+-                            }))))
+-                        },
+-                        Err(e) => {
+-                            error!("Get recent activities failed: {}", e);
+-                            Ok(Some(JsonRpcResponse::error(id, -32000, e.to_string())))
+-                        }
+-                    }
+-                }
+-"get_active_window_context" => {
++
++            ToolName::GetActiveWindowContext => {
+                     match call_get_active_window_context().await {
+                         Ok(result_text) => {
+                             Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
+@@ -537,7 +506,7 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
+                         }
+                     }
+                 }
+-                "get_terminal_output" => {
++              ToolName::GetTerminalOutput => {
+                     let lines = args["lines"].as_u64().map(|n| n as usize).unwrap_or(50);
+                     match call_get_terminal_output(lines).await {
+                         Ok(result_text) => {
+@@ -561,7 +530,7 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
+                         }
+                     }
+                 }
+-                "get_system_environment" => {
++          ToolName::GetSystemEnvironment => {
+                     let include_dev = args["include_dev_tools"].as_bool().unwrap_or(true);
+                     let include_procs = args["include_processes"].as_bool().unwrap_or(true);
+                     let include_ports = args["include_ports"].as_bool().unwrap_or(false);
+@@ -583,9 +552,7 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
+                         }
+                     }
+                 }
+-                _ => {
+-                    Ok(Some(JsonRpcResponse::error(id, -32601, format!("Tool not found: {}", name))))
+-                }
++
+             };
+             
+             // Log the tool call to audit log

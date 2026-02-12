@@ -5,8 +5,11 @@
 
 pub mod agent;
 pub mod ai;
+pub mod audit;
 pub mod context;
 pub mod db;
 pub mod focus_analytics;
+pub mod ocr_enhance;
 pub mod redact;
+pub mod terminal;
 pub mod vector_db;

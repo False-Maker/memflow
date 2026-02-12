@@ -1,0 +1,53 @@
+Baseline Routing Analysis
+=======================
+Date: 2026-02-13
+
+Current Tool Name System (from protocol.rs):
+--------------------------------------------
+
+Canonical Tools with Aliases:
+1. SearchMemory
+   - Canonical: "search_memory"  
+   - Alias: "search_visual_memory"
+   - Branches: 2
+
+2. GetRecentActivity
+   - Canonical: "get_recent_activity"
+   - Alias: "get_recent_activities" 
+   - Branches: 2
+
+3. GetActiveWindowContext
+   - Canonical: "get_active_window_context"
+   - Branches: 1
+
+4. GetTerminalOutput
+   - Canonical: "get_terminal_output"
+   - Branches: 1
+
+5. GetSystemEnvironment
+   - Canonical: "get_system_environment"
+   - Branches: 1
+
+6. GetRelatedContext
+   - Canonical: "get_related_context"
+   - Branches: 1
+
+Total Match Branches: 9 (for 6 canonical tools)
+
+Current Server Implementation (from server.rs):
+--------------------------------------------
+
+Tool Matching in call_tool():
+- 2 hardcoded tool implementations ("memflow_search_activities", "memflow_get_activity")
+- Error handling for unknown tools
+
+Tools vs Protocol Mismatch:
+----------------------------
+Protocol defines: search_memory, get_recent_activity, get_active_window_context, get_terminal_output, get_system_environment, get_related_context
+Server implements: memflow_search_activities, memflow_get_activity
+
+Issues Identified:
+------------------
+1. Server doesn't use ToolName enum - hardcoded strings only
+2. Protocol has alias support but server doesn't use it
+3. Multiple match branches for aliases not handled in routing logic

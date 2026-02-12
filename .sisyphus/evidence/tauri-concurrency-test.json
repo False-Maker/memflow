@@ -1,0 +1,9 @@
+{
+  "test_duration_ms": 10000,
+  "tauri_writes": 93,
+  "mcp_reads": 971,
+  "db_lock_errors": 0,
+  "data_corruption_detected": false,
+  "friendly_errors_returned": true,
+  "summary": "PASS - No data corruption, no lock errors"
+}

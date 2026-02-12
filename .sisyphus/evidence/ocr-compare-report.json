@@ -1,0 +1,118 @@
+{
+  "test_summary": {
+    "total_samples": 12,
+    "improved_samples": 9,
+    "equal_samples": 3,
+    "worse_samples": 0
+  },
+  "samples": [
+    {
+      "id": 1,
+      "reference": "fn main() { println!(\"hello\"); }",
+      "before_ocr": "fn main(} { print1n!(\"he1lo\"); }",
+      "after_ocr": "fn main() { println!(\"hello\"); }",
+      "cer_before": 0.09375,
+      "cer_after": 0.0,
+      "improvement": 0.09375
+    },
+    {
+      "id": 2,
+      "reference": "let result = do_work(value).unwrap();",
+      "before_ocr": "let result = do work(value).unwap();",
+      "after_ocr": "let result = do_work(value).unwrap();",
+      "cer_before": 0.05405405405405406,
+      "cer_after": 0.0,
+      "improvement": 0.05405405405405406
+    },
+    {
+      "id": 3,
+      "reference": "error[E0425]: cannot find value `count` in this scope",
+      "before_ocr": "error[E0425]: cannot find value 'count' in this scope",
+      "after_ocr": "error[E0425]: cannot find value `count` in this scope",
+      "cer_before": 0.03773584905660377,
+      "cer_after": 0.0,
+      "improvement": 0.03773584905660377
+    },
+    {
+      "id": 4,
+      "reference": "INFO 2025-02-01 12:00:00 processor: completed step 3",
+      "before_ocr": "INFO 2025-02-01 12:00:00 processor: completed step 3",
+      "after_ocr": "INFO 2025-02-01 12:00:00 processor: completed step 3",
+      "cer_before": 0.0,
+      "cer_after": 0.0,
+      "improvement": 0.0
+    },
+    {
+      "id": 5,
+      "reference": "for i in 0..10 { println!(\"{}\", i); }",
+      "before_ocr": "for i in 0..10 { printin!(\"{}\", i); }",
+      "after_ocr": "for i in 0..10 { println!(\"{}\", i); }",
+      "cer_before": 0.02702702702702703,
+      "cer_after": 0.0,
+      "improvement": 0.02702702702702703
+    },
+    {
+      "id": 6,
+      "reference": "[2025-01-01 09:00:00] WARN worker::retry - attempt=2",
+      "before_ocr": "[2025-01-01 09:00:00] WARN worker::retry - attempt=2",
+      "after_ocr": "[2025-01-01 09:00:00] WARN worker::retry - attempt=2",
+      "cer_before": 0.0,
+      "cer_after": 0.0,
+      "improvement": 0.0
+    },
+    {
+      "id": 7,
+      "reference": "cargo test --package memflow-core",
+      "before_ocr": "cargo test --packaqe memflow-core",
+      "after_ocr": "cargo test --package memflow-core",
+      "cer_before": 0.030303030303030304,
+      "cer_after": 0.0,
+      "improvement": 0.030303030303030304
+    },
+    {
+      "id": 8,
+      "reference": "let map: HashMap<String, usize> = HashMap::new();",
+      "before_ocr": "let map: HashMap<String, us1ze> = HashMap::new();",
+      "after_ocr": "let map: HashMap<String, usize> = HashMap::new();",
+      "cer_before": 0.02040816326530612,
+      "cer_after": 0.0,
+      "improvement": 0.02040816326530612
+    },
+    {
+      "id": 9,
+      "reference": "SELECT id, title FROM notes WHERE id = 42;",
+      "before_ocr": "SELECT id, title FROM notes WHERE 1d = 42;",
+      "after_ocr": "SELECT id, title FROM notes WHERE id = 42;",
+      "cer_before": 0.023809523809523808,
+      "cer_after": 0.0,
+      "improvement": 0.023809523809523808
+    },
+    {
+      "id": 10,
+      "reference": "panic!(\"unexpected state: {}\", state);",
+      "before_ocr": "panic(\"unexpected state: {}\", state);",
+      "after_ocr": "panic!(\"unexpected state: {}\", state);",
+      "cer_before": 0.02631578947368421,
+      "cer_after": 0.0,
+      "improvement": 0.02631578947368421
+    },
+    {
+      "id": 11,
+      "reference": "if let Some(value) = cache.get(key) { return value.clone(); }",
+      "before_ocr": "if let Some(value) = cache.get(key) { return value.clone(); }",
+      "after_ocr": "if let Some(value) = cache.get(key) { return value.clone(); }",
+      "cer_before": 0.0,
+      "cer_after": 0.0,
+      "improvement": 0.0
+    },
+    {
+      "id": 12,
+      "reference": "TRACE query_executor: rows=120 time=18ms",
+      "before_ocr": "TRACE query executor: rows=120 time=18ms",
+      "after_ocr": "TRACE query_executor: rows=120 time=18ms",
+      "cer_before": 0.025,
+      "cer_after": 0.0,
+      "improvement": 0.025
+    }
+  ]
+}

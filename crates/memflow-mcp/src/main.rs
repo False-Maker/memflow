@@ -4,9 +4,12 @@ use fastembed::{InitOptions, TextEmbedding, EmbeddingModel};
 use memflow_core::ai::{fallback_filter_params, FilterParams};
 use memflow_core::ai::nlp;
 use memflow_core::ai::rag::HybridSearch;
+use memflow_core::audit::{init_audit_logger, log_tool_call, flush_audit_log};
 use memflow_core::context::RuntimeContext;
 use memflow_core::db;
 use memflow_core::vector_db;
+use memflow_mcp::protocol::ToolName;
+use std::time::Instant;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::{self};
@@ -98,6 +101,9 @@ async fn main() -> Result<()> {
         .unwrap_or(true);
     let _ = MCP_AUTH_TOKEN.set(auth_token);
     let _ = MCP_READ_ONLY.set(read_only);
+    
+    // Initialize audit logger
+    init_audit_logger(None);
     
     // Initialize context and DB
     let ctx = McpContext::new();
@@ -233,7 +239,7 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
         "notifications/initialized" => {
             Ok(None)
         }
-        "tools/list" => {
+"tools/list" => {
             let tools = serde_json::json!({
                 "tools": [
                     {
@@ -293,6 +299,54 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
                         }
                     },
                     {
+                        "name": "get_active_window_context",
+                        "description": "Get information about the currently active window, including app name and recent activity.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {}
+                        }
+                    },
+                    {
+                        "name": "get_terminal_output",
+                        "description": "Capture the recent output from the active terminal window. Useful for debugging build errors and test failures.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "lines": {
+                                    "type": "integer",
+                                    "description": "Number of lines to capture from terminal output (default: 50).",
+                                    "default": 50,
+                                    "minimum": 1,
+                                    "maximum": 500
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "name": "get_system_environment",
+                        "description": "Retrieve system environment information including OS version, hardware specs, and development tools.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "include_dev_tools": {
+                                    "type": "boolean",
+                                    "description": "Include development tool versions (Node, Python, Rust, Docker).",
+                                    "default": true
+                                },
+                                "include_processes": {
+                                    "type": "boolean",
+                                    "description": "Include active development processes.",
+                                    "default": true
+                                },
+                                "include_ports": {
+                                    "type": "boolean",
+                                    "description": "Include common port usage (3000, 8080, 8000, etc.).",
+                                    "default": false
+                                }
+                            }
+                        }
+                    },
+                    {
                         "name": "get_related_context",
                         "description": "Return compact context chunks related to the query for downstream LLM reasoning.",
                         "inputSchema": {
@@ -327,12 +381,36 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
             if is_read_only() && is_write_tool(name) {
                 return Ok(Some(JsonRpcResponse::error(id, -32003, "Read-only mode".to_string())));
             }
-            let args = &params["arguments"];
+          let args = &params["arguments"];
 
-            match name {
-                "search_memory" => {
-                    let parsed: SearchMemoryArgs = serde_json::from_value(args.clone())
-                        .map_err(|e| anyhow::anyhow!("Invalid arguments: {}", e))?;
+            // Normalize tool name using ToolName enum
+            let tool_name = match ToolName::from_str(name) {
+                Some(tool) => tool,
+                None => {
+                    return Ok(Some(JsonRpcResponse::error(
+                        id, 
+                        -32601, 
+                        format!("Tool not found: {}", name)
+                    )))
+                }
+            };
+
+            // Start timing and audit logging
+            let start_time = Instant::now();
+            let args_str = args.to_string();
+            
+            let result = match tool_name {
+                ToolName::SearchMemory => {
+                    let parsed: SearchMemoryArgs = match serde_json::from_value(args.clone()) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            return Ok(Some(JsonRpcResponse::error(
+                                id, 
+                                -32602, 
+                                format!("Invalid parameters: {}", e)
+                            )));
+                        }
+                    };
                     match call_search_memory(parsed).await {
                         Ok(result_text) => {
                              Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
@@ -350,9 +428,17 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
                         }
                     }
                 }
-                "get_recent_activity" => {
-                    let parsed: RecentActivityArgs = serde_json::from_value(args.clone())
-                        .unwrap_or_default();
+                ToolName::GetRecentActivity => {
+                    let parsed: RecentActivityArgs = match serde_json::from_value(args.clone()) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            return Ok(Some(JsonRpcResponse::error(
+                                id, 
+                                -32602, 
+                                format!("Invalid parameters: {}", e)
+                            )));
+                        }
+                    };
                     let minutes = parsed.minutes.unwrap_or(5);
                     let limit = parsed.limit.unwrap_or(20);
 
@@ -373,9 +459,17 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
                         }
                     }
                 }
-                "get_related_context" => {
-                    let parsed: RelatedContextArgs = serde_json::from_value(args.clone())
-                        .map_err(|e| anyhow::anyhow!("Invalid arguments: {}", e))?;
+                ToolName::GetRelatedContext => {
+                    let parsed: RelatedContextArgs = match serde_json::from_value(args.clone()) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            return Ok(Some(JsonRpcResponse::error(
+                                id, 
+                                -32602, 
+                                format!("Invalid parameters: {}", e)
+                            )));
+                        }
+                    };
                     match call_get_related_context(parsed).await {
                         Ok(result_text) => {
                             Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
@@ -393,52 +487,8 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
                         }
                     }
                 }
-                "search_visual_memory" => {
-                    let mut parsed: SearchMemoryArgs = serde_json::from_value(args.clone())
-                        .map_err(|e| anyhow::anyhow!("Invalid arguments: {}", e))?;
-                    if parsed.mode.is_none() {
-                        parsed.mode = Some("hybrid".to_string());
-                    }
-                    match call_search_memory(parsed).await {
-                        Ok(result_text) => {
-                            Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
-                                "content": [
-                                    {
-                                        "type": "text",
-                                        "text": result_text
-                                    }
-                                ]
-                            }))))
-                        },
-                        Err(e) => {
-                            error!("Search failed: {}", e);
-                            Ok(Some(JsonRpcResponse::error(id, -32000, e.to_string())))
-                        }
-                    }
-                }
-                "get_recent_activities" => {
-                    let parsed: RecentActivityArgs = serde_json::from_value(args.clone())
-                        .unwrap_or_default();
-                    let minutes = parsed.minutes.unwrap_or(5);
-                    let limit = parsed.limit.unwrap_or(20);
-                    match call_get_recent_activities(minutes, limit).await {
-                        Ok(result_text) => {
-                            Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
-                                "content": [
-                                    {
-                                        "type": "text",
-                                        "text": result_text
-                                    }
-                                ]
-                            }))))
-                        },
-                        Err(e) => {
-                            error!("Get recent activities failed: {}", e);
-                            Ok(Some(JsonRpcResponse::error(id, -32000, e.to_string())))
-                        }
-                    }
-                }
-                "get_active_window_context" => {
+
+            ToolName::GetActiveWindowContext => {
                     match call_get_active_window_context().await {
                         Ok(result_text) => {
                             Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
@@ -456,10 +506,71 @@ async fn process_line(line: &str) -> Result<Option<JsonRpcResponse>> {
                         }
                     }
                 }
-                _ => {
-                    Ok(Some(JsonRpcResponse::error(id, -32601, format!("Tool not found: {}", name))))
+              ToolName::GetTerminalOutput => {
+                    let lines = args["lines"].as_u64().map(|n| n as usize).unwrap_or(50);
+                    match call_get_terminal_output(lines).await {
+                        Ok(result_text) => {
+                            Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": result_text
+                                    }
+                                ]
+                            }))))
+                        },
+                        Err(e) => {
+                            error!("Get terminal output failed: {}", e);
+                            let error_code = match e {
+                                memflow_core::terminal::TerminalError::NotFound => -32004,
+                                memflow_core::terminal::TerminalError::PermissionDenied => -32005,
+                                _ => -32000,
+                            };
+                            Ok(Some(JsonRpcResponse::error(id, error_code, e.to_string())))
+                        }
+                    }
                 }
-            }
+          ToolName::GetSystemEnvironment => {
+                    let include_dev = args["include_dev_tools"].as_bool().unwrap_or(true);
+                    let include_procs = args["include_processes"].as_bool().unwrap_or(true);
+                    let include_ports = args["include_ports"].as_bool().unwrap_or(false);
+                    
+                    match call_get_system_environment(include_dev, include_procs, include_ports).await {
+                        Ok(result_text) => {
+                            Ok(Some(JsonRpcResponse::ok(id, serde_json::json!({
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": result_text
+                                    }
+                                ]
+                            }))))
+                        },
+                        Err(e) => {
+                            error!("Get system environment failed: {}", e);
+                            Ok(Some(JsonRpcResponse::error(id, -32000, e.to_string())))
+                        }
+                    }
+                }
+
+            };
+            
+            // Log the tool call to audit log
+            let duration_ms = start_time.elapsed().as_millis() as u64;
+            let status = match &result {
+                Ok(Some(resp)) => {
+                    if resp.error.is_some() {
+                        "error"
+                    } else {
+                        "success"
+                    }
+                }
+                Ok(None) => "success",
+                Err(_) => "error",
+            };
+            log_tool_call(name, &args_str, status, duration_ms);
+            
+            result
         }
         "prompts/list" => {
             let result = prompts::list_prompts();
@@ -527,7 +638,7 @@ fn is_authorized(params: &Option<Value>) -> bool {
     if !required {
         return true;
     }
-    let token = MCP_AUTH_TOKEN.get().and_then(|v| v.clone()).flatten();
+    let token = MCP_AUTH_TOKEN.get().and_then(|v| v.clone());
     let provided = params.as_ref().and_then(|v| {
         v.get("authToken")
             .and_then(|t| t.as_str())
@@ -771,9 +882,9 @@ async fn search_memory_internal(args: SearchMemoryArgs) -> Result<Vec<ActivityHi
         .map_err(|e| {
             let err_str = e.to_string();
             if err_str.contains("database is locked") {
-                anyhow::anyhow!("Database is locked by another process (Memflow app may be recording). Please retry in a moment.")
+                anyhow::anyhow!("[-32000] Database is locked by another process (Memflow app may be recording). Please wait a moment and retry.")
             } else if err_str.contains("no such table") || err_str.contains("unable to open") {
-                anyhow::anyhow!("Database not found or not initialized. Please ensure Memflow app has run at least once.")
+                anyhow::anyhow!("[-32000] Database not found or not initialized. Please ensure Memflow app has run at least once.")
             } else {
                 e
             }
@@ -829,9 +940,9 @@ async fn call_get_active_window_context() -> Result<String> {
         .map_err(|e| {
             let err_str = e.to_string();
             if err_str.contains("database is locked") {
-                anyhow::anyhow!("Database is locked by another process. Please retry.")
+                anyhow::anyhow!("[-32000] Database is locked by another process (Memflow app may be recording). Please wait a moment and retry.")
             } else if err_str.contains("no such table") || err_str.contains("unable to open") {
-                anyhow::anyhow!("Database not initialized. Please ensure Memflow app has run at least once.")
+                anyhow::anyhow!("[-32000] Database not initialized. Please ensure Memflow app has run at least once.")
             } else {
                 e
             }
@@ -934,9 +1045,9 @@ async fn call_get_recent_activities(minutes: i64, limit: i64) -> Result<String> 
         .map_err(|e| {
             let err_str = e.to_string();
             if err_str.contains("database is locked") {
-                anyhow::anyhow!("Database is locked by another process. Please retry.")
+                anyhow::anyhow!("[-32000] Database is locked by another process (Memflow app may be recording). Please wait a moment and retry.")
             } else if err_str.contains("no such table") || err_str.contains("unable to open") {
-                anyhow::anyhow!("Database not initialized. Please ensure Memflow app has run at least once.")
+                anyhow::anyhow!("[-32000] Database not initialized. Please ensure Memflow app has run at least once.")
             } else {
                 e
             }
@@ -975,5 +1086,41 @@ async fn call_get_recent_activities(minutes: i64, limit: i64) -> Result<String> 
         ));
     }
 
+    Ok(output)
+}
+
+/// Get terminal output from active terminal window
+async fn call_get_terminal_output(lines: usize) -> Result<String, memflow_core::terminal::TerminalError> {
+    use memflow_core::terminal::capture_terminal_output;
+    info!("Getting terminal output: {} lines", lines);
+    
+    capture_terminal_output(lines).await
+}
+
+/// Get system environment information
+async fn call_get_system_environment(
+    _include_dev_tools: bool,
+    _include_processes: bool,
+    _include_ports: bool,
+) -> Result<String> {
+    use sysinfo::System;
+    
+    info!("Getting system environment");
+    
+    let mut sys = System::new_all();
+    sys.refresh_all();
+    
+    let mut output = String::new();
+    
+    // Basic system info
+    output.push_str("[System Environment]\n\n");
+    output.push_str(&format!("OS: {}\n", System::name().unwrap_or_default()));
+    output.push_str(&format!("OS Version: {}\n", System::os_version().unwrap_or_default()));
+    output.push_str(&format!("Kernel: {}\n", System::kernel_version().unwrap_or_default()));
+    output.push_str(&format!("Hostname: {}\n", System::host_name().unwrap_or_default()));
+    output.push_str(&format!("CPU Count: {}\n", sys.cpus().len()));
+    output.push_str(&format!("Total Memory: {} GB\n", sys.total_memory() / 1024 / 1024 / 1024));
+    output.push_str(&format!("Used Memory: {} GB\n", sys.used_memory() / 1024 / 1024 / 1024));
+    
     Ok(output)
 }
