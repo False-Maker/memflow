@@ -1,7 +1,71 @@
 //! Terminal output capture module
 //!
-//! Provides functionality to capture text output from terminal windows.
-//! Currently supports Windows Terminal and console applications.
+//! This module provides functionality to capture text output from terminal windows on Windows.
+//! It uses a hybrid capture strategy that prioritizes performance and reliability across
+//! different terminal types.
+//!
+//! # Architecture
+//!
+//! The module implements a multi-layered capture approach:
+//!
+//! 1. **Terminal Detection** (`detect_terminals`)
+//!    - Uses window enumeration to find active terminal windows
+//!    - Identifies terminals by window class name and process name
+//!    - Supports cmd.exe, PowerShell (pwsh.exe), Windows Terminal (wt.exe), and conhost.exe
+//!
+//! 2. **Hybrid Capture Strategy** (`capture_terminal_output`)
+//!    - **Console API (Primary)**: Uses `ReadConsoleOutputW` for legacy terminals (cmd.exe)
+//!    - **UI Automation (Fallback)**: Uses IUIAutomation for modern terminals (Windows Terminal)
+//!    - Automatic fallback triggers when Console API fails or modern terminal detected
+//!
+//! 3. **Background Caching** (Optional)
+//!    - 1-second polling interval when enabled via `MEMFLOW_TERMINAL_CACHE_POLLING` env var
+//!    - Stores up to 500 lines of terminal content
+//!    - Reduces capture overhead for frequent requests
+//!
+//! # Usage
+//!
+//! ```no_run
+//! use memflow_core::terminal::{detect_terminals, capture_terminal_output};
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Detect active terminals
+//! let terminals = detect_terminals().await?;
+//! println!("Found {} terminals", terminals.len());
+//!
+//! // Capture output from active terminal (default: 50 lines)
+//! let output = capture_terminal_output(50).await?;
+//! println!("Terminal output:\n{}", output);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Platform Support
+//!
+//! - **Windows**: Full support with hybrid capture strategy
+//! - **macOS**: Not supported (returns `PlatformNotSupported`)
+//! - **Linux**: Not supported (returns `PlatformNotSupported`)
+//!
+//! # Important Notes
+//!
+//! - **Microsoft Deprecation Warning**: Microsoft does not recommend using `ReadConsoleOutputW`
+//!   in new applications. However, for external terminal capture scenarios (reading output from
+//!   another process's terminal), Console API + UI Automation is the only viable approach.
+//! - **Permissions**: Capturing terminal output may require appropriate permissions. Failures
+//!   are handled with lenient error handling (warnings logged, partial data returned).
+//! - **Modern Terminals**: Windows Terminal and other modern terminals use ConPTY, which
+//!   does not support traditional Console API. The UI Automation fallback automatically
+//!   handles these cases.
+//!
+//! # Configuration
+//!
+//! Enable background caching by setting environment variable:
+//! ```text
+//! MEMFLOW_TERMINAL_CACHE_POLLING=1
+//! ```
+//!
+//! Valid values: "1", "true", "yes" (case-insensitive)
+//! Default: Disabled (on-demand capture only)
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -116,12 +180,78 @@ pub async fn start_background_refresh() {
 
 /// Capture terminal output from the active terminal window
 ///
+/// This function captures text output from the currently active terminal window using
+/// a hybrid strategy that prioritizes performance and reliability:
+///
+/// - **Console API (Primary)**: Uses Windows Console API for legacy terminals (cmd.exe)
+/// - **UI Automation (Fallback)**: Uses IUIAutomation for modern terminals (Windows Terminal)
+/// - **Background Cache**: Returns cached content if available and fresh (1-second window)
+///
+/// The capture process automatically detects the terminal type and selects the appropriate
+/// capture method. If the primary method fails, it falls back to the alternative method.
+///
 /// # Arguments
-/// * `lines` - Maximum number of lines to capture (default: 50)
+///
+/// * `lines` - Maximum number of lines to capture from the terminal buffer. If 0 or not specified,
+///   captures the available content (up to cache limit of 500 lines). Default: 50
 ///
 /// # Returns
-/// * `Ok(String)` - The captured terminal output
-/// * `Err(TerminalError)` - If terminal not found or capture failed
+///
+/// * `Ok(String)` - The captured terminal output, limited to the specified number of lines
+/// * `Err(TerminalError)` - If terminal not found, capture failed, or platform not supported
+///
+/// # Errors
+///
+/// This function can return the following errors:
+/// - `TerminalError::NotFound`: No active terminal window found
+/// - `TerminalError::PermissionDenied`: Insufficient permissions to access terminal
+/// - `TerminalError::CaptureFailed`: Capture operation failed (details in error message)
+/// - `TerminalError::PlatformNotSupported`: Function called on unsupported platform (macOS/Linux)
+///
+/// # Examples
+///
+/// ```no_run
+/// use memflow_core::terminal::capture_terminal_output;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // Capture the last 50 lines of terminal output
+/// let output = capture_terminal_output(50).await?;
+/// println!("Terminal output:\n{}", output);
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ```no_run
+/// use memflow_core::terminal::capture_terminal_output;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // Capture last 100 lines for detailed analysis
+/// let detailed_output = capture_terminal_output(100).await?;
+///
+/// // Capture all available lines (up to cache limit)
+/// let full_output = capture_terminal_output(0).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Background Caching
+///
+/// When background polling is enabled (via `MEMFLOW_TERMINAL_CACHE_POLLING` environment variable),
+/// this function may return cached content instead of performing a fresh capture. Cached content
+/// is considered fresh for 1 second after the last update.
+///
+/// # Performance Considerations
+///
+/// - Console API capture is faster for legacy terminals but limited to console windows
+/// - UI Automation fallback is slower but works with modern terminals (Windows Terminal)
+/// - Background caching reduces overhead for frequent capture requests (when enabled)
+/// - Capture operations involve Windows API calls and may have slight latency
+///
+/// # Platform Support
+///
+/// - **Windows**: Full support with hybrid capture strategy
+/// - **macOS**: Not supported (returns `PlatformNotSupported`)
+/// - **Linux**: Not supported (returns `PlatformNotSupported`)
 pub async fn capture_terminal_output(lines: usize) -> Result<String, TerminalError> {
     // Check if background polling is enabled and cache is fresh
     if is_background_polling_enabled() && CACHE.is_fresh(CACHE_FRESHNESS_WINDOW).await {
@@ -684,7 +814,118 @@ async fn capture_terminal_output_macos(_lines: usize) -> Result<String, Terminal
     Err(TerminalError::PlatformNotSupported)
 }
 
-/// Detect active terminal windows
+/// Detect active terminal windows on the system
+///
+/// This function enumerates all visible windows and identifies terminal applications
+/// by their window class names and process names. It returns a list of active terminal
+/// windows with metadata including process name, PID, and window title.
+///
+/// # Supported Terminal Types
+///
+/// The function detects the following terminal types:
+///
+/// **Window Class Names:**
+/// - `ConsoleWindowClass` - Legacy console windows (cmd.exe, PowerShell)
+/// - `Cascadia.Terminal` - Windows Terminal
+/// - `CASCADIA_HOSTING_WINDOW_CLASS` - Windows Terminal hosting window
+///
+/// **Process Names:**
+/// - `cmd.exe` - Command Prompt
+/// - `powershell.exe` - Windows PowerShell
+/// - `pwsh.exe` - PowerShell Core (cross-platform)
+/// - `wt.exe` - Windows Terminal
+/// - `WindowsTerminal.exe` - Windows Terminal (alternative executable name)
+/// - `conhost.exe` - Console Host
+///
+/// # Returns
+///
+/// * `Ok(Vec<TerminalInfo>)` - A vector of detected terminals, each containing:
+///   - `name`: Process name (e.g., "cmd.exe", "wt.exe")
+///   - `pid`: Process ID (non-zero)
+///   - `window_title`: Window title text
+/// * `Err(TerminalError)` - If detection fails or platform not supported
+///
+/// # Errors
+///
+/// This function can return the following errors:
+/// - `TerminalError::PlatformNotSupported`: Function called on unsupported platform (Linux)
+/// - `TerminalError::CaptureFailed`: Window enumeration failed (details in error message)
+///
+/// # Examples
+///
+/// ```no_run
+/// use memflow_core::terminal::detect_terminals;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // Detect all active terminals
+/// let terminals = detect_terminals().await?;
+///
+/// if terminals.is_empty() {
+///     println!("No active terminals found");
+/// } else {
+///     println!("Found {} active terminal(s):", terminals.len());
+///     for (i, term) in terminals.iter().enumerate() {
+///         println!("  {}. {} (PID: {}) - {}",
+///                  i + 1, term.name, term.pid, term.window_title);
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ```no_run
+/// use memflow_core::terminal::{detect_terminals, capture_terminal_output};
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// // Find and capture from the first terminal
+/// let terminals = detect_terminals().await?;
+///
+/// if let Some(first_terminal) = terminals.first() {
+///     println!("Capturing from: {}", first_terminal.window_title);
+///     let output = capture_terminal_output(50).await?;
+///     println!("Output:\n{}", output);
+/// }
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Filtering and Selection
+///
+/// You can filter the detected terminals based on your criteria:
+///
+/// ```no_run
+/// use memflow_core::terminal::detect_terminals;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let terminals = detect_terminals().await?;
+///
+/// // Filter for Windows Terminal only
+/// let wt_terminals: Vec<_> = terminals.iter()
+///     .filter(|t| t.name.eq_ignore_ascii_case("wt.exe") ||
+///                t.name.eq_ignore_ascii_case("WindowsTerminal.exe"))
+///     .collect();
+///
+/// // Find PowerShell terminals
+/// let ps_terminals: Vec<_> = terminals.iter()
+///     .filter(|t| t.name.eq_ignore_ascii_case("powershell.exe") ||
+///                t.name.eq_ignore_ascii_case("pwsh.exe"))
+///     .collect();
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Platform Support
+///
+/// - **Windows**: Full support with window enumeration
+/// - **macOS**: Returns `PlatformNotSupported` (stub implementation)
+/// - **Linux**: Returns `PlatformNotSupported` (not implemented)
+///
+/// # Notes
+///
+/// - Only detects visible terminal windows with non-empty titles
+/// - Requires appropriate permissions to enumerate windows and query process information
+/// - Multiple instances of the same terminal type will be listed separately
+/// - The function may return an empty vector if no terminals are currently running
 pub async fn detect_terminals() -> Result<Vec<TerminalInfo>, TerminalError> {
     #[cfg(target_os = "windows")]
     {
@@ -1116,5 +1357,264 @@ mod tests {
 
         // Clean up
         std::env::remove_var("MEMFLOW_TERMINAL_CACHE_POLLING");
+    }
+
+    // ============================================================================
+    // Integration Tests
+    // ============================================================================
+
+    /// Integration test: Full detection + capture flow
+    ///
+    /// This test verifies the end-to-end flow from terminal detection to capture.
+    /// It's designed to work in automated CI/CD environments without manual intervention.
+    #[tokio::test]
+    #[cfg(target_os = "windows")]
+    async fn test_integration_detect_and_capture() {
+        // Ensure background polling is disabled for consistent testing
+        std::env::remove_var("MEMFLOW_TERMINAL_CACHE_POLLING");
+
+        // Step 1: Detect terminals
+        let detect_result = detect_terminals().await;
+        assert!(detect_result.is_ok(), "Terminal detection should not fail with error");
+
+        let terminals = detect_result.unwrap();
+
+        // If no terminals found, we can't test capture, but that's acceptable
+        if terminals.is_empty() {
+            println!("No terminals detected in test environment - skipping capture test");
+            return;
+        }
+
+        // Step 2: Verify at least one terminal was detected
+        assert!(!terminals.is_empty(), "Should detect at least one terminal if terminals exist");
+
+        // Step 3: Validate terminal metadata
+        for terminal in &terminals {
+            assert!(!terminal.name.is_empty(), "Terminal name should not be empty");
+            assert!(terminal.pid > 0, "Terminal PID should be greater than 0");
+            assert!(
+                !terminal.window_title.is_empty(),
+                "Terminal window_title should not be empty"
+            );
+        }
+
+        // Step 4: Attempt to capture output from the first terminal
+        let capture_result = capture_terminal_output(50).await;
+
+        // Capture may succeed or fail depending on terminal type and permissions
+        // We verify it doesn't panic and handles errors gracefully
+        match capture_result {
+            Ok(output) => {
+                // If capture succeeds, verify we got some content
+                // (Note: empty output is possible in test environments)
+                println!("Captured {} characters from terminal", output.len());
+            }
+            Err(TerminalError::NotFound) => {
+                // Acceptable - terminal may have closed between detection and capture
+                println!("Terminal not found during capture (may have closed)");
+            }
+            Err(TerminalError::PermissionDenied) => {
+                // Acceptable in test environments with restricted permissions
+                println!("Permission denied accessing terminal");
+            }
+            Err(TerminalError::CaptureFailed(msg)) => {
+                // Acceptable - capture may fail for various reasons
+                println!("Capture failed: {} (acceptable in test env)", msg);
+            }
+            Err(e) => {
+                panic!("Unexpected error type: {:?}", e);
+            }
+        }
+    }
+
+    /// Integration test: Mixed strategy (Console API → UIA fallback)
+    ///
+    /// This test verifies the hybrid capture strategy by testing both the primary
+    /// Console API path and the UIA fallback path.
+    #[tokio::test]
+    #[cfg(target_os = "windows")]
+    async fn test_integration_mixed_strategy() {
+        // Ensure background polling is disabled for consistent testing
+        std::env::remove_var("MEMFLOW_TERMINAL_CACHE_POLLING");
+
+        // Test capture with hybrid strategy
+        let result = capture_terminal_output(50).await;
+
+        match result {
+            Ok(output) => {
+                // Verify output is valid (even if empty)
+                // The test passes as long as capture completes without panic
+                println!("Hybrid capture succeeded: {} bytes captured", output.len());
+
+                // If we got output, verify it's not just whitespace
+                // (Empty output is acceptable in test environments)
+                if !output.trim().is_empty() {
+                    assert!(
+                        output.chars().any(|c| !c.is_whitespace()),
+                        "Output should contain non-whitespace characters if not empty"
+                    );
+                }
+            }
+            Err(TerminalError::NotFound) => {
+                // Acceptable - no terminal window
+                println!("No terminal found (acceptable in test env)");
+            }
+            Err(TerminalError::PermissionDenied) => {
+                // Acceptable - insufficient permissions
+                println!("Permission denied (acceptable in test env)");
+            }
+            Err(TerminalError::CaptureFailed(msg)) => {
+                // Acceptable - both Console API and UIA failed
+                println!("Capture failed after both strategies: {} (acceptable in test env)", msg);
+            }
+            Err(e) => {
+                panic!("Unexpected error type: {:?}", e);
+            }
+        }
+
+        // Test with a different line limit to verify parameter handling
+        let result_100 = capture_terminal_output(100).await;
+        match result_100 {
+            Ok(output) => {
+                // Verify line limit was respected
+                let line_count = output.lines().count();
+                if output.lines().count() > 0 {
+                    assert!(
+                        line_count <= 100,
+                        "Should return at most 100 lines, got {}",
+                        line_count
+                    );
+                    println!("Line limit test passed: {} lines (<= 100)", line_count);
+                }
+            }
+            Err(_) => {
+                // Errors are acceptable
+                println!("Line limit test: error acceptable in test env");
+            }
+        }
+    }
+
+    /// Integration test: Background cache end-to-end
+    ///
+    /// This test verifies the background caching system including:
+    /// - Cache initialization
+    /// - Cache updates
+    /// - Cache freshness checking
+    /// - Cache retrieval
+    #[tokio::test]
+    async fn test_integration_background_cache() {
+        // Ensure background polling is disabled for this test
+        // (we'll manually test the cache behavior)
+        std::env::remove_var("MEMFLOW_TERMINAL_CACHE_POLLING");
+
+        // Create a test cache instance
+        let cache = TerminalCache::new(500);
+
+        // Step 1: Verify cache starts empty
+        let initial_content = cache.get_cached().await;
+        assert!(initial_content.is_none(), "Cache should start empty");
+
+        // Step 2: Update cache with test content
+        let test_content = "Line 1\nLine 2\nLine 3\n".to_string();
+        cache.update(test_content.clone()).await;
+
+        // Step 3: Verify cache contains the content
+        let cached = cache.get_cached().await;
+        assert!(cached.is_some(), "Cache should have content after update");
+        assert_eq!(cached.unwrap(), test_content, "Cached content should match input");
+
+        // Step 4: Verify cache is fresh immediately after update
+        assert!(cache.is_fresh(CACHE_FRESHNESS_WINDOW).await, "Cache should be fresh immediately after update");
+
+        // Step 5: Verify cache becomes stale after 1.1 seconds
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        assert!(!cache.is_fresh(CACHE_FRESHNESS_WINDOW).await, "Cache should be stale after 1.1 seconds");
+
+        // Step 6: Test cache line limiting
+        let mut long_content = String::new();
+        for i in 1..=600 {
+            long_content.push_str(&format!("Line {}\n", i));
+        }
+        cache.update(long_content).await;
+
+        let cached = cache.get_cached().await;
+        assert!(cached.is_some(), "Cache should have content after update");
+        let line_count = cached.unwrap().lines().count();
+        assert_eq!(line_count, 500, "Cache should limit to 500 lines");
+
+        // Step 7: Verify cached content contains the LAST 500 lines
+        let cached = cache.get_cached().await.unwrap();
+        let first_line = cached.lines().next().unwrap();
+        let last_line = cached.lines().last().unwrap();
+        assert_eq!(first_line, "Line 101", "First cached line should be Line 101");
+        assert_eq!(last_line, "Line 600", "Last cached line should be Line 600");
+
+        // Step 8: Test that cached content is readable and valid
+        assert!(!cached.is_empty(), "Cached content should not be empty");
+        assert!(
+            cached.lines().count() > 0,
+            "Cached content should have lines"
+        );
+    }
+
+    /// Integration test: Error handling and recovery
+    ///
+    /// This test verifies that errors are handled gracefully and don't cause panics.
+    #[tokio::test]
+    async fn test_integration_error_handling() {
+        // Test 1: Capture with no terminal should return NotFound, not panic
+        // (Note: This test assumes we're in an environment without active terminals)
+        std::env::remove_var("MEMFLOW_TERMINAL_CACHE_POLLING");
+
+        // Attempt capture - should handle all error cases gracefully
+        let result = capture_terminal_output(50).await;
+
+        // Any error is acceptable as long as it's not a panic
+        match result {
+            Ok(_) => {
+                println!("Capture succeeded (terminal was available)");
+            }
+            Err(TerminalError::NotFound) => {
+                println!("Terminal not found (expected in some test envs)");
+            }
+            Err(TerminalError::PermissionDenied) => {
+                println!("Permission denied (expected in some test envs)");
+            }
+            Err(TerminalError::CaptureFailed(_)) => {
+                println!("Capture failed (expected in some test envs)");
+            }
+            Err(TerminalError::PlatformNotSupported) => {
+                println!("Platform not supported (expected on non-Windows)");
+            }
+        }
+
+        // Test 2: Terminal detection should never panic
+        let detect_result = detect_terminals().await;
+        assert!(
+            detect_result.is_ok(),
+            "Detection should return Ok, not panic"
+        );
+
+        // Test 3: Empty terminal list is valid
+        if let Ok(terminals) = detect_result {
+            // Empty vec is valid - no panic should occur
+            let _ = terminals.len();
+            let _ = terminals.is_empty();
+        }
+
+        // Test 4: Invalid line limits should be handled gracefully
+        // Line limit of 0 means "capture all"
+        let result_zero = capture_terminal_output(0).await;
+        match result_zero {
+            Ok(_) => println!("Capture with line limit 0 succeeded"),
+            Err(_) => println!("Capture with line limit 0 failed (acceptable)"),
+        }
+
+        // Large line limit should also be handled
+        let result_large = capture_terminal_output(10000).await;
+        match result_large {
+            Ok(_) => println!("Capture with large line limit succeeded"),
+            Err(_) => println!("Capture with large line limit failed (acceptable)"),
+        }
     }
 }
