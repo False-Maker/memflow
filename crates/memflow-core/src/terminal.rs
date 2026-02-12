@@ -3,7 +3,13 @@
 //! Provides functionality to capture text output from terminal windows.
 //! Currently supports Windows Terminal and console applications.
 
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+
 use thiserror::Error;
+use tokio::sync::RwLock;
+use once_cell::sync::Lazy;
 
 /// Errors that can occur when capturing terminal output
 #[derive(Debug, Error)]
@@ -26,6 +32,88 @@ pub struct TerminalInfo {
     pub window_title: String,
 }
 
+/// Background cache for terminal output
+struct TerminalCache {
+    /// Cached terminal content (last N lines)
+    content: Arc<RwLock<String>>,
+    /// Timestamp of last cache update
+    last_update: Arc<RwLock<Instant>>,
+    /// Maximum number of lines to cache
+    max_lines: usize,
+}
+
+impl TerminalCache {
+    fn new(max_lines: usize) -> Self {
+        Self {
+            content: Arc::new(RwLock::new(String::new())),
+            last_update: Arc::new(RwLock::new(Instant::now() - Duration::from_secs(10))),
+            max_lines,
+        }
+    }
+
+    async fn get_cached(&self) -> Option<String> {
+        let content = self.content.read().await;
+        if content.is_empty() {
+            None
+        } else {
+            Some(content.clone())
+        }
+    }
+
+    async fn is_fresh(&self, max_age: Duration) -> bool {
+        let last_update = self.last_update.read().await;
+        last_update.elapsed() < max_age
+    }
+
+    async fn update(&self, new_content: String) {
+        let truncated = self.limit_lines(&new_content);
+        *self.content.write().await = truncated;
+        *self.last_update.write().await = Instant::now();
+    }
+
+    fn limit_lines(&self, content: &str) -> String {
+        if self.max_lines == 0 {
+            return content.to_string();
+        }
+
+        let lines: Vec<&str> = content.lines().collect();
+        if lines.len() <= self.max_lines {
+            return content.to_string();
+        }
+
+        lines[lines.len() - self.max_lines..].join("\n")
+    }
+}
+
+/// Global terminal cache instance
+static CACHE: Lazy<TerminalCache> = Lazy::new(|| TerminalCache::new(500));
+
+/// Cache freshness window (1 second)
+const CACHE_FRESHNESS_WINDOW: Duration = Duration::from_secs(1);
+
+/// Check if background polling is enabled via environment variable
+fn is_background_polling_enabled() -> bool {
+    std::env::var("MEMFLOW_TERMINAL_CACHE_POLLING")
+        .map(|val| val.eq_ignore_ascii_case("1") || val.eq_ignore_ascii_case("true") || val.eq_ignore_ascii_case("yes"))
+        .unwrap_or(false)
+}
+
+/// Start background refresh task for terminal cache
+///
+/// Note: Background spawning is currently disabled due to Windows API types not being Send-safe.
+/// The cache is still functional but will be updated on-demand rather than via background polling.
+/// To enable background polling in the future, we would need to refactor to use Send-safe types
+/// or wrap the capture calls in a Send-safe manner.
+pub async fn start_background_refresh() {
+    if !is_background_polling_enabled() {
+        tracing::debug!("Background terminal cache polling disabled by environment variable");
+        return;
+    }
+
+    // Note: Background polling is disabled due to Send-safety constraints with Windows API types
+    tracing::info!("Background terminal cache polling is disabled (Send-safety constraint). Cache will update on-demand.");
+}
+
 /// Capture terminal output from the active terminal window
 ///
 /// # Arguments
@@ -35,20 +123,52 @@ pub struct TerminalInfo {
 /// * `Ok(String)` - The captured terminal output
 /// * `Err(TerminalError)` - If terminal not found or capture failed
 pub async fn capture_terminal_output(lines: usize) -> Result<String, TerminalError> {
+    // Check if background polling is enabled and cache is fresh
+    if is_background_polling_enabled() && CACHE.is_fresh(CACHE_FRESHNESS_WINDOW).await {
+        if let Some(cached) = CACHE.get_cached().await {
+            // Apply user-requested line limit to cached content
+            let truncated = if lines > 0 && lines < CACHE.max_lines {
+                limit_lines(&cached, lines)
+            } else {
+                cached
+            };
+            tracing::trace!("Returning cached terminal output");
+            return Ok(truncated);
+        }
+    }
+
+    // No fresh cache, perform fresh capture
     #[cfg(target_os = "windows")]
-    {
-        capture_terminal_output_windows(lines).await
-    }
-    
+    let result = capture_terminal_output_windows(lines).await;
+
     #[cfg(target_os = "macos")]
-    {
-        capture_terminal_output_macos(lines).await
-    }
-    
+    let result = capture_terminal_output_macos(lines).await;
+
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        Err(TerminalError::PlatformNotSupported)
+    let result = Err(TerminalError::PlatformNotSupported);
+
+    // Update cache if capture succeeded
+    if is_background_polling_enabled() {
+        if let Ok(ref content) = result {
+            CACHE.update(content.clone()).await;
+        }
     }
+
+    result
+}
+
+/// Helper function to limit content to specified number of lines
+fn limit_lines(content: &str, max_lines: usize) -> String {
+    if max_lines == 0 {
+        return content.to_string();
+    }
+
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.len() <= max_lines {
+        return content.to_string();
+    }
+
+    lines[lines.len() - max_lines..].join("\n")
 }
 
 /// Windows implementation using Windows Console API with UIA fallback
@@ -848,5 +968,153 @@ mod tests {
                 println!("UIA test error (may be expected in test env): {}", e);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_cache_refresh_interval() {
+        // This test verifies the cache refresh interval is approximately 1 second
+        // We allow a 100ms tolerance for timing variations
+
+        // Ensure background polling is disabled for this test
+        std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "0");
+
+        let cache = TerminalCache::new(500);
+
+        // Update cache with initial content
+        let test_content = "Line 1\nLine 2\nLine 3\n".to_string();
+        cache.update(test_content).await;
+
+        // Verify cache is fresh immediately
+        assert!(cache.is_fresh(CACHE_FRESHNESS_WINDOW).await);
+
+        // Wait 900ms (should still be fresh)
+        tokio::time::sleep(Duration::from_millis(900)).await;
+        assert!(cache.is_fresh(CACHE_FRESHNESS_WINDOW).await, "Cache should still be fresh after 900ms");
+
+        // Wait another 200ms (total 1100ms, should be stale)
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(!cache.is_fresh(CACHE_FRESHNESS_WINDOW).await, "Cache should be stale after 1100ms");
+    }
+
+    #[tokio::test]
+    async fn test_cache_max_lines() {
+        // Verify that cache limits content to max_lines (500)
+        let cache = TerminalCache::new(500);
+
+        // Create content with 600 lines
+        let mut long_content = String::new();
+        for i in 1..=600 {
+            long_content.push_str(&format!("Line {}\n", i));
+        }
+
+        cache.update(long_content).await;
+
+        // Retrieve cached content
+        if let Some(cached) = cache.get_cached().await {
+            let line_count = cached.lines().count();
+            assert_eq!(line_count, 500, "Cache should contain exactly 500 lines");
+
+            // Verify we got the LAST 500 lines
+            let first_line = cached.lines().next().unwrap();
+            assert_eq!(first_line, "Line 101", "First line in cache should be Line 101");
+
+            let last_line = cached.lines().last().unwrap();
+            assert_eq!(last_line, "Line 600", "Last line in cache should be Line 600");
+        } else {
+            panic!("Cache should have content after update");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_cache_freshness() {
+        // This test verifies that multiple calls within the freshness window return cached data
+
+        // Ensure background polling is disabled for this test
+        std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "0");
+
+        // Simulate cache being populated
+        let cache = TerminalCache::new(500);
+        cache.update("Cached content\n".to_string()).await;
+
+        // First call - within freshness window
+        assert!(cache.is_fresh(CACHE_FRESHNESS_WINDOW).await);
+        if let Some(content) = cache.get_cached().await {
+            assert_eq!(content, "Cached content\n");
+        }
+
+        // Second call - still within freshness window (500ms later)
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(cache.is_fresh(CACHE_FRESHNESS_WINDOW).await);
+
+        // Third call - after freshness window expires (1100ms total)
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        assert!(!cache.is_fresh(CACHE_FRESHNESS_WINDOW).await);
+    }
+
+    #[tokio::test]
+    async fn test_limit_lines_function() {
+        // Test the limit_lines helper function
+
+        // Test with content less than limit
+        let short = "Line 1\nLine 2\nLine 3\n".to_string();
+        let result = limit_lines(&short, 10);
+        assert_eq!(result.lines().count(), 3, "Should preserve all lines when under limit");
+
+        // Test with content equal to limit
+        let exact = (1..=10).map(|i| format!("Line {}\n", i)).collect::<String>();
+        let result = limit_lines(&exact, 10);
+        assert_eq!(result.lines().count(), 10, "Should preserve all lines when at limit");
+
+        // Test with content greater than limit
+        let long = (1..=20).map(|i| format!("Line {}\n", i)).collect::<String>();
+        let result = limit_lines(&long, 5);
+        assert_eq!(result.lines().count(), 5, "Should truncate to limit");
+
+        // Verify we got the LAST 5 lines
+        let first_line = result.lines().next().unwrap();
+        assert_eq!(first_line, "Line 16", "Should start from Line 16");
+
+        let last_line = result.lines().last().unwrap();
+        assert_eq!(last_line, "Line 20", "Should end at Line 20");
+
+        // Test with limit of 0 (should return all content)
+        let all = (1..=10).map(|i| format!("Line {}\n", i)).collect::<String>();
+        let result = limit_lines(&all, 0);
+        assert_eq!(result.lines().count(), 10, "Should return all lines when limit is 0");
+    }
+
+    #[test]
+    fn test_is_background_polling_enabled() {
+        // Test environment variable parsing for background polling
+
+        // Clean environment
+        std::env::remove_var("MEMFLOW_TERMINAL_CACHE_POLLING");
+        assert!(!is_background_polling_enabled(), "Should be disabled when env var not set");
+
+        // Test various "true" values
+        std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "1");
+        assert!(is_background_polling_enabled(), "Should be enabled with '1'");
+
+        std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "true");
+        assert!(is_background_polling_enabled(), "Should be enabled with 'true'");
+
+        std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "TRUE");
+        assert!(is_background_polling_enabled(), "Should be enabled with 'TRUE' (case insensitive)");
+
+        std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "yes");
+        assert!(is_background_polling_enabled(), "Should be enabled with 'yes'");
+
+        // Test "false" values
+        std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "0");
+        assert!(!is_background_polling_enabled(), "Should be disabled with '0'");
+
+        std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "false");
+        assert!(!is_background_polling_enabled(), "Should be disabled with 'false'");
+
+        std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "no");
+        assert!(!is_background_polling_enabled(), "Should be disabled with 'no'");
+
+        // Clean up
+        std::env::remove_var("MEMFLOW_TERMINAL_CACHE_POLLING");
     }
 }
