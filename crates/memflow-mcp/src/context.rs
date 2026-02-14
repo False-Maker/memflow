@@ -41,8 +41,6 @@ impl RuntimeContext for McpContext {
         _context_text: &str,
     ) -> Pin<Box<dyn Future<Output = Result<AiAnalysisResult>> + Send + '_>> {
         // Initially return empty results as this is just the searching interface
-        Box::pin(async {
-            Ok(AiAnalysisResult { tasks: vec![] })
-        })
+        Box::pin(async { Ok(AiAnalysisResult { tasks: vec![] }) })
     }
 }

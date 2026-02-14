@@ -1,36 +1,38 @@
-pub mod desktop_context;
 pub mod ai;
 pub mod app_config;
 pub mod chat;
 pub mod commands;
 pub mod db;
+pub mod desktop_context;
+pub mod focus_analytics;
 pub mod graph;
 pub mod ocr;
+pub mod ocr_worker;
 pub mod performance;
+pub mod proactive_context;
 pub mod protocol;
 pub mod recorder;
-pub mod secure_storage;
-pub mod vector_db;
-pub mod window_info;
-pub mod focus_analytics;
-pub mod ocr_worker;
-pub mod proactive_context;
 pub mod redact;
 pub mod scheduler;
+pub mod secure_storage;
+pub mod system_helpers;
 pub mod uia;
+pub mod vector_db;
 pub mod win_event;
+pub mod window_info;
 
-use tracing_subscriber::prelude::*;
-use tauri::Manager;
-use tauri::tray::TrayIconBuilder;
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use std::time::Duration;
 use tauri::image::Image;
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::tray::TrayIconBuilder;
+use tauri::Manager;
 use tauri::{AppHandle, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-use std::time::Duration;
+use tracing_subscriber::prelude::*;
 
-static LOG_GUARD: once_cell::sync::Lazy<std::sync::Mutex<Option<tracing_appender::non_blocking::WorkerGuard>>> =
-    once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
+static LOG_GUARD: once_cell::sync::Lazy<
+    std::sync::Mutex<Option<tracing_appender::non_blocking::WorkerGuard>>,
+> = once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RunMode {
@@ -59,16 +61,12 @@ fn show_or_create_main_window(app: &AppHandle) {
         return;
     }
 
-    let window = WebviewWindowBuilder::new(
-        app,
-        "main",
-        WebviewUrl::App("index.html".into()),
-    )
-    .title("MemFlow")
-    .inner_size(1200.0, 800.0)
-    .min_inner_size(800.0, 600.0)
-    .resizable(true)
-    .build();
+    let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+        .title("MemFlow")
+        .inner_size(1200.0, 800.0)
+        .min_inner_size(800.0, 600.0)
+        .resizable(true)
+        .build();
 
     if let Ok(win) = window {
         let _ = win.show();
@@ -83,16 +81,13 @@ fn show_or_create_debug_window(app: &AppHandle) {
         return;
     }
 
-    let window = WebviewWindowBuilder::new(
-        app,
-        "debug",
-        WebviewUrl::App("index.html?debug=1".into()),
-    )
-    .title("MemFlow Debug")
-    .inner_size(860.0, 680.0)
-    .min_inner_size(680.0, 520.0)
-    .resizable(true)
-    .build();
+    let window =
+        WebviewWindowBuilder::new(app, "debug", WebviewUrl::App("index.html?debug=1".into()))
+            .title("MemFlow Debug")
+            .inner_size(860.0, 680.0)
+            .min_inner_size(680.0, 520.0)
+            .resizable(true)
+            .build();
 
     if let Ok(win) = window {
         let _ = win.show();
@@ -107,7 +102,9 @@ fn mcp_heartbeat_path(app_handle: &AppHandle) -> Option<std::path::PathBuf> {
         .map(|d| d.join("mcp_heartbeat.json"))
         .ok();
     let alt_hb = dirs::data_dir().map(|d| d.join("com.memflow.app").join("mcp_heartbeat.json"));
-    tauri_hb.filter(|p| p.exists()).or_else(|| alt_hb.filter(|p| p.exists()))
+    tauri_hb
+        .filter(|p| p.exists())
+        .or_else(|| alt_hb.filter(|p| p.exists()))
 }
 
 fn mcp_heartbeat_online(app_handle: &AppHandle) -> bool {
@@ -115,7 +112,10 @@ fn mcp_heartbeat_online(app_handle: &AppHandle) -> bool {
     if let Some(path) = mcp_heartbeat_path(app_handle) {
         if let Ok(text) = std::fs::read_to_string(&path) {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                let status = val.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+                let status = val
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
                 let ts = val.get("ts").and_then(|v| v.as_i64()).unwrap_or(0);
                 let now = chrono::Local::now().timestamp();
                 let delta = now - ts;
@@ -320,7 +320,7 @@ fn run_with_mode(run_mode: RunMode) {
 
             // 初始化录制器（传递 AppHandle）
             recorder::init(app_handle.clone());
-            
+
             // 初始化后台 OCR Worker
             tracing::info!("Calling ocr_worker::spawn_ocr_worker...");
             ocr_worker::spawn_ocr_worker(app_handle.clone());
@@ -334,7 +334,7 @@ fn run_with_mode(run_mode: RunMode) {
                     tracing::error!("CRITICAL: Config init failed (debug): {:?}", e);
                     eprintln!("CRITICAL: Config init failed: {:#}", e);
                 }
-                
+
                 // 初始化 Prompts 配置（从资源目录加载）
                 let resource_path = config_handle.path().resource_dir().ok();
                 if let Err(e) = ai::prompts::init_prompts(resource_path).await {
@@ -353,7 +353,7 @@ fn run_with_mode(run_mode: RunMode) {
                     let (kind, hint) = db::diagnose_init_error(&e);
                     tracing::error!("Database init failure kind: {:?}. {}", kind, hint);
                     eprintln!("Database init hint: {}", hint);
-                     
+
                     // 记录详细的诊断信息
                     if let Ok(db_path) = db::get_db_path_for_diagnostics(&config_handle) {
                         tracing::error!(
@@ -384,21 +384,19 @@ fn run_with_mode(run_mode: RunMode) {
             let _tray = TrayIconBuilder::new()
                 .menu(&menu)
                 .icon(icon)
-                .on_menu_event(|app, event| {
-                    match event.id().as_ref() {
-                        "status" => {
-                            let message = format_status_dialog(app);
-                            app.dialog()
-                                .message(message)
-                                .title("Memflow Status")
-                                .kind(MessageDialogKind::Info)
-                                .buttons(MessageDialogButtons::Ok)
-                                .show(|_| {});
-                        }
-                        "show" => show_or_create_main_window(app),
-                        "quit" => std::process::exit(0),
-                        _ => {}
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "status" => {
+                        let message = format_status_dialog(app);
+                        app.dialog()
+                            .message(message)
+                            .title("Memflow Status")
+                            .kind(MessageDialogKind::Info)
+                            .buttons(MessageDialogButtons::Ok)
+                            .show(|_| {});
                     }
+                    "show" => show_or_create_main_window(app),
+                    "quit" => std::process::exit(0),
+                    _ => {}
                 })
                 .build(app)?;
 

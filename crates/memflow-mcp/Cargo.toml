@@ -43,3 +43,4 @@ assert-json-diff = "2.0"
 
 [features]
 default = []
+integration-tests = []

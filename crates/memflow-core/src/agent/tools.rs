@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// 通用工具 Trait - 供 Agent/LLM 动态选择和执行
-/// 
+///
 /// # 设计理念 (Ref: Dify Tools/Plugin System)
 /// - Agent 不是死板的脚本，而是动态选择工具
 /// - 每个工具有名称和描述，供 LLM 决策使用
@@ -19,15 +19,15 @@ use std::sync::Arc;
 pub trait Tool: Send + Sync {
     /// 工具名称（唯一标识）
     fn name(&self) -> &str;
-    
+
     /// 工具描述（供 LLM 理解用途）
     fn description(&self) -> &str;
-    
+
     /// 参数 Schema 描述（JSON Schema 格式，可选）
     fn parameters_schema(&self) -> Option<Value> {
         None
     }
-    
+
     /// 执行工具
     async fn execute(&self, args: Value) -> Result<Value>;
 }
@@ -125,7 +125,7 @@ impl Tool for OpenUrlTool {
         let url = args["url"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("缺少 url 参数"))?;
-        
+
         // 使用系统默认方式打开 URL
         #[cfg(target_os = "windows")]
         {
@@ -133,7 +133,7 @@ impl Tool for OpenUrlTool {
                 .args(["/C", "start", "", url])
                 .spawn()?;
         }
-        
+
         Ok(serde_json::json!({
             "status": "success",
             "url": url
@@ -171,14 +171,14 @@ impl Tool for OpenFileTool {
         let path = args["path"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("缺少 path 参数"))?;
-        
+
         #[cfg(target_os = "windows")]
         {
             std::process::Command::new("cmd")
                 .args(["/C", "start", "", path])
                 .spawn()?;
         }
-        
+
         Ok(serde_json::json!({
             "status": "success",
             "path": path
@@ -216,12 +216,12 @@ impl Tool for OpenAppTool {
         let path = args["path"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("缺少 path 参数"))?;
-        
+
         #[cfg(target_os = "windows")]
         {
             std::process::Command::new(path).spawn()?;
         }
-        
+
         Ok(serde_json::json!({
             "status": "success",
             "path": path
@@ -259,13 +259,13 @@ impl Tool for CopyToClipboardTool {
         let text = args["text"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("缺少 text 参数"))?;
-        
-        let mut clipboard = arboard::Clipboard::new()
-            .map_err(|e| anyhow::anyhow!("初始化剪贴板失败: {}", e))?;
+
+        let mut clipboard =
+            arboard::Clipboard::new().map_err(|e| anyhow::anyhow!("初始化剪贴板失败: {}", e))?;
         clipboard
             .set_text(text.to_string())
             .map_err(|e| anyhow::anyhow!("写入剪贴板失败: {}", e))?;
-        
+
         Ok(serde_json::json!({
             "status": "success",
             "text_length": text.len()
@@ -313,37 +313,35 @@ impl Tool for CreateNoteTool {
 
     async fn execute(&self, args: Value) -> Result<Value> {
         use std::io::Write;
-        
+
         let content = args["content"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("缺少 content 参数"))?;
-        
-        let filename = args["filename"]
-            .as_str()
-            .unwrap_or("memflow_notes.md");
-        
+
+        let filename = args["filename"].as_str().unwrap_or("memflow_notes.md");
+
         let notes_path = if let Some(ref dir) = self.notes_dir {
             dir.join(filename)
         } else {
-            let doc_dir = dirs::document_dir()
-                .ok_or_else(|| anyhow::anyhow!("无法获取文档目录"))?;
+            let doc_dir =
+                dirs::document_dir().ok_or_else(|| anyhow::anyhow!("无法获取文档目录"))?;
             doc_dir.join(filename)
         };
-        
+
         // 确保父目录存在
         if let Some(parent) = notes_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&notes_path)?;
-        
+
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
         writeln!(file, "\n---\n*记录于 {}*\n", timestamp)?;
         writeln!(file, "{}", content)?;
-        
+
         Ok(serde_json::json!({
             "status": "success",
             "path": notes_path.to_string_lossy()
@@ -354,13 +352,13 @@ impl Tool for CreateNoteTool {
 /// 创建默认工具注册表（包含所有内置工具）
 pub fn create_default_registry() -> ToolRegistry {
     let mut registry = ToolRegistry::new();
-    
+
     registry.register(Arc::new(OpenUrlTool));
     registry.register(Arc::new(OpenFileTool));
     registry.register(Arc::new(OpenAppTool));
     registry.register(Arc::new(CopyToClipboardTool));
     registry.register(Arc::new(CreateNoteTool::new(None)));
-    
+
     registry
 }
 
@@ -371,7 +369,7 @@ mod tests {
     #[test]
     fn test_tool_registry() {
         let registry = create_default_registry();
-        
+
         assert!(registry.get("open_url").is_some());
         assert!(registry.get("open_file").is_some());
         assert!(registry.get("open_app").is_some());
@@ -384,7 +382,7 @@ mod tests {
     fn test_list_tools() {
         let registry = create_default_registry();
         let tools = registry.list_tools();
-        
+
         assert_eq!(tools.len(), 5);
     }
 
@@ -392,7 +390,7 @@ mod tests {
     fn test_tool_descriptions() {
         let registry = create_default_registry();
         let desc = registry.to_tool_descriptions();
-        
+
         assert!(desc.contains("open_url"));
         assert!(desc.contains("open_file"));
         assert!(desc.contains("创建"));

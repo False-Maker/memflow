@@ -18,7 +18,7 @@ pub mod rag;
 
 // Re-export commonly used types
 pub use prompt_engine::PromptTemplate;
-pub use prompts::{PromptsConfig, AgentConfig};
+pub use prompts::{AgentConfig, PromptsConfig};
 pub use provider::ProviderConfig;
 pub use rag::{HybridSearch, HybridSearchResult};
 
@@ -59,10 +59,7 @@ pub fn strip_json_code_fence(input: &str) -> &str {
             .trim();
     }
     if s.starts_with("```") {
-        return s
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim();
+        return s.trim_start_matches("```").trim_end_matches("```").trim();
     }
     s
 }
@@ -140,7 +137,8 @@ mod tests {
 
     #[test]
     fn parses_plain_json_for_filter_params() {
-        let input = r#"{"app_name":null,"keywords":["rust"],"date_range":"last_week","has_ocr":true}"#;
+        let input =
+            r#"{"app_name":null,"keywords":["rust"],"date_range":"last_week","has_ocr":true}"#;
         let parsed = parse_filter_params_from_response(input).unwrap();
         assert_eq!(parsed.app_name, None);
         assert_eq!(parsed.keywords, vec!["rust".to_string()]);

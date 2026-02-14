@@ -55,3 +55,6 @@ config.json
 # ONNX Runtime binaries for MCP
 crates/memflow-mcp/ort/
 .aider*
+
+# Windows reserved name (accidental file)
+/nul

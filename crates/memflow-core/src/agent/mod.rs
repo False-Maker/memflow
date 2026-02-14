@@ -1,7 +1,7 @@
 //! 智能代理（Agent）- 自动化提案与执行（MVP）
 //!
 //! 目标：基于 activity_logs 生成低风险自动化提案，并在用户确认后执行；全过程可审计并支持取消。
-//! 
+//!
 //! 增强功能：
 //! - 基于时间间隔的会话分割
 //! - 可配置的上下文构建参数
@@ -23,10 +23,10 @@ use tokio::sync::Mutex;
 
 use crate::context::RuntimeContext;
 
+use crate::agent::tools::{create_default_registry, ToolRegistry};
+use crate::ai::prompt_engine::PromptTemplate;
 use crate::ai::prompts::get_agent_config;
 use crate::db::get_pool;
-use crate::ai::prompt_engine::PromptTemplate;
-use crate::agent::tools::{create_default_registry, ToolRegistry};
 
 static TOOL_REGISTRY: Lazy<ToolRegistry> = Lazy::new(create_default_registry);
 
@@ -42,20 +42,23 @@ fn truncate_chars(s: &str, max_chars: usize) -> String {
 
 /// 基于时间间隔将活动记录分割为会话
 /// 如果两条记录之间的时间间隔超过 gap_minutes 分钟，则认为是不同的会话
-fn split_into_sessions(rows: &[sqlx::sqlite::SqliteRow], gap_minutes: i64) -> Vec<Vec<&sqlx::sqlite::SqliteRow>> {
+fn split_into_sessions(
+    rows: &[sqlx::sqlite::SqliteRow],
+    gap_minutes: i64,
+) -> Vec<Vec<&sqlx::sqlite::SqliteRow>> {
     if rows.is_empty() {
         return vec![];
     }
-    
+
     let gap_seconds = gap_minutes * 60;
     let mut sessions: Vec<Vec<&sqlx::sqlite::SqliteRow>> = vec![];
     let mut current_session: Vec<&sqlx::sqlite::SqliteRow> = vec![];
     let mut last_timestamp: Option<i64> = None;
-    
+
     // 注意：rows 是按时间降序排列的（最新的在前）
     for row in rows.iter() {
         let timestamp: i64 = row.get(1);
-        
+
         if let Some(last_ts) = last_timestamp {
             // 由于是降序，last_ts > timestamp
             if last_ts - timestamp > gap_seconds {
@@ -66,16 +69,16 @@ fn split_into_sessions(rows: &[sqlx::sqlite::SqliteRow], gap_minutes: i64) -> Ve
                 }
             }
         }
-        
+
         current_session.push(row);
         last_timestamp = Some(timestamp);
     }
-    
+
     // 添加最后一个会话
     if !current_session.is_empty() {
         sessions.push(current_session);
     }
-    
+
     sessions
 }
 
@@ -87,27 +90,29 @@ fn select_context_rows<'a>(
     if sessions.is_empty() {
         return vec![];
     }
-    
+
     let mut selected: Vec<&sqlx::sqlite::SqliteRow> = vec![];
     let mut remaining = max_items;
-    
+
     // 策略：从最近的会话开始，每个会话取适当数量的记录
     // 较大的会话（可能是主要工作）获得更多配额
     for session in sessions.iter() {
         if remaining == 0 {
             break;
         }
-        
+
         // 根据会话大小分配配额：较大的会话获得更多
         let session_quota = if sessions.len() == 1 {
             remaining
         } else {
             // 至少取 5 条，或者按比例分配
             let min_quota = 5.min(remaining);
-            let proportional = (session.len() * remaining / sessions.iter().map(|s| s.len()).sum::<usize>()).max(min_quota);
+            let proportional = (session.len() * remaining
+                / sessions.iter().map(|s| s.len()).sum::<usize>())
+            .max(min_quota);
             proportional.min(remaining)
         };
-        
+
         for row in session.iter().take(session_quota) {
             selected.push(row);
             remaining -= 1;
@@ -116,7 +121,7 @@ fn select_context_rows<'a>(
             }
         }
     }
-    
+
     selected
 }
 
@@ -270,7 +275,7 @@ pub async fn propose_automation(
     let context_max_items = agent_config.context_max_items;
     let max_chars_per_ocr = agent_config.context_max_chars_per_ocr;
     let session_gap_minutes = agent_config.session_gap_minutes;
-    
+
     // 基于时间间隔的会话分割
     let sessions = split_into_sessions(&rows, session_gap_minutes);
     tracing::info!(
@@ -278,33 +283,36 @@ pub async fn propose_automation(
         sessions.len(),
         session_gap_minutes
     );
-    
+
     // 智能选择会话：优先选择最近且活动较多的会话
     let selected_rows = select_context_rows(&sessions, context_max_items);
-    
-    // 构建上下文（使用配置的参数）
-    let context_items: Vec<String> = selected_rows.iter().map(|row| {
-        let timestamp: i64 = row.get(1);
-        let app_name: String = row.get(2);
-        let window_title: String = row.get(3);
-        let ocr_text: Option<String> = row.get(4);
-        
-        let mut line = if let Some(dt) = chrono::DateTime::from_timestamp(timestamp, 0) {
-             let local: chrono::DateTime<chrono::Local> = chrono::DateTime::from(dt);
-             format!("[{}] {}: {}", local.format("%H:%M"), app_name, window_title)
-        } else {
-             format!("{}: {}", app_name, window_title)
-        };
 
-        if let Some(text) = ocr_text {
-             if !text.trim().is_empty() {
-                 // 使用配置的 OCR 文本截断长度
-                 let truncated = truncate_chars(&text, max_chars_per_ocr);
-                 line.push_str(&format!(" | 内容: {}", truncated.replace("\n", " ")));
-             }
-        }
-        line
-    }).collect();
+    // 构建上下文（使用配置的参数）
+    let context_items: Vec<String> = selected_rows
+        .iter()
+        .map(|row| {
+            let timestamp: i64 = row.get(1);
+            let app_name: String = row.get(2);
+            let window_title: String = row.get(3);
+            let ocr_text: Option<String> = row.get(4);
+
+            let mut line = if let Some(dt) = chrono::DateTime::from_timestamp(timestamp, 0) {
+                let local: chrono::DateTime<chrono::Local> = chrono::DateTime::from(dt);
+                format!("[{}] {}: {}", local.format("%H:%M"), app_name, window_title)
+            } else {
+                format!("{}: {}", app_name, window_title)
+            };
+
+            if let Some(text) = ocr_text {
+                if !text.trim().is_empty() {
+                    // 使用配置的 OCR 文本截断长度
+                    let truncated = truncate_chars(&text, max_chars_per_ocr);
+                    line.push_str(&format!(" | 内容: {}", truncated.replace("\n", " ")));
+                }
+            }
+            line
+        })
+        .collect();
     let context_text = context_items.join("\n");
 
     // 使用 Prompt Template 渲染提示词
@@ -315,7 +323,7 @@ pub async fn propose_automation(
          ## 任务要求\n\
          1. 识别用户正在进行的任务\n\
          2. 提取相关的 URL、文件路径和应用程序\n\
-         3. 忽略系统进程和无关活动"
+         3. 忽略系统进程和无关活动",
     );
     let mut vars = HashMap::new();
     vars.insert("context".to_string(), context_text.clone());
@@ -324,16 +332,23 @@ pub async fn propose_automation(
 
     let mut proposals: Vec<AutomationProposalDto> = Vec::new();
 
-    tracing::info!("agent propose: start ai analysis (context chars={})", context_text.len());
+    tracing::info!(
+        "agent propose: start ai analysis (context chars={})",
+        context_text.len()
+    );
     match tokio::time::timeout(Duration::from_secs(60), ctx.analyze_for_proposals(&prompt)).await {
         Ok(Ok(analysis)) => {
-            tracing::info!("agent propose: ai analysis ok, tasks={}", analysis.tasks.len());
-            
+            tracing::info!(
+                "agent propose: ai analysis ok, tasks={}",
+                analysis.tasks.len()
+            );
+
             for task in analysis.tasks {
                 let mut steps = Vec::new();
-                
+
                 // 1. 笔记步骤：包含摘要和链接列表
-                let mut note_content = format!("# {}\n\n{}\n\n### 相关资源\n", task.title, task.summary);
+                let mut note_content =
+                    format!("# {}\n\n{}\n\n### 相关资源\n", task.title, task.summary);
                 for url in &task.related_urls {
                     note_content.push_str(&format!("- 链接: {}\n", url));
                 }
@@ -346,7 +361,9 @@ pub async fn propose_automation(
                 // 额外加上“一键恢复”说明
                 note_content.push_str("\n*(此笔记由 MemFlow 智能回顾自动生成)*");
 
-                steps.push(AutomationStep::CreateNote { content: note_content });
+                steps.push(AutomationStep::CreateNote {
+                    content: note_content,
+                });
 
                 // 2. 恢复步骤：打开链接 (限制数量，防止炸浏览器)
                 for url in task.related_urls.iter().take(5) {
@@ -357,8 +374,12 @@ pub async fn propose_automation(
                 for path in task.related_files.iter().take(5) {
                     // 简单的路径过滤（必须是绝对路径）
                     let path = path.trim();
-                    if !path.is_empty() && (path.contains(":/") || path.contains(":\\") || path.starts_with("/")) {
-                         steps.push(AutomationStep::OpenFile { path: path.to_string() });
+                    if !path.is_empty()
+                        && (path.contains(":/") || path.contains(":\\") || path.starts_with("/"))
+                    {
+                        steps.push(AutomationStep::OpenFile {
+                            path: path.to_string(),
+                        });
                     }
                 }
 
@@ -368,16 +389,18 @@ pub async fn propose_automation(
                     let path_lower = path.to_lowercase();
                     // 排除 memflow 自身和系统应用
                     let is_memflow = path_lower.contains("memflow");
-                    let is_system = path_lower.contains("explorer.exe") 
+                    let is_system = path_lower.contains("explorer.exe")
                         || path_lower.contains("cmd.exe")
                         || path_lower.contains("powershell.exe");
-                    
-                    if !path.is_empty() 
-                        && !is_memflow 
+
+                    if !path.is_empty()
+                        && !is_memflow
                         && !is_system
-                        && (path.contains(":/") || path.contains(":\\") || path.starts_with("/")) 
+                        && (path.contains(":/") || path.contains(":\\") || path.starts_with("/"))
                     {
-                         steps.push(AutomationStep::OpenApp { path: path.to_string() });
+                        steps.push(AutomationStep::OpenApp {
+                            path: path.to_string(),
+                        });
                     }
                 }
 
@@ -396,13 +419,15 @@ pub async fn propose_automation(
 
             // 如果没有生成任何任务（比如活动太少），则回退到规则摘要
             if proposals.is_empty() {
-                 let fallback_proposal = AutomationProposalDto {
+                let fallback_proposal = AutomationProposalDto {
                     id: 0,
                     title: format!("生成最近 {} 小时活动摘要（规则）", time_window_hours),
                     description: "AI 未识别出明确任务，生成基础活动摘要。".to_string(),
                     confidence: 0.60,
                     risk_level: "low".to_string(),
-                    steps: vec![AutomationStep::CreateNote { content: rule_based_summary.clone() }],
+                    steps: vec![AutomationStep::CreateNote {
+                        content: rule_based_summary.clone(),
+                    }],
                     evidence: evidence.clone(),
                     created_at: now,
                 };
@@ -418,7 +443,9 @@ pub async fn propose_automation(
                 description: "AI 分析失败，生成基础活动摘要。".to_string(),
                 confidence: 0.60,
                 risk_level: "low".to_string(),
-                steps: vec![AutomationStep::CreateNote { content: rule_based_summary }],
+                steps: vec![AutomationStep::CreateNote {
+                    content: rule_based_summary,
+                }],
                 evidence: evidence.clone(),
                 created_at: now,
             };
@@ -432,7 +459,9 @@ pub async fn propose_automation(
                 description: "AI 分析超时，生成基础活动摘要。".to_string(),
                 confidence: 0.55,
                 risk_level: "low".to_string(),
-                steps: vec![AutomationStep::CreateNote { content: rule_based_summary }],
+                steps: vec![AutomationStep::CreateNote {
+                    content: rule_based_summary,
+                }],
                 evidence: evidence.clone(),
                 created_at: now,
             };
@@ -445,7 +474,7 @@ pub async fn propose_automation(
     for mut p in proposals {
         let steps_json = serde_json::to_string(&p.steps)?;
         let evidence_json = serde_json::to_string(&p.evidence)?;
-        
+
         let id = tokio::time::timeout(Duration::from_secs(10), async {
             sqlx::query(
                 r#"
@@ -475,7 +504,6 @@ pub async fn propose_automation(
 
     Ok(saved_proposals.into_iter().take(limit as usize).collect())
 }
-
 
 pub async fn list_executions(limit: i64, offset: i64) -> Result<Vec<ExecutionDto>> {
     let pool = get_pool().await?;
@@ -756,8 +784,12 @@ async fn execute_step(step: &AutomationStep, _ctx: &Arc<dyn RuntimeContext>) -> 
         AutomationStep::OpenUrl { url } => ("open_url", serde_json::json!({"url": url})),
         AutomationStep::OpenFile { path } => ("open_file", serde_json::json!({"path": path})),
         AutomationStep::OpenApp { path } => ("open_app", serde_json::json!({"path": path})),
-        AutomationStep::CopyToClipboard { text } => ("copy_to_clipboard", serde_json::json!({"text": text})),
-        AutomationStep::CreateNote { content } => ("create_note", serde_json::json!({"content": content})),
+        AutomationStep::CopyToClipboard { text } => {
+            ("copy_to_clipboard", serde_json::json!({"text": text}))
+        }
+        AutomationStep::CreateNote { content } => {
+            ("create_note", serde_json::json!({"content": content}))
+        }
     };
 
     // 动态执行工具

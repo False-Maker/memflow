@@ -8,26 +8,26 @@
 
 use anyhow::Result;
 use std::time::Instant;
+use windows::core::BSTR;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowTextW, GetWindowTextLengthW,
-};
 use windows::Win32::System::Com::{
-    CoInitializeEx, CoUninitialize, CoCreateInstance, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
 };
 use windows::Win32::UI::Accessibility::{
     CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
-    UIA_TextControlTypeId, UIA_EditControlTypeId, UIA_DocumentControlTypeId,
-    UIA_ControlTypePropertyId, UIA_NamePropertyId, UIA_ValueValuePropertyId,
+    UIA_ControlTypePropertyId, UIA_DocumentControlTypeId, UIA_EditControlTypeId,
+    UIA_NamePropertyId, UIA_TextControlTypeId, UIA_ValueValuePropertyId,
 };
-use windows::core::BSTR;
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+};
 
 /// UIA 遍历性能熔断常量
-const MAX_TRAVERSAL_DEPTH: u32 = 5;      // 最大遍历深度
+const MAX_TRAVERSAL_DEPTH: u32 = 5; // 最大遍历深度
 const MAX_TRAVERSAL_TIME_MS: u128 = 200; // 最大遍历时间（毫秒）
 
 /// 获取前台窗口的文本内容
-/// 
+///
 /// 优先使用 UIA 获取结构化文本，失败时回退到窗口标题
 pub fn get_foreground_text() -> Result<Option<String>> {
     unsafe {
@@ -57,7 +57,7 @@ pub fn get_window_title(hwnd: HWND) -> Result<Option<String>> {
 
         let mut buffer: Vec<u16> = vec![0; (len + 1) as usize];
         let copied = GetWindowTextW(hwnd, &mut buffer);
-        
+
         if copied == 0 {
             return Ok(None);
         }
@@ -72,7 +72,7 @@ pub fn get_window_title(hwnd: HWND) -> Result<Option<String>> {
 }
 
 /// 尝试使用 UIA 获取窗口内的文本内容
-/// 
+///
 /// 性能熔断实现：
 /// 1. CoInitializeEx 初始化 COM
 /// 2. 创建 IUIAutomation 实例
@@ -88,20 +88,21 @@ pub fn get_window_text_content(hwnd: HWND) -> Result<Option<String>> {
             tracing::debug!("COM 初始化失败: {:?}", hr);
             return Ok(None);
         }
-        
+
         // 使用 scopeguard 确保 CoUninitialize 被调用
         let _guard = scopeguard::guard((), |_| {
             CoUninitialize();
         });
 
         // 2. 创建 UIA 实例
-        let automation: IUIAutomation = match CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) {
-            Ok(a) => a,
-            Err(e) => {
-                tracing::debug!("创建 UIA 实例失败: {:?}", e);
-                return Ok(None);
-            }
-        };
+        let automation: IUIAutomation =
+            match CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) {
+                Ok(a) => a,
+                Err(e) => {
+                    tracing::debug!("创建 UIA 实例失败: {:?}", e);
+                    return Ok(None);
+                }
+            };
 
         // 3. 获取窗口根元素
         let element: IUIAutomationElement = match automation.ElementFromHandle(hwnd) {
@@ -124,7 +125,7 @@ pub fn get_window_text_content(hwnd: HWND) -> Result<Option<String>> {
         // 5. 使用受控遍历收集文本
         let start_time = Instant::now();
         let mut texts: Vec<String> = Vec::new();
-        
+
         walk_tree(&walker, &element, 0, &start_time, &mut texts);
 
         if texts.is_empty() {
@@ -142,7 +143,7 @@ pub fn get_window_text_content(hwnd: HWND) -> Result<Option<String>> {
 }
 
 /// 受控递归遍历 UI 树
-/// 
+///
 /// 性能熔断：
 /// - 深度限制：超过 MAX_TRAVERSAL_DEPTH 层立即截断
 /// - 时间限制：超过 MAX_TRAVERSAL_TIME_MS 毫秒立即截断
@@ -212,7 +213,6 @@ fn walk_tree(
         }
     }
 }
-
 
 /// 获取前台窗口句柄
 pub fn get_foreground_hwnd() -> Option<isize> {

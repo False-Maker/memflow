@@ -5,12 +5,8 @@
 
 // Re-export core types from memflow-core
 pub use memflow_core::ai::{
-    strip_json_code_fence,
-    fallback_filter_params,
-    FilterParams,
-    PromptTemplate,
+    fallback_filter_params, strip_json_code_fence, AgentConfig, FilterParams, PromptTemplate,
     PromptsConfig,
-    AgentConfig,
 };
 
 // Keep local submodules (they wrap/extend memflow-core modules)
@@ -103,10 +99,7 @@ fn calculate_timestamps(range: &str) -> (Option<i64>, Option<i64>) {
     }
 }
 
-async fn build_context_from_range(
-    _query: &str,
-    intent: &FilterParams,
-) -> Result<(String, usize)> {
+async fn build_context_from_range(_query: &str, intent: &FilterParams) -> Result<(String, usize)> {
     let (from_ts, to_ts) = if let Some(range) = &intent.date_range {
         calculate_timestamps(range)
     } else {
@@ -140,7 +133,8 @@ async fn build_context_from_range(
     let mut context_count = 0;
 
     for activity in activities {
-        let time_str = Local.timestamp_opt(activity.timestamp, 0)
+        let time_str = Local
+            .timestamp_opt(activity.timestamp, 0)
             .unwrap()
             .format("%H:%M:%S")
             .to_string();
@@ -155,19 +149,15 @@ async fn build_context_from_range(
                     ocr_text.trim()
                 ));
             } else {
-                 context_text.push_str(&format!(
+                context_text.push_str(&format!(
                     "[{}] 应用: {} | 窗口: {}\n\n",
-                    time_str,
-                    activity.app_name,
-                    activity.window_title
+                    time_str, activity.app_name, activity.window_title
                 ));
             }
         } else {
-             context_text.push_str(&format!(
+            context_text.push_str(&format!(
                 "[{}] 应用: {} | 窗口: {}\n\n",
-                time_str,
-                activity.app_name,
-                activity.window_title
+                time_str, activity.app_name, activity.window_title
             ));
         }
         context_count += 1;
@@ -178,13 +168,15 @@ async fn build_context_from_range(
 
 pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
     // 1. 解析意图
-    let intent = parse_query_intent(query).await.unwrap_or_else(|_| fallback_filter_params(query));
-    
+    let intent = parse_query_intent(query)
+        .await
+        .unwrap_or_else(|_| fallback_filter_params(query));
+
     // 2. 获取上下文
     let (mut context_text, mut context_count) = if intent.date_range.is_some() {
         match build_context_from_range(query, &intent).await {
-             Ok((text, count)) if count > 0 => (text, count),
-             _ => (String::new(), 0),
+            Ok((text, count)) if count > 0 => (text, count),
+            _ => (String::new(), 0),
         }
     } else {
         (String::new(), 0)
@@ -192,15 +184,16 @@ pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
 
     // 如果还没有上下文（意图解析未返回时间范围，或者时间范围搜索为空），则使用混合检索
     if context_count == 0 {
-         let searcher = HybridSearch::new();
-         // HybridSearch from core requires explicit embedding
-         let embedding = crate::vector_db::generate_embedding(query).await?;
-         let results = searcher.search_with_embedding(query, embedding, 5).await?;
-        
-         for result in results {
+        let searcher = HybridSearch::new();
+        // HybridSearch from core requires explicit embedding
+        let embedding = crate::vector_db::generate_embedding(query).await?;
+        let results = searcher.search_with_embedding(query, embedding, 5).await?;
+
+        for result in results {
             if let Ok(activity) = crate::db::get_activity_by_id(result.id).await {
                 // 简单起见，这里复用 formatting 逻辑
-                let time_str = Local.timestamp_opt(activity.timestamp, 0)
+                let time_str = Local
+                    .timestamp_opt(activity.timestamp, 0)
                     .unwrap()
                     .format("%Y-%m-%d %H:%M:%S")
                     .to_string();
@@ -221,15 +214,14 @@ pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
                 if !has_content {
                     context_text.push_str(&format!(
                         "[{}] 应用: {} | 窗口: {}\n\n",
-                        time_str,
-                        activity.app_name, activity.window_title
+                        time_str, activity.app_name, activity.window_title
                     ));
                 }
                 context_count += 1;
             }
         }
     }
-    
+
     tracing::info!(
         "Chat Context: {} items, {} chars (Intent: DateRange={:?})",
         context_count,
@@ -259,7 +251,9 @@ pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
                     "https://api.anthropic.com",
                 );
 
-                match chat_with_anthropic(query, &context_text, model_id, &provider_config, None).await {
+                match chat_with_anthropic(query, &context_text, model_id, &provider_config, None)
+                    .await
+                {
                     Ok(answer) => {
                         tracing::info!("使用 Anthropic API 生成回答，模型: {}", model_id);
                         return Ok(answer);
@@ -302,7 +296,8 @@ pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
                     "https://api.openai.com/v1",
                 );
 
-                match chat_with_openai(query, &context_text, model_id, &provider_config, None).await {
+                match chat_with_openai(query, &context_text, model_id, &provider_config, None).await
+                {
                     Ok(answer) => {
                         tracing::info!("使用 OpenAI API 生成回答，模型: {}", model_id);
                         return Ok(answer);
@@ -338,19 +333,20 @@ pub async fn chat(query: &str, _context: Vec<i64>) -> Result<String> {
     }
 }
 
-
 pub async fn chat_stream<F>(query: &str, _context: Vec<i64>, on_chunk: F) -> Result<()>
 where
     F: Fn(String) + Send + Sync + 'static,
 {
     // 1. 解析意图 (Time Awareness)
-    let intent = parse_query_intent(query).await.unwrap_or_else(|_| fallback_filter_params(query));
-    
+    let intent = parse_query_intent(query)
+        .await
+        .unwrap_or_else(|_| fallback_filter_params(query));
+
     // 2. 获取上下文
     let (mut context_text, mut context_count) = if intent.date_range.is_some() {
         match build_context_from_range(query, &intent).await {
-             Ok((text, count)) if count > 0 => (text, count),
-             _ => (String::new(), 0),
+            Ok((text, count)) if count > 0 => (text, count),
+            _ => (String::new(), 0),
         }
     } else {
         (String::new(), 0)
@@ -358,15 +354,16 @@ where
 
     // 如果还没有上下文，回退到 HybridSearch
     if context_count == 0 {
-         let searcher = HybridSearch::new();
-         // HybridSearch from core requires explicit embedding
-         let embedding = crate::vector_db::generate_embedding(query).await?;
-         let results = searcher.search_with_embedding(query, embedding, 5).await?;
-        
-         for result in results {
+        let searcher = HybridSearch::new();
+        // HybridSearch from core requires explicit embedding
+        let embedding = crate::vector_db::generate_embedding(query).await?;
+        let results = searcher.search_with_embedding(query, embedding, 5).await?;
+
+        for result in results {
             if let Ok(activity) = crate::db::get_activity_by_id(result.id).await {
                 // 简单起见，这里复用 formatting 逻辑
-                let time_str = Local.timestamp_opt(activity.timestamp, 0)
+                let time_str = Local
+                    .timestamp_opt(activity.timestamp, 0)
                     .unwrap()
                     .format("%Y-%m-%d %H:%M:%S")
                     .to_string();
@@ -387,8 +384,7 @@ where
                 if !has_content {
                     context_text.push_str(&format!(
                         "[{}] 应用: {} | 窗口: {}\n\n",
-                        time_str,
-                        activity.app_name, activity.window_title
+                        time_str, activity.app_name, activity.window_title
                     ));
                 }
                 context_count += 1;
@@ -427,13 +423,15 @@ where
 
                 // 调用新实现的流式函数
                 crate::ai::provider::chat_with_anthropic_stream(
-                    query, 
-                    &context_text, 
-                    model_id, 
-                    &provider_config, 
-                    None, 
-                    on_chunk
-                ).await.map(|_| ())
+                    query,
+                    &context_text,
+                    model_id,
+                    &provider_config,
+                    None,
+                    on_chunk,
+                )
+                .await
+                .map(|_| ())
             }
             Ok(None) => {
                 on_chunk(format!("⚠️ Missing Anthropic API Key for {}", model_id));
@@ -450,8 +448,17 @@ where
                     config.openai_base_url.clone(),
                     "https://api.openai.com/v1",
                 );
-                
-                crate::ai::provider::chat_with_openai_stream(query, &context_text, model_id, &provider_config, None, on_chunk).await.map(|_| ())
+
+                crate::ai::provider::chat_with_openai_stream(
+                    query,
+                    &context_text,
+                    model_id,
+                    &provider_config,
+                    None,
+                    on_chunk,
+                )
+                .await
+                .map(|_| ())
             }
             Ok(None) => {
                 on_chunk(format!("⚠️ Missing OpenAI API Key for {}", model_id));
@@ -487,7 +494,7 @@ pub async fn analyze_for_proposals(context_text: &str) -> Result<AiAnalysisResul
 
     let model_id = &config.chat_model;
     let is_anthropic = model_id.starts_with("claude-");
-    
+
     // 诊断日志：显示实际读取到的配置
     tracing::info!(
         "analyze_for_proposals: model={}, openai_base_url={:?}, is_anthropic={}",
@@ -495,7 +502,7 @@ pub async fn analyze_for_proposals(context_text: &str) -> Result<AiAnalysisResul
         config.openai_base_url,
         is_anthropic
     );
-    
+
     // 从外部配置加载系统提示词
     let system_prompt = get_analyze_proposals_prompt().await;
 
@@ -509,12 +516,13 @@ pub async fn analyze_for_proposals(context_text: &str) -> Result<AiAnalysisResul
                 );
 
                 chat_with_anthropic(
-                    "请分析活动记录并生成建议", 
-                    context_text, 
-                    model_id, 
-                    &provider_config, 
-                    Some(&system_prompt)
-                ).await?
+                    "请分析活动记录并生成建议",
+                    context_text,
+                    model_id,
+                    &provider_config,
+                    Some(&system_prompt),
+                )
+                .await?
             }
             Ok(None) => return Err(anyhow::anyhow!("未配置 Anthropic API Key")),
             Err(e) => return Err(anyhow::anyhow!("获取 API Key 失败: {}", e)),
@@ -529,12 +537,13 @@ pub async fn analyze_for_proposals(context_text: &str) -> Result<AiAnalysisResul
                 );
 
                 chat_with_openai(
-                    "请分析活动记录并生成建议", 
-                    context_text, 
-                    model_id, 
-                    &provider_config, 
-                    Some(&system_prompt)
-                ).await?
+                    "请分析活动记录并生成建议",
+                    context_text,
+                    model_id,
+                    &provider_config,
+                    Some(&system_prompt),
+                )
+                .await?
             }
             Ok(None) => return Err(anyhow::anyhow!("未配置 OpenAI API Key")),
             Err(e) => return Err(anyhow::anyhow!("获取 API Key 失败: {}", e)),
@@ -544,16 +553,22 @@ pub async fn analyze_for_proposals(context_text: &str) -> Result<AiAnalysisResul
     // 尝试解析 JSON（处理可能存在的 markdown 标记）
     let json_str = response.trim();
     let json_str = if json_str.starts_with("```json") {
-        json_str.trim_start_matches("```json").trim_end_matches("```").trim()
+        json_str
+            .trim_start_matches("```json")
+            .trim_end_matches("```")
+            .trim()
     } else if json_str.starts_with("```") {
-        json_str.trim_start_matches("```").trim_end_matches("```").trim()
+        json_str
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim()
     } else {
         json_str
     };
 
     let result: AiAnalysisResult = serde_json::from_str(json_str)
         .map_err(|e| anyhow::anyhow!("JSON 解析失败: {} - 原文: {}", e, json_str))?;
-    
+
     Ok(result)
 }
 
@@ -598,7 +613,13 @@ pub async fn parse_query_intent(query: &str) -> Result<FilterParams> {
 
                 match tokio::time::timeout(
                     llm_timeout,
-                    chat_with_anthropic(query, "", model_id, &provider_config, Some(&system_prompt)),
+                    chat_with_anthropic(
+                        query,
+                        "",
+                        model_id,
+                        &provider_config,
+                        Some(&system_prompt),
+                    ),
                 )
                 .await
                 {
@@ -714,7 +735,8 @@ mod tests {
 
     #[test]
     fn parses_plain_json_for_filter_params() {
-        let input = r#"{"app_name":null,"keywords":["rust"],"date_range":"last_week","has_ocr":true}"#;
+        let input =
+            r#"{"app_name":null,"keywords":["rust"],"date_range":"last_week","has_ocr":true}"#;
         let parsed = parse_filter_params_from_llm_response(input).unwrap();
         assert_eq!(parsed.app_name, None);
         assert_eq!(parsed.keywords, vec!["rust".to_string()]);

@@ -4,6 +4,7 @@
 
 mod mocks;
 mod protocol_test;
+mod tauri_concurrency_test;
 
 // Re-export mock types for use in other tests
 pub use mocks::mock_context::{MockContext, SystemInfo, WindowInfo};

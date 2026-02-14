@@ -65,7 +65,7 @@ impl std::error::Error for OcrStartupError {}
 static OCR_PROCESS: Lazy<Mutex<Option<Child>>> = Lazy::new(|| Mutex::new(None));
 
 /// 启动 OCR 服务
-/// 
+///
 /// 返回 Ok(()) 即使服务未完全就绪（允许后台初始化），
 /// 但会记录详细的诊断信息便于排查问题。
 pub fn start_service(app_handle: &AppHandle) -> Result<()> {
@@ -80,7 +80,7 @@ pub fn start_service(app_handle: &AppHandle) -> Result<()> {
             return Err(err.into());
         }
     }
-    
+
     tracing::info!("准备查找 OCR 服务脚本路径...");
     // 获取 Python 脚本路径
     let script_path = match get_ocr_server_path(app_handle) {
@@ -108,7 +108,11 @@ pub fn start_service(app_handle: &AppHandle) -> Result<()> {
         }
     };
 
-    tracing::info!("启动 OCR 服务: {} {}", python.display(), script_path.display());
+    tracing::info!(
+        "启动 OCR 服务: {} {}",
+        python.display(),
+        script_path.display()
+    );
 
     let log_path = app_handle
         .path()
@@ -159,10 +163,8 @@ pub fn start_service(app_handle: &AppHandle) -> Result<()> {
 
     if let Err(e) = quick_check {
         // 分析日志以提供更详细的错误诊断
-        let diagnosis = log_path
-            .as_ref()
-            .and_then(|p| diagnose_startup_failure(p));
-        
+        let diagnosis = log_path.as_ref().and_then(|p| diagnose_startup_failure(p));
+
         match diagnosis {
             Some(OcrStartupError::MissingDependency(dep)) => {
                 tracing::error!(
@@ -178,7 +180,8 @@ pub fn start_service(app_handle: &AppHandle) -> Result<()> {
                 if let Some(log_path) = &log_path {
                     tracing::warn!(
                         "OCR 服务启动未就绪: {} (详情请查看日志: {})",
-                        e, log_path.display()
+                        e,
+                        log_path.display()
                     );
                 } else {
                     tracing::warn!("OCR 服务启动未就绪: {}", e);
@@ -266,7 +269,7 @@ fn wait_for_service_with_child(child: &mut Child, timeout: Duration) -> Result<(
         }
         tracing::info!("Service not running yet. Checking child status...");
         if let Ok(Some(status)) = child.try_wait() {
-             tracing::info!("Child exited with status: {}", status);
+            tracing::info!("Child exited with status: {}", status);
             return Err(anyhow::anyhow!("OCR 进程异常退出: {}", status));
         }
         tracing::info!("Child running. Sleeping...");
@@ -279,14 +282,14 @@ fn wait_for_service_with_child(child: &mut Child, timeout: Duration) -> Result<(
 /// 分析日志文件，诊断启动失败的具体原因
 fn diagnose_startup_failure(log_path: &Path) -> Option<OcrStartupError> {
     let content = std::fs::read_to_string(log_path).ok()?;
-    
+
     // 从后往前查找错误信息（最近的错误）
     for line in content.lines().rev().take(200) {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        
+
         // 检测依赖缺失
         if trimmed.contains("ModuleNotFoundError") || trimmed.contains("No module named") {
             // 提取缺失的模块名
@@ -298,25 +301,22 @@ fn diagnose_startup_failure(log_path: &Path) -> Option<OcrStartupError> {
             }
             return Some(OcrStartupError::MissingDependency(trimmed.to_string()));
         }
-        
+
         if trimmed.contains("ImportError:") {
             return Some(OcrStartupError::MissingDependency(trimmed.to_string()));
         }
-        
+
         // 检测端口绑定失败
         if trimmed.contains("Address already in use") || trimmed.contains("bind failed") {
             return Some(OcrStartupError::PortInUse(OCR_SERVICE_PORT));
         }
-        
+
         // 检测权限问题
         if trimmed.contains("Permission denied") {
-            return Some(OcrStartupError::Other(format!(
-                "权限被拒绝: {}",
-                trimmed
-            )));
+            return Some(OcrStartupError::Other(format!("权限被拒绝: {}", trimmed)));
         }
     }
-    
+
     None
 }
 
@@ -440,14 +440,3 @@ fn find_python() -> Result<std::path::PathBuf> {
         请安装 Python 3.8+ 并确保在系统 PATH 中"
     ))
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -45,9 +45,15 @@ pub struct AgentConfig {
     pub session_gap_minutes: i64,
 }
 
-fn default_context_max_items() -> usize { 40 }
-fn default_context_max_chars_per_ocr() -> usize { 100 }
-fn default_session_gap_minutes() -> i64 { 5 }
+fn default_context_max_items() -> usize {
+    40
+}
+fn default_context_max_chars_per_ocr() -> usize {
+    100
+}
+fn default_session_gap_minutes() -> i64 {
+    5
+}
 
 impl Default for PromptsConfig {
     fn default() -> Self {
@@ -108,7 +114,7 @@ JSON 结构如下：
     }
 }
 
-static PROMPTS: Lazy<Arc<RwLock<PromptsConfig>>> = 
+static PROMPTS: Lazy<Arc<RwLock<PromptsConfig>>> =
     Lazy::new(|| Arc::new(RwLock::new(PromptsConfig::default())));
 
 /// 从资源目录初始化 prompts 配置
@@ -117,18 +123,16 @@ pub async fn init_prompts(resource_path: Option<PathBuf>) -> Result<()> {
         let prompts_path = path.join("prompts.json");
         if prompts_path.exists() {
             match std::fs::read_to_string(&prompts_path) {
-                Ok(content) => {
-                    match serde_json::from_str::<PromptsConfig>(&content) {
-                        Ok(config) => {
-                            tracing::info!("从 {:?} 加载 prompts 配置成功", prompts_path);
-                            config
-                        }
-                        Err(e) => {
-                            tracing::warn!("解析 prompts.json 失败: {}, 使用默认配置", e);
-                            PromptsConfig::default()
-                        }
+                Ok(content) => match serde_json::from_str::<PromptsConfig>(&content) {
+                    Ok(config) => {
+                        tracing::info!("从 {:?} 加载 prompts 配置成功", prompts_path);
+                        config
                     }
-                }
+                    Err(e) => {
+                        tracing::warn!("解析 prompts.json 失败: {}, 使用默认配置", e);
+                        PromptsConfig::default()
+                    }
+                },
                 Err(e) => {
                     tracing::warn!("读取 prompts.json 失败: {}, 使用默认配置", e);
                     PromptsConfig::default()
@@ -142,7 +146,7 @@ pub async fn init_prompts(resource_path: Option<PathBuf>) -> Result<()> {
         tracing::info!("未指定资源路径，使用默认 prompts 配置");
         PromptsConfig::default()
     };
-    
+
     *PROMPTS.write().await = config;
     Ok(())
 }
@@ -176,4 +180,3 @@ pub async fn get_analyze_proposals_prompt() -> String {
 pub async fn get_agent_config() -> AgentConfig {
     PROMPTS.read().await.agent.clone()
 }
-

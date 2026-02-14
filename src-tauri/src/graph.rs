@@ -59,7 +59,7 @@ struct ActivityRecord {
 pub async fn build_graph() -> Result<GraphData> {
     // 检查缓存是否有效
     let current_count = db::get_activity_count().await.unwrap_or(0);
-    
+
     {
         let cache = GRAPH_CACHE.read().unwrap();
         if let Some(ref cached_data) = cache.data {
@@ -77,9 +77,9 @@ pub async fn build_graph() -> Result<GraphData> {
             }
         }
     }
-    
+
     tracing::info!("重建知识图谱 (活动数: {})", current_count);
-    
+
     // 1. 提取实体（应用、文档、时间段）
     let activities = db::get_activities(1000).await?;
     let records: Vec<ActivityRecord> = activities
@@ -92,7 +92,7 @@ pub async fn build_graph() -> Result<GraphData> {
         .collect();
 
     let graph = build_graph_from_records(&records);
-    
+
     // 更新缓存
     {
         let mut cache = GRAPH_CACHE.write().unwrap();
@@ -100,21 +100,21 @@ pub async fn build_graph() -> Result<GraphData> {
         cache.last_activity_count = current_count;
         cache.last_updated = Some(std::time::Instant::now());
     }
-    
+
     Ok(graph)
 }
 
 /// 强制重建图谱（忽略缓存）
 pub async fn rebuild_graph_force() -> Result<GraphData> {
     tracing::info!("强制重建知识图谱");
-    
+
     // 清除缓存
     {
         let mut cache = GRAPH_CACHE.write().unwrap();
         cache.data = None;
         cache.last_updated = None;
     }
-    
+
     // 重新构建
     build_graph().await
 }
@@ -209,11 +209,11 @@ fn build_graph_from_records(records: &[ActivityRecord]) -> GraphData {
 fn extract_keywords_for_graph(text: &str) -> Vec<String> {
     // 优先使用 TF-IDF 提取高质量关键词
     let tfidf_keywords = extract_keywords_tfidf(text, 3);
-    
+
     if !tfidf_keywords.is_empty() {
         return tfidf_keywords;
     }
-    
+
     // 回退到普通分词提取
     let options = KeywordOptions {
         max_keywords: 5,
@@ -221,7 +221,7 @@ fn extract_keywords_for_graph(text: &str) -> Vec<String> {
         filter_stopwords: true,
         filter_numbers: true,
     };
-    
+
     extract_keywords(text, Some(options))
 }
 

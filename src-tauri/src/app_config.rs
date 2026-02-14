@@ -64,17 +64,17 @@ pub async fn init_config(app_handle: AppHandle) -> Result<()> {
 
 async fn save_config_internal(config_path: &PathBuf, config: &AppConfig) -> Result<()> {
     let content = serde_json::to_string_pretty(config)?;
-    
+
     // 原子性写入：先写临时文件，再重命名
     let temp_path = config_path.with_extension("json.tmp");
     std::fs::write(&temp_path, &content)?;
-    
+
     // Windows 上 rename 不会覆盖已存在文件，需要先删除
     if config_path.exists() {
         std::fs::remove_file(config_path)?;
     }
     std::fs::rename(&temp_path, config_path)?;
-    
+
     tracing::debug!("配置已保存到: {:?}", config_path);
     Ok(())
 }

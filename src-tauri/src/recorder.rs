@@ -80,7 +80,7 @@ fn adjust_heartbeat(on_duplicate: bool) {
     let base = BASE_INTERVAL_MS.load(Ordering::Relaxed);
     let max = 60_000_u64; // Max 60s
     let step = 500_u64; // Step 500ms (was 5s)
-    
+
     loop {
         let current = HEARTBEAT_MS.load(Ordering::Relaxed);
         let next = if on_duplicate {
@@ -89,12 +89,12 @@ fn adjust_heartbeat(on_duplicate: bool) {
             // Restore towards base interval properly
             // If current > base, decrease. If current < base (shouldn't happen), set to base.
             if current > base {
-                 current.saturating_sub(step).max(base)
+                current.saturating_sub(step).max(base)
             } else {
                 base
             }
         };
-        
+
         if HEARTBEAT_MS
             .compare_exchange(current, next, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
@@ -115,7 +115,7 @@ async fn log_to_frontend(msg: &str) {
 
 async fn recording_loop() {
     use crate::win_event::{EventDrivenRecorder, EventLoopConfig, WindowEvent};
-    
+
     log_to_frontend("Starting event-driven recording_loop...").await;
 
     // 获取配置
@@ -139,7 +139,7 @@ async fn recording_loop() {
     // 初始化间隔
     let initial_interval = config.recording_interval.max(100); // 最小 100ms
     set_base_interval(initial_interval);
-    
+
     // 初始化事件驱动录制器
     let event_config = EventLoopConfig {
         track_foreground: true,
@@ -149,7 +149,7 @@ async fn recording_loop() {
     };
     let mut event_recorder = EventDrivenRecorder::new(event_config);
     let mut event_rx = event_recorder.start();
-    
+
     // 事件防抖计时器：500ms 内的连续事件只处理最后一个
     let mut last_capture_time = std::time::Instant::now();
     let debounce_duration = Duration::from_millis(500);
@@ -196,7 +196,7 @@ async fn recording_loop() {
             }
         }
     }
-    
+
     // 停止事件录制器
     event_recorder.stop();
     log_to_frontend("Exited event-driven recording loop").await;
@@ -304,30 +304,31 @@ async fn capture_and_save() -> Result<()> {
     let uia_ms = t_uia.elapsed().as_millis();
 
     let t_capture = std::time::Instant::now();
-    let (webp_bytes, current_hash) = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, u64)> {
-        let screenshot = capture_screen()?;
-        let current_hash = calculate_phash_u64(&screenshot)?;
+    let (webp_bytes, current_hash) =
+        tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, u64)> {
+            let screenshot = capture_screen()?;
+            let current_hash = calculate_phash_u64(&screenshot)?;
 
-        // Resolution Scaling
-        let scale = config.target_resolution_scale;
-        let final_image = if (scale - 1.0).abs() > 0.01 && scale > 0.0 && scale < 1.0 {
-             let new_width = (screenshot.width() as f32 * scale) as u32;
-             let new_height = (screenshot.height() as f32 * scale) as u32;
-             screenshot.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
-        } else {
-             screenshot
-        };
+            // Resolution Scaling
+            let scale = config.target_resolution_scale;
+            let final_image = if (scale - 1.0).abs() > 0.01 && scale > 0.0 && scale < 1.0 {
+                let new_width = (screenshot.width() as f32 * scale) as u32;
+                let new_height = (screenshot.height() as f32 * scale) as u32;
+                screenshot.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
+            } else {
+                screenshot
+            };
 
-        let rgba_image = final_image.to_rgba8();
-        let encoder =
-            webp::Encoder::from_rgba(&rgba_image, rgba_image.width(), rgba_image.height());
-        
-        let quality = config.compression_quality as f32;
-        let webp_memory = encoder.encode(quality);
+            let rgba_image = final_image.to_rgba8();
+            let encoder =
+                webp::Encoder::from_rgba(&rgba_image, rgba_image.width(), rgba_image.height());
 
-        Ok((webp_memory.to_vec(), current_hash))
-    })
-    .await??;
+            let quality = config.compression_quality as f32;
+            let webp_memory = encoder.encode(quality);
+
+            Ok((webp_memory.to_vec(), current_hash))
+        })
+        .await??;
 
     let capture_ms = t_capture.elapsed().as_millis();
     let phash_str = format!("{:016x}", current_hash);
@@ -344,7 +345,7 @@ async fn capture_and_save() -> Result<()> {
     // 6. 智能混合去重：只有当画面和文本都没变时，才跳过
     let last_phash = LAST_PHASH.lock().await.clone();
     let last_text_hash = LAST_TEXT_HASH.lock().await.clone();
-    
+
     let visual_changed = if let Some(ref last) = last_phash {
         if let Some(last_hash) = parse_phash(last) {
             let distance = hamming_distance(current_hash, last_hash);
@@ -359,21 +360,19 @@ async fn capture_and_save() -> Result<()> {
     let text_changed = match (&current_text_hash, &last_text_hash) {
         (Some(curr), Some(last)) => curr != last,
         (Some(_), None) | (None, Some(_)) => true, // 一方有文本一方没有视为变化
-        (None, None) => false, // 都没有文本视为未变化
+        (None, None) => false,                     // 都没有文本视为未变化
     };
 
     if !visual_changed && !text_changed {
         // 画面和文本都没变，跳过保存
-        tracing::debug!(
-            "检测到重复帧：视觉未变，文本未变，跳过保存"
-        );
+        tracing::debug!("检测到重复帧：视觉未变，文本未变，跳过保存");
         adjust_heartbeat(true);
         let _ = tokio::spawn(async {
             let _ = db::increment_skipped_stat("duplicate_frame").await;
         });
         return Ok(());
     }
-    
+
     // 有变化时记录原因
     tracing::debug!(
         "检测到变化：visual_changed={}, text_changed={}",
@@ -479,7 +478,7 @@ async fn capture_and_save() -> Result<()> {
             tracing::error!("更新 UIA 文本失败: {}", e);
         } else {
             tracing::info!("使用 UIA 文本更新数据库成功，跳过 OCR");
-            
+
             // 发送 OCR 更新事件到前端（实际上是 UIA 文本）
             if let Some(app_handle) = APP_HANDLE.lock().await.as_ref() {
                 use tauri::Emitter;
@@ -531,7 +530,7 @@ fn capture_screen() -> Result<DynamicImage> {
     if monitors.is_empty() {
         return Err(anyhow::anyhow!("未找到显示器"));
     }
-    
+
     // 如果只有一个显示器，直接返回（优化单屏场景）
     if monitors.len() == 1 {
         let monitor = &monitors[0];
@@ -546,28 +545,36 @@ fn capture_screen() -> Result<DynamicImage> {
             .ok_or_else(|| anyhow::anyhow!("无法创建图像"))?;
         return Ok(DynamicImage::ImageRgba8(rgba_image));
     }
-    
+
     // 多显示器：计算画布边界（bounding box）
     let min_x = monitors.iter().map(|m| m.x()).min().unwrap_or(0);
     let min_y = monitors.iter().map(|m| m.y()).min().unwrap_or(0);
-    let max_x = monitors.iter().map(|m| m.x() + m.width() as i32).max().unwrap_or(1920);
-    let max_y = monitors.iter().map(|m| m.y() + m.height() as i32).max().unwrap_or(1080);
-    
+    let max_x = monitors
+        .iter()
+        .map(|m| m.x() + m.width() as i32)
+        .max()
+        .unwrap_or(1920);
+    let max_y = monitors
+        .iter()
+        .map(|m| m.y() + m.height() as i32)
+        .max()
+        .unwrap_or(1080);
+
     let canvas_width = (max_x - min_x) as u32;
     let canvas_height = (max_y - min_y) as u32;
-    
+
     tracing::info!(
         "全景拼接：检测到 {} 个显示器，画布尺寸 {}x{}",
         monitors.len(),
         canvas_width,
         canvas_height
     );
-    
+
     // 使用 std::thread 并行采集所有显示器截图
     // （xcap::Monitor 不支持 Send，所以我们在每个线程中重新获取 monitors）
     let num_monitors = monitors.len();
     drop(monitors); // 释放原始 monitors 以允许线程内重新获取
-    
+
     let captures: Vec<_> = (0..num_monitors)
         .map(|idx| {
             let min_x = min_x;
@@ -584,7 +591,7 @@ fn capture_screen() -> Result<DynamicImage> {
                 let monitor = &monitors[idx];
                 let x_offset = (monitor.x() - min_x) as u32;
                 let y_offset = (monitor.y() - min_y) as u32;
-                
+
                 let image_buffer = monitor.capture_image()?;
                 let width = image_buffer.width();
                 let height = image_buffer.height();
@@ -592,36 +599,45 @@ fn capture_screen() -> Result<DynamicImage> {
                 for p in image_buffer.pixels() {
                     raw_pixels.extend_from_slice(&p.0);
                 }
-                
+
                 let rgba_image = image::RgbaImage::from_raw(width, height, raw_pixels)
                     .ok_or_else(|| anyhow::anyhow!("无法创建图像"))?;
-                
+
                 Ok((rgba_image, x_offset, y_offset))
             })
         })
         .collect();
-    
+
     // 等待所有线程完成并收集结果
     let results: Vec<_> = captures
         .into_iter()
-        .map(|handle| handle.join().unwrap_or_else(|_| Err(anyhow::anyhow!("线程 panic"))))
+        .map(|handle| {
+            handle
+                .join()
+                .unwrap_or_else(|_| Err(anyhow::anyhow!("线程 panic")))
+        })
         .collect();
-    
+
     // 创建空白画布（RGBA，黑色背景）
     let mut panorama = image::RgbaImage::new(canvas_width, canvas_height);
-    
+
     // 将每个显示器的截图贴到画布上
     for result in results {
         match result {
             Ok((monitor_img, x_offset, y_offset)) => {
-                image::imageops::overlay(&mut panorama, &monitor_img, x_offset as i64, y_offset as i64);
+                image::imageops::overlay(
+                    &mut panorama,
+                    &monitor_img,
+                    x_offset as i64,
+                    y_offset as i64,
+                );
             }
             Err(e) => {
                 tracing::warn!("显示器截图失败: {:?}，跳过该显示器", e);
             }
         }
     }
-    
+
     Ok(DynamicImage::ImageRgba8(panorama))
 }
 
@@ -692,7 +708,8 @@ mod tests {
         // 多位不同
         assert_eq!(hamming_distance(0x0000000000000000, 0x0000000000000003), 2); // 2 bits
         assert_eq!(hamming_distance(0x0000000000000000, 0x000000000000000F), 4); // 4 bits
-        assert_eq!(hamming_distance(0x0000000000000000, 0x00000000000000FF), 8); // 8 bits
+        assert_eq!(hamming_distance(0x0000000000000000, 0x00000000000000FF), 8);
+        // 8 bits
     }
 
     #[test]
@@ -723,7 +740,7 @@ mod tests {
 
         let distance = hamming_distance(hash1, hash2);
         assert_eq!(distance, 5);
-        
+
         // 距离 = 阈值，应该认为是相似的
         assert!(distance <= DEDUP_HAMMING_THRESHOLD);
 
@@ -737,15 +754,13 @@ mod tests {
     #[test]
     fn test_calculate_phash_deterministic() {
         // 创建一个简单的测试图像
-        let img = image::DynamicImage::ImageRgba8(
-            image::RgbaImage::from_fn(100, 100, |x, y| {
-                if (x + y) % 2 == 0 {
-                    image::Rgba([255, 255, 255, 255])
-                } else {
-                    image::Rgba([0, 0, 0, 255])
-                }
-            })
-        );
+        let img = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(100, 100, |x, y| {
+            if (x + y) % 2 == 0 {
+                image::Rgba([255, 255, 255, 255])
+            } else {
+                image::Rgba([0, 0, 0, 255])
+            }
+        }));
 
         // 计算两次哈希，应该相同
         let hash1 = calculate_phash_u64(&img).unwrap();
@@ -756,47 +771,52 @@ mod tests {
     #[test]
     fn test_calculate_phash_different_images() {
         // 纯白图像
-        let white = image::DynamicImage::ImageRgba8(
-            image::RgbaImage::from_fn(100, 100, |_, _| image::Rgba([255, 255, 255, 255]))
-        );
-        
+        let white = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(100, 100, |_, _| {
+            image::Rgba([255, 255, 255, 255])
+        }));
+
         // 纯黑图像
-        let black = image::DynamicImage::ImageRgba8(
-            image::RgbaImage::from_fn(100, 100, |_, _| image::Rgba([0, 0, 0, 255]))
-        );
+        let black = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(100, 100, |_, _| {
+            image::Rgba([0, 0, 0, 255])
+        }));
 
         let hash_white = calculate_phash_u64(&white).unwrap();
         let hash_black = calculate_phash_u64(&black).unwrap();
-        
+
         // 纯色图像的 dHash 都是 0（因为相邻像素相同）
         // 但它们应该相等（都是纯色）
-        assert_eq!(hash_white, hash_black, "Solid color images should have same dHash (all 0)");
+        assert_eq!(
+            hash_white, hash_black,
+            "Solid color images should have same dHash (all 0)"
+        );
     }
 
     #[test]
     fn test_calculate_phash_gradient() {
         // 水平渐变（从左到右变亮）
-        let gradient_lr = image::DynamicImage::ImageRgba8(
-            image::RgbaImage::from_fn(100, 100, |x, _| {
+        let gradient_lr =
+            image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(100, 100, |x, _| {
                 let v = (x * 255 / 99) as u8;
                 image::Rgba([v, v, v, 255])
-            })
-        );
+            }));
 
         // 水平渐变（从右到左变亮）- 反向
-        let gradient_rl = image::DynamicImage::ImageRgba8(
-            image::RgbaImage::from_fn(100, 100, |x, _| {
+        let gradient_rl =
+            image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(100, 100, |x, _| {
                 let v = ((99 - x) * 255 / 99) as u8;
                 image::Rgba([v, v, v, 255])
-            })
-        );
+            }));
 
         let hash_lr = calculate_phash_u64(&gradient_lr).unwrap();
         let hash_rl = calculate_phash_u64(&gradient_rl).unwrap();
 
         // 反向渐变应该有很大的 Hamming 距离
         let distance = hamming_distance(hash_lr, hash_rl);
-        assert!(distance > 32, "Opposite gradients should have high Hamming distance: {}", distance);
+        assert!(
+            distance > 32,
+            "Opposite gradients should have high Hamming distance: {}",
+            distance
+        );
     }
 
     #[test]

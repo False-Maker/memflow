@@ -2,8 +2,8 @@
 // 读取 image 目录下所有图片，使用 OCR 识别，并将结果写入文档
 use memflow::ocr::{process_image, OcrConfig};
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
 
     // 获取 image 目录路径（相对于项目根目录）
     let image_dir = Path::new("image");
-    
+
     // 如果当前目录在 src-tauri/examples，需要向上两级到项目根目录
     let current_dir = std::env::current_dir()?;
     let image_dir = if image_dir.exists() {
@@ -81,23 +81,30 @@ async fn main() -> anyhow::Result<()> {
 
     println!("找到 {} 张图片:\n", image_files.len());
     for (i, file) in image_files.iter().enumerate() {
-        println!("  {}. {}", i + 1, file.file_name().unwrap().to_string_lossy());
+        println!(
+            "  {}. {}",
+            i + 1,
+            file.file_name().unwrap().to_string_lossy()
+        );
     }
     println!();
 
     // 配置 OCR
-    let ocr_config = OcrConfig::new("rapidocr")
-        .with_redaction(false); // 测试时禁用脱敏，查看原始结果
+    let ocr_config = OcrConfig::new("rapidocr").with_redaction(false); // 测试时禁用脱敏，查看原始结果
 
     // 创建输出文档路径
     let output_file = Path::new("ocr_results.md");
-    
+
     // 打开或创建输出文件
     let mut output = fs::File::create(&output_file)?;
-    
+
     // 写入文档头部
     writeln!(output, "# OCR 识别结果\n")?;
-    writeln!(output, "生成时间: {}\n", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"))?;
+    writeln!(
+        output,
+        "生成时间: {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+    )?;
     writeln!(output, "图片目录: `{}`\n", image_dir.display())?;
     writeln!(output, "共识别 {} 张图片\n\n", image_files.len())?;
     writeln!(output, "---\n")?;
@@ -108,12 +115,14 @@ async fn main() -> anyhow::Result<()> {
 
     for (index, image_path) in image_files.iter().enumerate() {
         let file_name = image_path.file_name().unwrap().to_string_lossy();
-        println!("[{}/{}] 正在处理: {}...", index + 1, image_files.len(), file_name);
+        println!(
+            "[{}/{}] 正在处理: {}...",
+            index + 1,
+            image_files.len(),
+            file_name
+        );
 
-        match process_image(
-            image_path.to_str().unwrap(),
-            ocr_config.clone(),
-        ).await {
+        match process_image(image_path.to_str().unwrap(), ocr_config.clone()).await {
             Ok(text) => {
                 success_count += 1;
                 println!("  ✓ 识别成功 (长度: {} 字符)", text.len());
@@ -121,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
                 // 写入结果到文档
                 writeln!(output, "## {}. {}\n", index + 1, file_name)?;
                 writeln!(output, "**文件路径**: `{}`\n", image_path.display())?;
-                
+
                 if text.trim().is_empty() {
                     writeln!(output, "**识别结果**: *（未识别到文本）*\n")?;
                 } else {
@@ -130,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
                     writeln!(output, "{}", text)?;
                     writeln!(output, "```\n")?;
                 }
-                
+
                 writeln!(output, "---\n")?;
             }
             Err(e) => {
@@ -163,4 +172,3 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-

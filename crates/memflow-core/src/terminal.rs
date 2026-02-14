@@ -71,9 +71,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::sync::RwLock;
-use once_cell::sync::Lazy;
 
 /// Errors that can occur when capturing terminal output
 #[derive(Debug, Error)]
@@ -158,7 +158,11 @@ const CACHE_FRESHNESS_WINDOW: Duration = Duration::from_secs(1);
 /// Check if background polling is enabled via environment variable
 fn is_background_polling_enabled() -> bool {
     std::env::var("MEMFLOW_TERMINAL_CACHE_POLLING")
-        .map(|val| val.eq_ignore_ascii_case("1") || val.eq_ignore_ascii_case("true") || val.eq_ignore_ascii_case("yes"))
+        .map(|val| {
+            val.eq_ignore_ascii_case("1")
+                || val.eq_ignore_ascii_case("true")
+                || val.eq_ignore_ascii_case("yes")
+        })
         .unwrap_or(false)
 }
 
@@ -361,7 +365,9 @@ fn is_modern_terminal(hwnd: windows::Win32::Foundation::HWND) -> Result<bool, Te
         let class_indicators = ["Cascadia", "CASCADIA_HOSTING", "WindowsTerminal"];
         let title_indicators = ["Windows Terminal", "PowerShell", "Ubuntu", "WSL"];
 
-        let is_modern = class_indicators.iter().any(|ind| class_name_str.contains(ind))
+        let is_modern = class_indicators
+            .iter()
+            .any(|ind| class_name_str.contains(ind))
             || title_indicators.iter().any(|ind| title_str.contains(ind));
 
         Ok(is_modern)
@@ -374,8 +380,8 @@ async fn try_console_api_capture(lines: usize) -> Result<String, TerminalError> 
     use windows::{
         Win32::Foundation::GetLastError,
         Win32::System::Console::{
-            AttachConsole, GetConsoleScreenBufferInfo, GetStdHandle, ReadConsoleOutputW,
-            CHAR_INFO, CONSOLE_SCREEN_BUFFER_INFO, COORD, SMALL_RECT, STD_OUTPUT_HANDLE,
+            AttachConsole, GetConsoleScreenBufferInfo, GetStdHandle, ReadConsoleOutputW, CHAR_INFO,
+            CONSOLE_SCREEN_BUFFER_INFO, COORD, SMALL_RECT, STD_OUTPUT_HANDLE,
         },
     };
 
@@ -383,7 +389,9 @@ async fn try_console_api_capture(lines: usize) -> Result<String, TerminalError> 
     let target_pid = find_console_terminal_pid().await?;
 
     if target_pid == 0 {
-        return Err(TerminalError::CaptureFailed("No console terminal found".to_string()));
+        return Err(TerminalError::CaptureFailed(
+            "No console terminal found".to_string(),
+        ));
     }
 
     // Attach to the target console
@@ -433,8 +441,8 @@ async fn try_console_api_capture(lines: usize) -> Result<String, TerminalError> 
         }
 
         // Allocate buffer for CHAR_INFO
-        let mut char_buffer: Vec<CHAR_INFO> = vec![unsafe { std::mem::zeroed() };
-            buffer_width as usize * buffer_height as usize];
+        let mut char_buffer: Vec<CHAR_INFO> =
+            vec![unsafe { std::mem::zeroed() }; buffer_width as usize * buffer_height as usize];
 
         let mut read_region = SMALL_RECT {
             Left: 0,
@@ -515,16 +523,20 @@ async fn try_console_api_capture(lines: usize) -> Result<String, TerminalError> 
 
 /// Capture terminal output using UI Automation (fallback for modern terminals)
 #[cfg(target_os = "windows")]
-async fn capture_with_uia(hwnd: windows::Win32::Foundation::HWND, lines: usize) -> Result<String, TerminalError> {
+async fn capture_with_uia(
+    hwnd: windows::Win32::Foundation::HWND,
+    lines: usize,
+) -> Result<String, TerminalError> {
+    use std::time::Instant;
     use windows::{
         Win32::System::Com::{
-            CoInitializeEx, CoUninitialize, CoCreateInstance, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+            CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
+            COINIT_MULTITHREADED,
         },
         Win32::UI::Accessibility::{
             CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
         },
     };
-    use std::time::Instant;
 
     unsafe {
         // Initialize COM
@@ -542,16 +554,17 @@ async fn capture_with_uia(hwnd: windows::Win32::Foundation::HWND, lines: usize) 
         });
 
         // Create UIA instance
-        let automation: IUIAutomation = match CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) {
-            Ok(a) => a,
-            Err(e) => {
-                tracing::debug!("Failed to create UIA instance: {:?}", e);
-                return Err(TerminalError::CaptureFailed(format!(
-                    "UIA instance creation failed: {:?}",
-                    e
-                )));
-            }
-        };
+        let automation: IUIAutomation =
+            match CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) {
+                Ok(a) => a,
+                Err(e) => {
+                    tracing::debug!("Failed to create UIA instance: {:?}", e);
+                    return Err(TerminalError::CaptureFailed(format!(
+                        "UIA instance creation failed: {:?}",
+                        e
+                    )));
+                }
+            };
 
         // Get window element
         let element: IUIAutomationElement = match automation.ElementFromHandle(hwnd) {
@@ -617,11 +630,11 @@ fn walk_terminal_tree(
     texts: &mut Vec<String>,
 ) {
     use windows::{
-        Win32::UI::Accessibility::{
-            UIA_TextControlTypeId, UIA_EditControlTypeId, UIA_DocumentControlTypeId,
-            UIA_ControlTypePropertyId, UIA_NamePropertyId, UIA_ValueValuePropertyId,
-        },
         core::BSTR,
+        Win32::UI::Accessibility::{
+            UIA_ControlTypePropertyId, UIA_DocumentControlTypeId, UIA_EditControlTypeId,
+            UIA_NamePropertyId, UIA_TextControlTypeId, UIA_ValueValuePropertyId,
+        },
     };
 
     const MAX_TRAVERSAL_DEPTH: u32 = 10;
@@ -689,14 +702,14 @@ fn walk_terminal_tree(
 async fn find_console_terminal_pid() -> Result<u32, TerminalError> {
     use std::cell::RefCell;
     use windows::{
-        Win32::Foundation::{BOOL, CloseHandle, HWND, LPARAM},
+        Win32::Foundation::{CloseHandle, BOOL, HWND, LPARAM},
         Win32::System::Threading::{
-            OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ, PROCESS_NAME_FORMAT,
-            QueryFullProcessImageNameW,
+            OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+            PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
         },
         Win32::UI::WindowsAndMessaging::{
-            EnumWindows, GetClassNameW, GetWindowThreadProcessId, GetWindowTextLengthW,
-            GetWindowTextW,
+            EnumWindows, GetClassNameW, GetWindowTextLengthW, GetWindowTextW,
+            GetWindowThreadProcessId,
         },
     };
 
@@ -709,10 +722,7 @@ async fn find_console_terminal_pid() -> Result<u32, TerminalError> {
     let target_pid = RefCell::new(0u32);
 
     unsafe {
-        unsafe extern "system" fn enumerate_console_windows(
-            hwnd: HWND,
-            lparam: LPARAM,
-        ) -> BOOL {
+        unsafe extern "system" fn enumerate_console_windows(hwnd: HWND, lparam: LPARAM) -> BOOL {
             let target_pid = &*(lparam.0 as *const RefCell<u32>);
 
             // Get window class name
@@ -725,7 +735,9 @@ async fn find_console_terminal_pid() -> Result<u32, TerminalError> {
             };
 
             // Check if this is a console window
-            let is_console = TERMINAL_CLASSES.iter().any(|tc| class_name_str.contains(tc));
+            let is_console = TERMINAL_CLASSES
+                .iter()
+                .any(|tc| class_name_str.contains(tc));
 
             if is_console {
                 // Get process ID
@@ -757,7 +769,11 @@ async fn find_console_terminal_pid() -> Result<u32, TerminalError> {
         }
 
         unsafe fn get_process_name_internal(process_id: u32) -> anyhow::Result<String> {
-            let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, process_id)?;
+            let handle = OpenProcess(
+                PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+                false,
+                process_id,
+            )?;
 
             let mut name = [0u16; 512];
             let mut size = name.len() as u32;
@@ -931,12 +947,12 @@ pub async fn detect_terminals() -> Result<Vec<TerminalInfo>, TerminalError> {
     {
         detect_terminals_windows().await
     }
-    
+
     #[cfg(target_os = "macos")]
     {
         detect_terminals_macos().await
     }
-    
+
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         Err(TerminalError::PlatformNotSupported)
@@ -947,10 +963,14 @@ pub async fn detect_terminals() -> Result<Vec<TerminalInfo>, TerminalError> {
 async fn detect_terminals_windows() -> Result<Vec<TerminalInfo>, TerminalError> {
     use std::cell::RefCell;
     use windows::{
-        Win32::Foundation::{BOOL, HWND, LPARAM, CloseHandle},
-        Win32::System::Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ, PROCESS_NAME_FORMAT, QueryFullProcessImageNameW},
+        Win32::Foundation::{CloseHandle, BOOL, HWND, LPARAM},
+        Win32::System::Threading::{
+            OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+            PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+        },
         Win32::UI::WindowsAndMessaging::{
-            EnumWindows, GetClassNameW, GetWindowThreadProcessId, GetWindowTextLengthW, GetWindowTextW,
+            EnumWindows, GetClassNameW, GetWindowTextLengthW, GetWindowTextW,
+            GetWindowThreadProcessId,
         },
     };
 
@@ -1000,7 +1020,9 @@ async fn detect_terminals_windows() -> Result<Vec<TerminalInfo>, TerminalError> 
             let process_name = get_process_name(process_id).unwrap_or_else(|_| String::new());
 
             // Check if this is a terminal by class name or process name
-            let is_terminal_class = TERMINAL_CLASSES.iter().any(|tc| class_name_str.contains(tc));
+            let is_terminal_class = TERMINAL_CLASSES
+                .iter()
+                .any(|tc| class_name_str.contains(tc));
             let is_terminal_process = TERMINAL_PROCESSES
                 .iter()
                 .any(|tp| process_name.eq_ignore_ascii_case(tp));
@@ -1027,11 +1049,20 @@ async fn detect_terminals_windows() -> Result<Vec<TerminalInfo>, TerminalError> 
         }
 
         unsafe fn get_process_name(process_id: u32) -> anyhow::Result<String> {
-            let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, process_id)?;
+            let handle = OpenProcess(
+                PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+                false,
+                process_id,
+            )?;
 
             let mut name = [0u16; 512];
             let mut size = name.len() as u32;
-            QueryFullProcessImageNameW(handle, PROCESS_NAME_FORMAT(0), windows::core::PWSTR(name.as_mut_ptr()), &mut size)?;
+            QueryFullProcessImageNameW(
+                handle,
+                PROCESS_NAME_FORMAT(0),
+                windows::core::PWSTR(name.as_mut_ptr()),
+                &mut size,
+            )?;
 
             let _ = CloseHandle(handle);
 
@@ -1089,8 +1120,8 @@ mod tests {
         // With UIA fallback, we might get various errors when no terminal is available
         // NotFound, CaptureFailed, or PermissionDenied are all acceptable
         match result {
-            Ok(_) => (), // Success is acceptable if terminal exists
-            Err(TerminalError::NotFound) => (), // Expected if no terminal
+            Ok(_) => (),                                // Success is acceptable if terminal exists
+            Err(TerminalError::NotFound) => (),         // Expected if no terminal
             Err(TerminalError::CaptureFailed(_)) => (), // Expected if UIA fails
             Err(TerminalError::PermissionDenied) => (), // Expected if permissions issue
             Err(e) => panic!("Unexpected error: {}", e),
@@ -1116,7 +1147,10 @@ mod tests {
             Ok(terminals) => {
                 // If terminals are found, validate their structure
                 for terminal in &terminals {
-                    assert!(!terminal.name.is_empty(), "Terminal name should not be empty");
+                    assert!(
+                        !terminal.name.is_empty(),
+                        "Terminal name should not be empty"
+                    );
                     assert!(terminal.pid > 0, "Terminal PID should be greater than 0");
                     assert!(
                         !terminal.window_title.is_empty(),
@@ -1142,7 +1176,10 @@ mod tests {
             // If we find terminals, verify they have valid metadata
             if !terminals.is_empty() {
                 let terminal = &terminals[0];
-                assert!(!terminal.name.is_empty(), "Terminal name should not be empty");
+                assert!(
+                    !terminal.name.is_empty(),
+                    "Terminal name should not be empty"
+                );
                 assert!(terminal.pid > 0, "Terminal PID should be greater than 0");
                 assert!(
                     !terminal.window_title.is_empty(),
@@ -1161,9 +1198,10 @@ mod tests {
                 assert!(
                     valid_names.iter().any(|name| {
                         terminal.name.eq_ignore_ascii_case(name)
-                            || terminal.name.to_lowercase().contains(
-                                &name.strip_suffix(".exe").unwrap_or(name).to_lowercase()
-                            )
+                            || terminal
+                                .name
+                                .to_lowercase()
+                                .contains(&name.strip_suffix(".exe").unwrap_or(name).to_lowercase())
                     }),
                     "Terminal name should be a known terminal process: {}",
                     terminal.name
@@ -1196,9 +1234,15 @@ mod tests {
         match result {
             Ok(text) => {
                 // Verify we got non-empty text
-                assert!(!text.trim().is_empty(), "UIA fallback should extract non-empty text");
+                assert!(
+                    !text.trim().is_empty(),
+                    "UIA fallback should extract non-empty text"
+                );
                 // Text should contain some content (not just whitespace)
-                assert!(text.chars().any(|c| !c.is_whitespace()), "Text should contain non-whitespace characters");
+                assert!(
+                    text.chars().any(|c| !c.is_whitespace()),
+                    "Text should contain non-whitespace characters"
+                );
             }
             Err(TerminalError::NotFound) => {
                 // Acceptable if no terminal is found
@@ -1230,11 +1274,17 @@ mod tests {
 
         // Wait 900ms (should still be fresh)
         tokio::time::sleep(Duration::from_millis(900)).await;
-        assert!(cache.is_fresh(CACHE_FRESHNESS_WINDOW).await, "Cache should still be fresh after 900ms");
+        assert!(
+            cache.is_fresh(CACHE_FRESHNESS_WINDOW).await,
+            "Cache should still be fresh after 900ms"
+        );
 
         // Wait another 200ms (total 1100ms, should be stale)
         tokio::time::sleep(Duration::from_millis(200)).await;
-        assert!(!cache.is_fresh(CACHE_FRESHNESS_WINDOW).await, "Cache should be stale after 1100ms");
+        assert!(
+            !cache.is_fresh(CACHE_FRESHNESS_WINDOW).await,
+            "Cache should be stale after 1100ms"
+        );
     }
 
     #[tokio::test]
@@ -1257,10 +1307,16 @@ mod tests {
 
             // Verify we got the LAST 500 lines
             let first_line = cached.lines().next().unwrap();
-            assert_eq!(first_line, "Line 101", "First line in cache should be Line 101");
+            assert_eq!(
+                first_line, "Line 101",
+                "First line in cache should be Line 101"
+            );
 
             let last_line = cached.lines().last().unwrap();
-            assert_eq!(last_line, "Line 600", "Last line in cache should be Line 600");
+            assert_eq!(
+                last_line, "Line 600",
+                "Last line in cache should be Line 600"
+            );
         } else {
             panic!("Cache should have content after update");
         }
@@ -1299,15 +1355,27 @@ mod tests {
         // Test with content less than limit
         let short = "Line 1\nLine 2\nLine 3\n".to_string();
         let result = limit_lines(&short, 10);
-        assert_eq!(result.lines().count(), 3, "Should preserve all lines when under limit");
+        assert_eq!(
+            result.lines().count(),
+            3,
+            "Should preserve all lines when under limit"
+        );
 
         // Test with content equal to limit
-        let exact = (1..=10).map(|i| format!("Line {}\n", i)).collect::<String>();
+        let exact = (1..=10)
+            .map(|i| format!("Line {}\n", i))
+            .collect::<String>();
         let result = limit_lines(&exact, 10);
-        assert_eq!(result.lines().count(), 10, "Should preserve all lines when at limit");
+        assert_eq!(
+            result.lines().count(),
+            10,
+            "Should preserve all lines when at limit"
+        );
 
         // Test with content greater than limit
-        let long = (1..=20).map(|i| format!("Line {}\n", i)).collect::<String>();
+        let long = (1..=20)
+            .map(|i| format!("Line {}\n", i))
+            .collect::<String>();
         let result = limit_lines(&long, 5);
         assert_eq!(result.lines().count(), 5, "Should truncate to limit");
 
@@ -1319,9 +1387,15 @@ mod tests {
         assert_eq!(last_line, "Line 20", "Should end at Line 20");
 
         // Test with limit of 0 (should return all content)
-        let all = (1..=10).map(|i| format!("Line {}\n", i)).collect::<String>();
+        let all = (1..=10)
+            .map(|i| format!("Line {}\n", i))
+            .collect::<String>();
         let result = limit_lines(&all, 0);
-        assert_eq!(result.lines().count(), 10, "Should return all lines when limit is 0");
+        assert_eq!(
+            result.lines().count(),
+            10,
+            "Should return all lines when limit is 0"
+        );
     }
 
     #[test]
@@ -1330,30 +1404,54 @@ mod tests {
 
         // Clean environment
         std::env::remove_var("MEMFLOW_TERMINAL_CACHE_POLLING");
-        assert!(!is_background_polling_enabled(), "Should be disabled when env var not set");
+        assert!(
+            !is_background_polling_enabled(),
+            "Should be disabled when env var not set"
+        );
 
         // Test various "true" values
         std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "1");
-        assert!(is_background_polling_enabled(), "Should be enabled with '1'");
+        assert!(
+            is_background_polling_enabled(),
+            "Should be enabled with '1'"
+        );
 
         std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "true");
-        assert!(is_background_polling_enabled(), "Should be enabled with 'true'");
+        assert!(
+            is_background_polling_enabled(),
+            "Should be enabled with 'true'"
+        );
 
         std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "TRUE");
-        assert!(is_background_polling_enabled(), "Should be enabled with 'TRUE' (case insensitive)");
+        assert!(
+            is_background_polling_enabled(),
+            "Should be enabled with 'TRUE' (case insensitive)"
+        );
 
         std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "yes");
-        assert!(is_background_polling_enabled(), "Should be enabled with 'yes'");
+        assert!(
+            is_background_polling_enabled(),
+            "Should be enabled with 'yes'"
+        );
 
         // Test "false" values
         std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "0");
-        assert!(!is_background_polling_enabled(), "Should be disabled with '0'");
+        assert!(
+            !is_background_polling_enabled(),
+            "Should be disabled with '0'"
+        );
 
         std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "false");
-        assert!(!is_background_polling_enabled(), "Should be disabled with 'false'");
+        assert!(
+            !is_background_polling_enabled(),
+            "Should be disabled with 'false'"
+        );
 
         std::env::set_var("MEMFLOW_TERMINAL_CACHE_POLLING", "no");
-        assert!(!is_background_polling_enabled(), "Should be disabled with 'no'");
+        assert!(
+            !is_background_polling_enabled(),
+            "Should be disabled with 'no'"
+        );
 
         // Clean up
         std::env::remove_var("MEMFLOW_TERMINAL_CACHE_POLLING");
@@ -1375,7 +1473,10 @@ mod tests {
 
         // Step 1: Detect terminals
         let detect_result = detect_terminals().await;
-        assert!(detect_result.is_ok(), "Terminal detection should not fail with error");
+        assert!(
+            detect_result.is_ok(),
+            "Terminal detection should not fail with error"
+        );
 
         let terminals = detect_result.unwrap();
 
@@ -1386,11 +1487,17 @@ mod tests {
         }
 
         // Step 2: Verify at least one terminal was detected
-        assert!(!terminals.is_empty(), "Should detect at least one terminal if terminals exist");
+        assert!(
+            !terminals.is_empty(),
+            "Should detect at least one terminal if terminals exist"
+        );
 
         // Step 3: Validate terminal metadata
         for terminal in &terminals {
-            assert!(!terminal.name.is_empty(), "Terminal name should not be empty");
+            assert!(
+                !terminal.name.is_empty(),
+                "Terminal name should not be empty"
+            );
             assert!(terminal.pid > 0, "Terminal PID should be greater than 0");
             assert!(
                 !terminal.window_title.is_empty(),
@@ -1465,7 +1572,10 @@ mod tests {
             }
             Err(TerminalError::CaptureFailed(msg)) => {
                 // Acceptable - both Console API and UIA failed
-                println!("Capture failed after both strategies: {} (acceptable in test env)", msg);
+                println!(
+                    "Capture failed after both strategies: {} (acceptable in test env)",
+                    msg
+                );
             }
             Err(e) => {
                 panic!("Unexpected error type: {:?}", e);
@@ -1521,14 +1631,24 @@ mod tests {
         // Step 3: Verify cache contains the content
         let cached = cache.get_cached().await;
         assert!(cached.is_some(), "Cache should have content after update");
-        assert_eq!(cached.unwrap(), test_content, "Cached content should match input");
+        assert_eq!(
+            cached.unwrap(),
+            test_content,
+            "Cached content should match input"
+        );
 
         // Step 4: Verify cache is fresh immediately after update
-        assert!(cache.is_fresh(CACHE_FRESHNESS_WINDOW).await, "Cache should be fresh immediately after update");
+        assert!(
+            cache.is_fresh(CACHE_FRESHNESS_WINDOW).await,
+            "Cache should be fresh immediately after update"
+        );
 
         // Step 5: Verify cache becomes stale after 1.1 seconds
         tokio::time::sleep(Duration::from_millis(1100)).await;
-        assert!(!cache.is_fresh(CACHE_FRESHNESS_WINDOW).await, "Cache should be stale after 1.1 seconds");
+        assert!(
+            !cache.is_fresh(CACHE_FRESHNESS_WINDOW).await,
+            "Cache should be stale after 1.1 seconds"
+        );
 
         // Step 6: Test cache line limiting
         let mut long_content = String::new();
@@ -1546,7 +1666,10 @@ mod tests {
         let cached = cache.get_cached().await.unwrap();
         let first_line = cached.lines().next().unwrap();
         let last_line = cached.lines().last().unwrap();
-        assert_eq!(first_line, "Line 101", "First cached line should be Line 101");
+        assert_eq!(
+            first_line, "Line 101",
+            "First cached line should be Line 101"
+        );
         assert_eq!(last_line, "Line 600", "Last cached line should be Line 600");
 
         // Step 8: Test that cached content is readable and valid

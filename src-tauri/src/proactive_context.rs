@@ -1,7 +1,7 @@
 use crate::ai::provider::{chat_with_anthropic, chat_with_openai, ProviderConfig};
 use crate::ai::rag::HybridSearch;
-use crate::{app_config, db, secure_storage};
 use crate::window_info::WindowInfo;
+use crate::{app_config, db, secure_storage};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
@@ -200,7 +200,8 @@ pub fn spawn_suggestion_task(ctx: TriggerContext, app_handle: Option<AppHandle>)
 
 async fn build_payload(ctx: &TriggerContext) -> anyhow::Result<ContextSuggestionPayload> {
     let query = format!("{} {}", ctx.process_name, ctx.window_title);
-    let (related, activities_for_actions) = load_related_memories(&query, &ctx.process_name).await?;
+    let (related, activities_for_actions) =
+        load_related_memories(&query, &ctx.process_name).await?;
     let suggested_actions = build_suggested_actions(ctx, &activities_for_actions).await;
 
     Ok(ContextSuggestionPayload {
@@ -297,7 +298,10 @@ async fn build_suggested_actions(
 
     let mut context_text = String::new();
     for a in related.iter().take(5) {
-        context_text.push_str(&format!("应用: {} | 窗口: {}\n", a.app_name, a.window_title));
+        context_text.push_str(&format!(
+            "应用: {} | 窗口: {}\n",
+            a.app_name, a.window_title
+        ));
         if let Some(ref t) = a.ocr_text {
             let t = t.trim();
             if !t.is_empty() {
@@ -384,7 +388,7 @@ async fn build_suggested_actions(
 
 #[cfg(test)]
 mod tests {
-    use super::{levenshtein, significant_title_change, should_trigger, ContextKey};
+    use super::{levenshtein, should_trigger, significant_title_change, ContextKey};
 
     #[test]
     fn levenshtein_basic_cases() {

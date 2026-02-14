@@ -1,7 +1,3 @@
-use memflow_core::agent;
-use crate::desktop_context::TauriContext;
-use std::sync::Arc;
-use std::path::Path;
 use crate::ai;
 use crate::ai::provider::{
     chat_with_anthropic, chat_with_openai, embedding_with_openai, ProviderConfig,
@@ -9,10 +5,14 @@ use crate::ai::provider::{
 use crate::app_config;
 use crate::chat;
 use crate::db;
+use crate::desktop_context::TauriContext;
 use crate::graph;
 use crate::performance;
 use crate::recorder;
+use memflow_core::agent;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::sync::Arc;
 use tauri::Manager;
 
 // ActivityLog is imported from crate::db (re-exported from memflow_core)
@@ -74,7 +74,10 @@ pub struct AppConfig {
     pub ocr_redaction_enabled: bool,
     #[serde(default = "default_ocr_redaction_level", alias = "ocr_redaction_level")]
     pub ocr_redaction_level: String,
-    #[serde(default, alias = "ocr_preprocess_enabled")]
+    #[serde(
+        default = "default_ocr_preprocess_enabled",
+        alias = "ocr_preprocess_enabled"
+    )]
     pub ocr_preprocess_enabled: bool,
     #[serde(
         default = "default_ocr_preprocess_target_width",
@@ -245,8 +248,10 @@ pub async fn get_activities(limit: Option<i64>) -> Result<Vec<ActivityLog>, Stri
         Ok(activities) => {
             tracing::info!("Returning {} activities", activities.len());
             if let Some(first) = activities.first() {
-                println!("[DEBUG] First activity: ID={}, App={}, ImagePath={:?}", 
-                    first.id, first.app_name, first.image_path);
+                println!(
+                    "[DEBUG] First activity: ID={}, App={}, ImagePath={:?}",
+                    first.id, first.app_name, first.image_path
+                );
             }
             Ok(activities)
         }
@@ -348,7 +353,10 @@ fn detect_mcp_status(app_handle: &tauri::AppHandle) -> String {
     if let Some(path) = candidate {
         if let Ok(text) = std::fs::read_to_string(&path) {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                let status = val.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+                let status = val
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
                 let ts = val.get("ts").and_then(|v| v.as_i64()).unwrap_or(0);
                 let now = chrono::Local::now().timestamp();
                 let delta = now - ts;
@@ -410,7 +418,7 @@ pub async fn update_config(config: AppConfig, app_handle: tauri::AppHandle) -> R
     app_config::update_config(config, app_handle)
         .await
         .map_err(|e| e.to_string())?;
-    
+
     // Notify recorder of the new interval
     recorder::set_base_interval(interval);
     Ok(())
@@ -437,7 +445,7 @@ pub async fn get_stats() -> Result<Stats, String> {
     let interval = config.recording_interval as f64 / 1000.0;
     // Sanity check: ensure interval is positive, default to 5s if invalid
     let interval = if interval <= 0.0 { 5.0 } else { interval };
-    
+
     db::get_stats(interval).await.map_err(|e| e.to_string())
 }
 
@@ -539,7 +547,7 @@ pub async fn ai_chat(query: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn ai_chat_stream(query: String, app_handle: tauri::AppHandle) -> Result<(), String> {
     use tauri::Emitter;
-    
+
     let handle = app_handle.clone();
     let res = ai::chat_stream(&query, vec![], move |chunk| {
         if let Err(e) = handle.emit("ai-chat-chunk", chunk) {
@@ -559,9 +567,10 @@ pub async fn ai_chat_stream(query: String, app_handle: tauri::AppHandle) -> Resu
 
 #[tauri::command]
 pub async fn parse_query_intent(query: String) -> Result<ai::FilterParams, String> {
-    ai::parse_query_intent(&query).await.map_err(|e| e.to_string())
+    ai::parse_query_intent(&query)
+        .await
+        .map_err(|e| e.to_string())
 }
-
 
 #[tauri::command]
 pub async fn get_activity_heatmap_stats(year: Option<i32>) -> Result<Vec<db::HeatmapData>, String> {
@@ -656,11 +665,11 @@ mod tests {
         // 测试部分字段的 JSON 会正确填充缺失字段的默认值
         let json = r#"{"recordingInterval": 3000, "ocrEnabled": true}"#;
         let cfg: AppConfig = serde_json::from_str(json).unwrap();
-        
+
         // 指定的字段应该使用提供的值
         assert_eq!(cfg.recording_interval, 3000);
         assert_eq!(cfg.ocr_enabled, true);
-        
+
         // 未指定的字段应该使用默认值
         assert_eq!(cfg.ocr_engine, "rapidocr");
         assert_eq!(cfg.ai_enabled, false);

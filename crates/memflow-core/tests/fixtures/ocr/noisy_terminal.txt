@@ -1,0 +1,29 @@
+# Noisy Terminal Output Sample
+This simulates poor OCR quality with common recognition errors.
+
+> cargo new my_project
+> cd my_project  
+> cargo add serde --features ["derive"]
+> cargo add tokio --features ["full"]
+
+✅ New proj ect created successfully!
+
+$ git init  
+$ git add .
+$ git commit -m "Initial commit"
+
+Error: You need to sign your commits. Use:
+$ git config --global user.signingkey <your_key>
+$ git config --global commit.gpgsign true
+
+$ cargo run
+   Compiling my_project v0.1.0 (...)
+    Finished dev [unoptimized + debuginfo] target(s) in 2.45s  
+     Running `target/debug/my_project`
+Hello, word!
+
+WARNING: This text simulates common OCR errors including:
+- Character substitution (e.g., "world" -> "word")  
+- Spurious spaces
+- Line breaks in wrong places
+- Missing punctuation

@@ -4,9 +4,7 @@ use std::error::Error;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // 1. 创建内存数据库
-    let pool = SqlitePoolOptions::new()
-        .connect("sqlite::memory:")
-        .await?;
+    let pool = SqlitePoolOptions::new().connect("sqlite::memory:").await?;
 
     // 2. 初始化表结构
     sqlx::query(
@@ -50,9 +48,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let app_name_filter = Some("antigravity".to_string()); // 应该过滤掉 Explorer
 
     // 复制 db.rs 里的逻辑
-    let mut builder = QueryBuilder::new(
-        "SELECT a.id, a.app_name, a.ocr_text FROM activity_logs a "
-    );
+    let mut builder =
+        QueryBuilder::new("SELECT a.id, a.app_name, a.ocr_text FROM activity_logs a ");
 
     let has_query = query_str.as_ref().map(|s| !s.is_empty()).unwrap_or(false);
 

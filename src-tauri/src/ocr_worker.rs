@@ -1,4 +1,5 @@
 use crate::{app_config, db, ocr};
+use memflow_core::ocr_enhance::{preprocess_terminal_image, postprocess_terminal_text, is_likely_code};
 use once_cell::sync::Lazy;
 use std::io::Cursor;
 use std::path::PathBuf;
@@ -83,6 +84,7 @@ async fn run_worker(app_handle: AppHandle) {
             let redaction_enabled = config.ocr_redaction_enabled;
             let redaction_level = config.ocr_redaction_level.clone();
             let resource_dir = app_handle.path().resource_dir().ok();
+            let enhance_enabled = preprocess_enabled;
 
             let mut join_set: JoinSet<()> = JoinSet::new();
             for task in tasks {
@@ -121,34 +123,47 @@ async fn run_worker(app_handle: AppHandle) {
                     let mut input_path = full_path.clone();
                     let mut tmp_path: Option<PathBuf> = None;
 
+                    // Apply OCR enhancement preprocessing if enabled
+                    let apply_enhancement = enhance_enabled;
+                    if apply_enhancement {
+                        tracing::debug!("Checking if OCR enhancement should be applied for task {}", task.id);
+                        // Note: is_likely_code requires OCR text, so we'll apply enhancement
+                        // as a preprocessing step. Terminal scenes often benefit from enhancement.
+                    }
+
                     if preprocess_enabled {
                         let t_preprocess = std::time::Instant::now();
                         let src_path = full_path.clone();
                         let target_width = preprocess_target_width;
                         let max_pixels = preprocess_max_pixels;
 
-                        let result = tokio::task::spawn_blocking(move || -> anyhow::Result<Option<Vec<u8>>> {
-                            use image::GenericImageView;
-                            let img = image::open(&src_path)?;
-                            let (w, h) = img.dimensions();
-                            let pixels = w as u64 * h as u64;
+                        let result = tokio::task::spawn_blocking(
+                            move || -> anyhow::Result<Option<Vec<u8>>> {
+                                use image::GenericImageView;
+                                let img = image::open(&src_path)?;
+                                let (w, h) = img.dimensions();
+                                let pixels = w as u64 * h as u64;
 
-                            if w <= target_width && pixels <= max_pixels {
-                                return Ok(None);
-                            }
+                                if w <= target_width && pixels <= max_pixels {
+                                    return Ok(None);
+                                }
 
-                            let new_w = target_width.max(1).min(w);
-                            let ratio = new_w as f64 / w.max(1) as f64;
-                            let new_h = ((h as f64) * ratio).round().max(1.0) as u32;
+                                let new_w = target_width.max(1).min(w);
+                                let ratio = new_w as f64 / w.max(1) as f64;
+                                let new_h = ((h as f64) * ratio).round().max(1.0) as u32;
 
-                            let resized =
-                                img.resize_exact(new_w, new_h, image::imageops::FilterType::Triangle);
+                                let resized = img.resize_exact(
+                                    new_w,
+                                    new_h,
+                                    image::imageops::FilterType::Triangle,
+                                );
 
-                            let mut buf: Vec<u8> = Vec::new();
-                            let mut cursor = Cursor::new(&mut buf);
-                            resized.write_to(&mut cursor, image::ImageFormat::Png)?;
-                            Ok(Some(buf))
-                        })
+                                let mut buf: Vec<u8> = Vec::new();
+                                let mut cursor = Cursor::new(&mut buf);
+                                resized.write_to(&mut cursor, image::ImageFormat::Png)?;
+                                Ok(Some(buf))
+                            },
+                        )
                         .await;
 
                         if let Ok(Ok(Some(png_bytes))) = result {
@@ -156,15 +171,37 @@ async fn run_worker(app_handle: AppHandle) {
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap_or_default()
                                 .as_nanos();
-                            let tmp = screenshots_dir.join(format!("ocr_tmp_{}_{}.png", task.id, nanos));
-                            if tokio::fs::write(&tmp, &png_bytes).await.is_ok() {
+                            let tmp =
+                                screenshots_dir.join(format!("ocr_tmp_{}_{}.png", task.id, nanos));
+
+                            // Apply enhancement preprocessing if enabled
+                            let final_bytes = if apply_enhancement {
+                                tracing::debug!("Applying terminal enhancement preprocessing for task {}", task.id);
+                                let enhanced = preprocess_terminal_image(&png_bytes);
+                                tracing::debug!(
+                                    enhancement_bytes = enhanced.len(),
+                                    original_bytes = png_bytes.len(),
+                                    "Enhancement preprocessing applied"
+                                );
+                                enhanced
+                            } else {
+                                png_bytes
+                            };
+
+                            if tokio::fs::write(&tmp, &final_bytes).await.is_ok() {
                                 tmp_path = Some(tmp.clone());
                                 input_path = tmp;
                                 tracing::debug!(
                                     preprocess_ms = t_preprocess.elapsed().as_millis(),
-                                    preprocessed_bytes = png_bytes.len(),
+                                    preprocessed_bytes = final_bytes.len(),
                                     "ocr preprocess applied"
                                 );
+                            }
+                        } else if let Ok(Ok(None)) = result {
+                            // No resizing needed, but enhancement might still be useful
+                            if apply_enhancement {
+                                tracing::debug!("Image already optimal size, checking enhancement for task {}", task.id);
+                                // Could read and enhance in-place if needed
                             }
                         }
                     }
@@ -193,8 +230,33 @@ async fn run_worker(app_handle: AppHandle) {
                     }
 
                     match ocr_result {
-                        Ok(text) => {
+                        Ok(mut text) => {
                             let ocr_ms = t_ocr.elapsed().as_millis();
+
+                            // Apply OCR enhancement postprocessing if enabled
+                            if apply_enhancement {
+                                let is_code = is_likely_code(&text);
+                                tracing::debug!(
+                                    task_id = task.id,
+                                    is_code = is_code,
+                                    "Checking if text is likely code"
+                                );
+
+                                if is_code {
+                                    let t_enhance = std::time::Instant::now();
+                                    let original_len = text.len();
+                                    text = postprocess_terminal_text(&text);
+                                    let enhance_ms = t_enhance.elapsed().as_millis();
+                                    tracing::info!(
+                                        task_id = task.id,
+                                        enhance_ms = enhance_ms,
+                                        original_len = original_len,
+                                        enhanced_len = text.len(),
+                                        "Applied terminal enhancement postprocessing"
+                                    );
+                                }
+                            }
+
                             let t_db = std::time::Instant::now();
                             if let Err(e) = db::update_activity_ocr(task.activity_id, &text).await {
                                 tracing::error!("Failed to update activity OCR: {}", e);
@@ -222,7 +284,11 @@ async fn run_worker(app_handle: AppHandle) {
                         }
                         Err(e) => {
                             let err_msg = e.to_string();
-                            tracing::warn!("OCR processing failed for task {}: {}", task.id, err_msg);
+                            tracing::warn!(
+                                "OCR processing failed for task {}: {}",
+                                task.id,
+                                err_msg
+                            );
 
                             if task.retry_count >= 3 {
                                 let _ =

@@ -169,7 +169,7 @@ pub async fn chat_with_openai(
     } else {
         "你是桌面活动记录分析助手。基于用户提供的桌面活动记录（OCR文本、应用名称等）回答问题。只回答事实，不要解释如何设计系统。".to_string()
     };
-    
+
     let system_prompt = custom_system_prompt
         .map(|s| s.to_string())
         .unwrap_or(default_system_prompt);
@@ -216,7 +216,7 @@ pub async fn chat_with_openai(
 
     tracing::info!("chat_with_openai: 发送请求到 {}", url);
     let start = std::time::Instant::now();
-    
+
     let response = client
         .post(&url)
         .header("Authorization", format!("Bearer {}", config.api_key))
@@ -225,8 +225,12 @@ pub async fn chat_with_openai(
         .send()
         .await
         .context("OpenAI Chat API 请求失败")?;
-    
-    tracing::info!("chat_with_openai: 收到响应, 耗时 {}ms, status={}", start.elapsed().as_millis(), response.status());
+
+    tracing::info!(
+        "chat_with_openai: 收到响应, 耗时 {}ms, status={}",
+        start.elapsed().as_millis(),
+        response.status()
+    );
 
     if !response.status().is_success() {
         let status = response.status();
@@ -367,7 +371,7 @@ where
     } else {
         "你是桌面活动记录分析助手。基于用户提供的桌面活动记录（OCR文本、应用名称等）回答问题。只回答事实，不要解释如何设计系统。".to_string()
     };
-    
+
     let system_prompt = custom_system_prompt
         .map(|s| s.to_string())
         .unwrap_or(default_system_prompt);
@@ -506,7 +510,7 @@ pub async fn chat_with_anthropic(
     } else {
         "你是桌面活动记录分析助手。基于用户提供的桌面活动记录（OCR文本、应用名称等）回答问题。只回答事实，不要解释如何设计系统。".to_string()
     };
-    
+
     let system_prompt = custom_system_prompt
         .map(|s| s.to_string())
         .unwrap_or(default_system_prompt);
@@ -625,7 +629,7 @@ where
     } else {
         "你是桌面活动记录分析助手。基于用户提供的桌面活动记录（OCR文本、应用名称等）回答问题。只回答事实，不要解释如何设计系统。".to_string()
     };
-    
+
     let system_prompt = custom_system_prompt
         .map(|s| s.to_string())
         .unwrap_or(default_system_prompt);
@@ -692,7 +696,7 @@ where
 
         while let Some(line_end) = buffer.find('\n') {
             let line = buffer[..line_end].trim();
-            let line_content = line.to_string(); 
+            let line_content = line.to_string();
             buffer.drain(..line_end + 1);
 
             if line_content.is_empty() {
@@ -702,18 +706,18 @@ where
             if let Some(json_str) = line_content.strip_prefix("data: ") {
                 // Anthropic SSE 结束事件通常是 event: message_stop，data 里可能不包含 update
                 // 这里我们解析每个 event data
-                
+
                 if let Ok(event) = serde_json::from_str::<StreamEvent>(json_str) {
-                     if event.event_type == "content_block_delta" {
-                         if let Some(delta) = event.delta {
-                             if delta.delta_type == "text_delta" {
-                                 if let Some(text) = delta.text {
-                                     on_chunk(text.clone());
-                                     full_response.push_str(&text);
-                                 }
-                             }
-                         }
-                     }
+                    if event.event_type == "content_block_delta" {
+                        if let Some(delta) = event.delta {
+                            if delta.delta_type == "text_delta" {
+                                if let Some(text) = delta.text {
+                                    on_chunk(text.clone());
+                                    full_response.push_str(&text);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

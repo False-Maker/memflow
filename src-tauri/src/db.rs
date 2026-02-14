@@ -32,7 +32,7 @@ pub async fn init_db(app_handle: AppHandle) -> Result<()> {
     let db_path = get_db_path(&app_handle)?;
     let app_data = db_path.parent().unwrap().to_path_buf();
     let screenshots_dir = app_data.join("screenshots");
-    
+
     // Call the core init function with resolved paths
     memflow_core::db::init_db_with_path(db_path, screenshots_dir).await
 }
@@ -52,7 +52,7 @@ pub async fn force_recovery(app_handle: AppHandle) -> Result<()> {
 
     // Re-initialize with resolved paths
     init_db(app_handle).await?;
-    
+
     tracing::info!("Database recovery completed.");
     Ok(())
 }

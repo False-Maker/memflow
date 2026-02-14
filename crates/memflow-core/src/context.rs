@@ -3,12 +3,12 @@
 //! This module defines the `RuntimeContext` trait that abstracts away platform-specific
 //! capabilities, allowing the agent to run on both Tauri desktop and future CLI/MCP contexts.
 
-use std::path::PathBuf;
-use std::future::Future;
-use std::pin::Pin;
-use serde::{Serialize, Deserialize};
-use serde_json::Value;
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::future::Future;
+use std::path::PathBuf;
+use std::pin::Pin;
 
 /// AI analysis result containing extracted task contexts
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,7 +37,7 @@ pub trait RuntimeContext: Send + Sync {
     /// Desktop: Returns the Tauri app data directory
     /// CLI/MCP: Returns a configured path or current directory
     fn app_dir(&self) -> PathBuf;
-    
+
     /// Get the resources directory (for models, prompts, etc.)
     ///
     /// Desktop: Returns the Tauri resources directory
@@ -49,7 +49,7 @@ pub trait RuntimeContext: Send + Sync {
     /// Desktop: Emits a Tauri event to the frontend
     /// MCP/CLI: Logs to stdout or ignores based on verbosity settings
     fn emit(&self, event: &str, payload: Value) -> Result<()>;
-    
+
     /// Analyze activity context using AI to generate proposals
     ///
     /// Desktop: Calls LLM API via app_config and secure_storage

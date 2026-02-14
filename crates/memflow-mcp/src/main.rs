@@ -9,12 +9,13 @@ use memflow_core::context::RuntimeContext;
 use memflow_core::db;
 use memflow_core::vector_db;
 use memflow_mcp::protocol::ToolName;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::{self};
 use std::collections::HashMap;
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
 use tracing::{error, info};
 use tracing_subscriber::{fmt, EnvFilter};
 use std::sync::OnceLock;
@@ -1097,11 +1098,111 @@ async fn call_get_terminal_output(lines: usize) -> Result<String, memflow_core::
     capture_terminal_output(lines).await
 }
 
+/// Detect Node.js version with timeout
+async fn detect_node_version() -> Option<String> {
+    let timeout = Duration::from_secs(3);
+    let mut cmd = Command::new("node");
+    cmd.args(["--version"]);
+    
+    match tokio::time::timeout(timeout, cmd.output()).await {
+        Ok(Ok(output)) if output.status.success() => {
+            Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        }
+        _ => None,
+    }
+}
+
+/// Detect Python version with timeout
+async fn detect_python_version() -> Option<String> {
+    let timeout = Duration::from_secs(3);
+    let mut cmd = Command::new("python");
+    cmd.args(["--version"]);
+    
+    let result = tokio::time::timeout(timeout, cmd.output()).await;
+    
+    // Try python3 if python fails
+    if result.as_ref().ok().and_then(|r| r.as_ref().ok()).is_none_or(|o| !o.status.success()) {
+        let mut cmd = Command::new("python3");
+        cmd.args(["--version"]);
+        match tokio::time::timeout(timeout, cmd.output()).await {
+            Ok(Ok(output)) if output.status.success() => {
+                return Some(String::from_utf8_lossy(&output.stdout).trim().to_string());
+            }
+            _ => {}
+        }
+    }
+    
+    match result {
+        Ok(Ok(output)) if output.status.success() => {
+            Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        }
+        _ => None,
+    }
+}
+
+/// Detect Rust version with timeout
+async fn detect_rust_version() -> Option<String> {
+    let timeout = Duration::from_secs(3);
+    let mut cmd = Command::new("rustc");
+    cmd.args(["--version"]);
+    
+    match tokio::time::timeout(timeout, cmd.output()).await {
+        Ok(Ok(output)) if output.status.success() => {
+            Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        }
+        _ => None,
+    }
+}
+
+/// Detect Docker version with timeout
+async fn detect_docker_version() -> Option<String> {
+    let timeout = Duration::from_secs(3);
+    let mut cmd = Command::new("docker");
+    cmd.args(["--version"]);
+    
+    match tokio::time::timeout(timeout, cmd.output()).await {
+        Ok(Ok(output)) if output.status.success() => {
+            Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        }
+        _ => None,
+    }
+}
+
+/// Detect Go version with timeout
+async fn detect_go_version() -> Option<String> {
+    let timeout = Duration::from_secs(3);
+    let mut cmd = Command::new("go");
+    cmd.args(["version"]);
+    
+    match tokio::time::timeout(timeout, cmd.output()).await {
+        Ok(Ok(output)) if output.status.success() => {
+            Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        }
+        _ => None,
+    }
+}
+
+/// Detect Java version with timeout
+async fn detect_java_version() -> Option<String> {
+    let timeout = Duration::from_secs(3);
+    let mut cmd = Command::new("java");
+    cmd.args(["-version"]);
+    
+    match tokio::time::timeout(timeout, cmd.output()).await {
+        Ok(Ok(output)) if output.status.success() => {
+            // Java version goes to stderr
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            stderr.lines().next().map(|l| l.to_string())
+        }
+        _ => None,
+    }
+}
+
 /// Get system environment information
 async fn call_get_system_environment(
-    _include_dev_tools: bool,
-    _include_processes: bool,
-    _include_ports: bool,
+    include_dev_tools: bool,
+    include_processes: bool,
+    include_ports: bool,
 ) -> Result<String> {
     use sysinfo::System;
     

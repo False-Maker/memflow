@@ -80,8 +80,9 @@ pub async fn search_similar_with_candidates(
 
     let rows = match candidate_ids {
         Some(ids) if !ids.is_empty() => {
-            let mut builder =
-                sqlx::QueryBuilder::new("SELECT activity_id, embedding FROM vector_embeddings WHERE activity_id IN (");
+            let mut builder = sqlx::QueryBuilder::new(
+                "SELECT activity_id, embedding FROM vector_embeddings WHERE activity_id IN (",
+            );
             let mut separated = builder.separated(", ");
             for id in ids {
                 separated.push_bind(*id);

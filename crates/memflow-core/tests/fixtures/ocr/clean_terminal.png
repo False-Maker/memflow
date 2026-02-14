@@ -1,0 +1,9 @@
+// This is a placeholder for clean_terminal.png
+// In a real scenario, this would be an actual PNG image file
+// containing a screenshot of a clean terminal session
+//
+// The image would show:
+// - Black background with colored text (green for $, yellow for >, etc.)
+// - Clear, readable text without OCR artifacts
+// - Terminal prompt with current directory
+// - Clean command output without garbled text

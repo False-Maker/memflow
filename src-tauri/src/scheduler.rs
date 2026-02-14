@@ -1,15 +1,15 @@
 //! 定时任务调度器
-//! 
+//!
 //! 负责在应用启动时及每日定时执行清理逻辑。
 
-use tokio::time::{interval, Duration};
 use crate::{app_config, db};
+use tokio::time::{interval, Duration};
 
 /// 调度间隔（24小时）
 const CLEANUP_INTERVAL_SECS: u64 = 24 * 60 * 60;
 
 /// 启动自动清理调度器
-/// 
+///
 /// 在应用启动时立即执行一次清理，之后每 24 小时执行一次。
 pub fn spawn_retention_scheduler() {
     tokio::spawn(async {

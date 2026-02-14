@@ -62,7 +62,7 @@ impl EventLoopHandle {
 }
 
 /// 启动事件驱动的窗口监听
-/// 
+///
 /// 返回事件接收通道和控制句柄
 pub fn start_event_loop(config: EventLoopConfig) -> (mpsc::Receiver<WindowEvent>, EventLoopHandle) {
     let (tx, rx) = mpsc::channel::<WindowEvent>(100);
@@ -87,7 +87,7 @@ fn run_event_loop_internal(
     config: EventLoopConfig,
 ) {
     use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-    
+
     let mut last_hwnd: isize = 0;
     let debounce_duration = std::time::Duration::from_millis(config.debounce_ms);
 
@@ -103,9 +103,9 @@ fn run_event_loop_internal(
                     last_hwnd = current_hwnd;
 
                     // 发送前台窗口切换事件
-                    if let Err(e) = tx.blocking_send(WindowEvent::ForegroundChanged {
-                        hwnd: current_hwnd,
-                    }) {
+                    if let Err(e) =
+                        tx.blocking_send(WindowEvent::ForegroundChanged { hwnd: current_hwnd })
+                    {
                         tracing::warn!("发送窗口事件失败: {}", e);
                         break;
                     }
@@ -142,9 +142,7 @@ where
 
                 if current_hwnd != last_hwnd && current_hwnd != 0 {
                     last_hwnd = current_hwnd;
-                    callback(WindowEvent::ForegroundChanged {
-                        hwnd: current_hwnd,
-                    });
+                    callback(WindowEvent::ForegroundChanged { hwnd: current_hwnd });
                 }
             }
 
@@ -156,7 +154,7 @@ where
 }
 
 /// 事件驱动录制器
-/// 
+///
 /// 将事件循环与现有录制逻辑集成
 pub struct EventDrivenRecorder {
     handle: Option<EventLoopHandle>,
@@ -188,7 +186,10 @@ impl EventDrivenRecorder {
 
     /// 检查是否正在运行
     pub fn is_running(&self) -> bool {
-        self.handle.as_ref().map(|h| !h.is_stopped()).unwrap_or(false)
+        self.handle
+            .as_ref()
+            .map(|h| !h.is_stopped())
+            .unwrap_or(false)
     }
 }
 
@@ -227,7 +228,7 @@ mod tests {
         let mut recorder = EventDrivenRecorder::new(config);
 
         assert!(!recorder.is_running());
-        
+
         let _rx = recorder.start();
         assert!(recorder.is_running());
 

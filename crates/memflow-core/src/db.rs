@@ -1,5 +1,5 @@
-use chrono::Datelike;
 use anyhow::Result;
+use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool};
 use sqlx::{QueryBuilder, Row};
@@ -53,7 +53,7 @@ static SKIPPED_STATS_FLUSH_STARTED: AtomicBool = AtomicBool::new(false);
 /// Removes or escapes special characters that could cause FTS5 syntax errors.
 pub fn sanitize_fts_query(input: &str) -> String {
     let mut sanitized = String::with_capacity(input.len());
-    
+
     for c in input.chars() {
         match c {
             // Skip FTS5 special characters that could break parsing
@@ -67,13 +67,13 @@ pub fn sanitize_fts_query(input: &str) -> String {
             _ => sanitized.push(c),
         }
     }
-    
+
     // Split and filter out boolean keywords that could cause issues
     let terms: Vec<&str> = sanitized
         .split_whitespace()
         .filter(|t| !matches!(t.to_uppercase().as_str(), "AND" | "OR" | "NOT" | "NEAR"))
         .collect();
-    
+
     terms.join(" ")
 }
 
@@ -91,7 +91,6 @@ pub async fn init_db_with_path(db_path: PathBuf, screenshots_dir: PathBuf) -> Re
     // Create screenshots directory
     std::fs::create_dir_all(&screenshots_dir)?;
     *SCREENSHOTS_DIR.lock().await = Some(screenshots_dir);
-
 
     let mut retry_count = 0;
     loop {
@@ -121,10 +120,7 @@ pub async fn init_db_with_path(db_path: PathBuf, screenshots_dir: PathBuf) -> Re
                             get_os_info()
                         );
                         tracing::error!("{}", error_msg);
-                        return Err(anyhow::anyhow!(
-                            "Database init failed: {}",
-                            err
-                        ));
+                        return Err(anyhow::anyhow!("Database init failed: {}", err));
                     }
                     tracing::info!("数据库恢复成功，重新尝试连接...");
                     retry_count = 0;
@@ -191,17 +187,17 @@ pub async fn get_activities(limit: i64) -> Result<Vec<ActivityLog>> {
 }
 
 /// Get activities from the last N minutes (for MCP real-time perception)
-/// 
+///
 /// # Arguments
 /// * `minutes` - Number of minutes to look back (clamped to 1-30)
 /// * `limit` - Maximum number of results (clamped to 1-100)
 pub async fn get_recent_activities_by_time(minutes: i64, limit: i64) -> Result<Vec<ActivityLog>> {
     let pool = get_pool().await?;
-    
+
     // Clamp parameters to reasonable bounds
     let minutes = minutes.clamp(1, 30);
     let limit = limit.clamp(1, 100);
-    
+
     // Calculate cutoff timestamp
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -388,7 +384,10 @@ pub async fn search_activities(
     order_by: Option<String>,
 ) -> Result<(Vec<ActivityLog>, i64)> {
     let pool = get_pool().await?;
-    search_activities_impl(&pool, query, app_name, from_ts, to_ts, has_ocr, limit, offset, order_by).await
+    search_activities_impl(
+        &pool, query, app_name, from_ts, to_ts, has_ocr, limit, offset, order_by,
+    )
+    .await
 }
 
 /// 内部实现，接受 pool 参数以便于单元测试
@@ -404,7 +403,9 @@ pub async fn search_activities_impl(
     order_by: Option<String>,
 ) -> Result<(Vec<ActivityLog>, i64)> {
     // Sanitize the query for FTS5 to prevent syntax errors from special characters
-    let sanitized_query = query.map(|q| sanitize_fts_query(&q)).filter(|q| !q.is_empty());
+    let sanitized_query = query
+        .map(|q| sanitize_fts_query(&q))
+        .filter(|q| !q.is_empty());
     let has_query = sanitized_query.is_some();
 
     // 构建 COUNT 查询以获取 total
@@ -626,7 +627,6 @@ async fn try_connect_and_migrate(options: SqliteConnectOptions) -> Result<Sqlite
         .map_err(|e| anyhow::anyhow!("Integrity check failed to execute: {}", e))?;
 
     if check_result.0 != "ok" {
-
         tracing::error!("数据库完整性检查失败: {}", check_result.0);
         return Err(anyhow::anyhow!(
             "Database integrity check failed (corrupt): {}",
@@ -648,7 +648,6 @@ async fn try_connect_and_migrate(options: SqliteConnectOptions) -> Result<Sqlite
         .await;
 
         if let Err(e) = test_result {
-
             tracing::error!("写入冒烟测试失败 (检测到损坏): {}", e);
             return Err(anyhow::anyhow!("Database write failed (corrupt): {}", e));
         }
@@ -656,7 +655,6 @@ async fn try_connect_and_migrate(options: SqliteConnectOptions) -> Result<Sqlite
         // 如果成功，回滚事务，不污染数据库
         transaction.rollback().await?;
     }
-
 
     tracing::info!("数据库完整性检查通过");
     Ok(pool)
@@ -694,9 +692,27 @@ async fn ensure_agent_automation_schema(pool: &SqlitePool) -> Result<()> {
     .execute(pool)
     .await?;
 
-    ensure_sqlite_column(pool, "agent_executions", "finished_at", "finished_at INTEGER").await?;
-    ensure_sqlite_column(pool, "agent_executions", "error_message", "error_message TEXT").await?;
-    ensure_sqlite_column(pool, "agent_executions", "metadata_json", "metadata_json TEXT").await?;
+    ensure_sqlite_column(
+        pool,
+        "agent_executions",
+        "finished_at",
+        "finished_at INTEGER",
+    )
+    .await?;
+    ensure_sqlite_column(
+        pool,
+        "agent_executions",
+        "error_message",
+        "error_message TEXT",
+    )
+    .await?;
+    ensure_sqlite_column(
+        pool,
+        "agent_executions",
+        "metadata_json",
+        "metadata_json TEXT",
+    )
+    .await?;
 
     sqlx::query(
         r#"
@@ -719,7 +735,12 @@ async fn ensure_agent_automation_schema(pool: &SqlitePool) -> Result<()> {
     Ok(())
 }
 
-async fn ensure_sqlite_column(pool: &SqlitePool, table: &str, column: &str, ddl: &str) -> Result<()> {
+async fn ensure_sqlite_column(
+    pool: &SqlitePool,
+    table: &str,
+    column: &str,
+    ddl: &str,
+) -> Result<()> {
     let pragma = format!("PRAGMA table_info({})", table);
     let rows = sqlx::query(&pragma).fetch_all(pool).await?;
     let exists = rows
@@ -755,9 +776,12 @@ pub async fn get_activity_heatmap_stats(year: Option<i32>) -> Result<Vec<Heatmap
     get_activity_heatmap_stats_impl(&pool, year).await
 }
 
-pub async fn get_activity_heatmap_stats_impl(pool: &SqlitePool, year: Option<i32>) -> Result<Vec<HeatmapData>> {
+pub async fn get_activity_heatmap_stats_impl(
+    pool: &SqlitePool,
+    year: Option<i32>,
+) -> Result<Vec<HeatmapData>> {
     let year = year.unwrap_or_else(|| chrono::Utc::now().year());
-    
+
     // 计算该年的起始和结束时间戳
     let start_of_year = chrono::NaiveDate::from_ymd_opt(year, 1, 1)
         .unwrap()
@@ -765,7 +789,7 @@ pub async fn get_activity_heatmap_stats_impl(pool: &SqlitePool, year: Option<i32
         .unwrap()
         .and_utc()
         .timestamp();
-        
+
     let end_of_year = chrono::NaiveDate::from_ymd_opt(year + 1, 1, 1)
         .unwrap()
         .and_hms_opt(0, 0, 0)
@@ -816,7 +840,7 @@ pub async fn get_pending_ocr_tasks(limit: i64) -> Result<Vec<OcrQueueItem>> {
            OR (q.status = 'processing' AND q.updated_at < (strftime('%s', 'now') - 300))
         ORDER BY q.created_at ASC
         LIMIT ?
-        "#
+        "#,
     )
     .bind(limit)
     .fetch_all(&pool)
@@ -825,27 +849,31 @@ pub async fn get_pending_ocr_tasks(limit: i64) -> Result<Vec<OcrQueueItem>> {
     Ok(tasks)
 }
 
-pub async fn update_ocr_queue_status(id: i64, status: &str, error_message: Option<&str>) -> Result<()> {
+pub async fn update_ocr_queue_status(
+    id: i64,
+    status: &str,
+    error_message: Option<&str>,
+) -> Result<()> {
     let pool = get_pool().await?;
-    
+
     // 如果是重试（从 processing 回到 pending），增加重试次数
     // 如果是失败（failed），也意味这是最后一次尝试
     // 但简单的逻辑是：调用者决定是否重试。
     // 这里我们假设如果 status 是 pending，就是一次重试。
-    
+
     let sql = if status == "pending" {
         "UPDATE ocr_queue SET status = ?, error_message = ?, updated_at = strftime('%s', 'now'), retry_count = retry_count + 1 WHERE id = ?"
     } else {
         "UPDATE ocr_queue SET status = ?, error_message = ?, updated_at = strftime('%s', 'now') WHERE id = ?"
     };
-    
+
     sqlx::query(sql)
         .bind(status)
         .bind(error_message)
         .bind(id)
         .execute(&pool)
         .await?;
-        
+
     Ok(())
 }
 
@@ -867,11 +895,11 @@ pub async fn get_ocr_queue_stats() -> Result<OcrQueueStats> {
             COALESCE(SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END), 0) as done,
             COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed
         FROM ocr_queue
-        "#
+        "#,
     )
     .fetch_one(&pool)
     .await?;
-    
+
     Ok(stats)
 }
 
@@ -879,8 +907,6 @@ pub async fn get_ocr_queue_stats() -> Result<OcrQueueStats> {
 mod tests {
     use super::*;
     use sqlx::sqlite::SqlitePoolOptions;
-
-
 
     #[tokio::test]
     async fn ensures_agent_executions_columns_exist() {
@@ -937,7 +963,7 @@ mod tests {
                 phash TEXT,
                 app_path TEXT,
                 ocr_text TEXT
-            )"
+            )",
         )
         .execute(&pool)
         .await
@@ -947,28 +973,33 @@ mod tests {
         // 2024-01-01 12:00:00 UTC = 1704110400
         // 2024-01-01 13:00:00 UTC = 1704114000
         // 2024-01-02 12:00:00 UTC = 1704196800
-        
-        let ts1 = 1704110400; 
+
+        let ts1 = 1704110400;
         let ts2 = 1704114000;
         let ts3 = 1704196800;
-        
+
         sqlx::query("INSERT INTO activity_logs (timestamp) VALUES (?)")
             .bind(ts1)
             .execute(&pool)
-            .await.unwrap();
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO activity_logs (timestamp) VALUES (?)")
             .bind(ts2)
             .execute(&pool)
-            .await.unwrap();
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO activity_logs (timestamp) VALUES (?)")
             .bind(ts3)
             .execute(&pool)
-            .await.unwrap();
+            .await
+            .unwrap();
 
         // Test with year 2024
-        let stats = get_activity_heatmap_stats_impl(&pool, Some(2024)).await.unwrap();
+        let stats = get_activity_heatmap_stats_impl(&pool, Some(2024))
+            .await
+            .unwrap();
         assert!(!stats.is_empty());
-        
+
         // Sum of counts should be 3
         let total: i64 = stats.iter().map(|s| s.count).sum();
         assert_eq!(total, 3);
@@ -998,11 +1029,13 @@ async fn repair_migration_checksums(
         };
         let desired = migration.checksum.as_ref();
         if existing.as_slice() != desired {
-            sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = ? AND success = 1")
-                .bind(desired.to_vec())
-                .bind(version)
-                .execute(pool)
-                .await?;
+            sqlx::query(
+                "UPDATE _sqlx_migrations SET checksum = ? WHERE version = ? AND success = 1",
+            )
+            .bind(desired.to_vec())
+            .bind(version)
+            .execute(pool)
+            .await?;
             fixed += 1;
         }
     }
@@ -1188,20 +1221,31 @@ mod stats_tests {
                 phash TEXT,
                 app_path TEXT,
                 ocr_text TEXT
-            )"
+            )",
         )
-        .execute(&pool).await.unwrap();
+        .execute(&pool)
+        .await
+        .unwrap();
 
         // Insert data
         sqlx::query("INSERT INTO activity_logs (timestamp, app_name) VALUES (?, ?)")
-            .bind(1000).bind("Chrome")
-            .execute(&pool).await.unwrap();
+            .bind(1000)
+            .bind("Chrome")
+            .execute(&pool)
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO activity_logs (timestamp, app_name) VALUES (?, ?)")
-            .bind(2000).bind("Chrome")
-            .execute(&pool).await.unwrap();
+            .bind(2000)
+            .bind("Chrome")
+            .execute(&pool)
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO activity_logs (timestamp, app_name) VALUES (?, ?)")
-            .bind(3000).bind("Code")
-            .execute(&pool).await.unwrap();
+            .bind(3000)
+            .bind("Code")
+            .execute(&pool)
+            .await
+            .unwrap();
 
         let stats = get_app_usage_stats_impl(&pool, 5).await.unwrap();
         assert_eq!(stats.len(), 2);
@@ -1296,7 +1340,7 @@ mod stats_tests {
                 phash TEXT,
                 app_path TEXT,
                 ocr_text TEXT
-            )"
+            )",
         )
         .execute(&pool)
         .await
@@ -1318,53 +1362,109 @@ mod stats_tests {
         }
 
         // 测试1：无过滤条件，total 应为 10
-        let (activities, total) = search_activities_impl(
-            &pool, None, None, None, None, None, Some(5), None, None
-        ).await.unwrap();
+        let (activities, total) =
+            search_activities_impl(&pool, None, None, None, None, None, Some(5), None, None)
+                .await
+                .unwrap();
         assert_eq!(total, 10, "Total should be 10 without any filters");
         assert_eq!(activities.len(), 5, "Should return 5 items with limit=5");
 
         // 测试2：按 app_name 过滤
         let (activities, total) = search_activities_impl(
-            &pool, None, Some("Chrome".to_string()), None, None, None, Some(100), None, None
-        ).await.unwrap();
+            &pool,
+            None,
+            Some("Chrome".to_string()),
+            None,
+            None,
+            None,
+            Some(100),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(total, 5, "Total should be 5 for Chrome");
         assert_eq!(activities.len(), 5);
 
         // 测试3：按时间范围过滤
         let (activities, total) = search_activities_impl(
-            &pool, None, None, Some(3000), Some(7000), None, Some(100), None, None
-        ).await.unwrap();
+            &pool,
+            None,
+            None,
+            Some(3000),
+            Some(7000),
+            None,
+            Some(100),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(total, 5, "Total should be 5 for timestamp 3000-7000");
         assert_eq!(activities.len(), 5);
 
         // 测试4：has_ocr = true
         let (activities, total) = search_activities_impl(
-            &pool, None, None, None, None, Some(true), Some(100), None, None
-        ).await.unwrap();
+            &pool,
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            Some(100),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(total, 5, "Total should be 5 for records with OCR text");
         assert_eq!(activities.len(), 5);
 
         // 测试5：has_ocr = false
         let (activities, total) = search_activities_impl(
-            &pool, None, None, None, None, Some(false), Some(100), None, None
-        ).await.unwrap();
+            &pool,
+            None,
+            None,
+            None,
+            None,
+            Some(false),
+            Some(100),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(total, 5, "Total should be 5 for records without OCR text");
         assert_eq!(activities.len(), 5);
 
         // 测试6：组合过滤 - Chrome + has_ocr
         let (activities, total) = search_activities_impl(
-            &pool, None, Some("Chrome".to_string()), None, None, Some(true), Some(100), None, None
-        ).await.unwrap();
+            &pool,
+            None,
+            Some("Chrome".to_string()),
+            None,
+            None,
+            Some(true),
+            Some(100),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(total, 2, "Total should be 2 for Chrome with OCR (ids 2,4)");
         assert_eq!(activities.len(), 2);
 
         // 测试7：分页 - offset
-        let (activities, total) = search_activities_impl(
-            &pool, None, None, None, None, None, Some(3), Some(2), None
-        ).await.unwrap();
+        let (activities, total) =
+            search_activities_impl(&pool, None, None, None, None, None, Some(3), Some(2), None)
+                .await
+                .unwrap();
         assert_eq!(total, 10, "Total should still be 10 with pagination");
-        assert_eq!(activities.len(), 3, "Should return 3 items with limit=3, offset=2");
+        assert_eq!(
+            activities.len(),
+            3,
+            "Should return 3 items with limit=3, offset=2"
+        );
     }
 
     #[tokio::test]
@@ -1501,7 +1601,9 @@ pub fn diagnose_init_error(err: &anyhow::Error) -> (DbInitFailureKind, &'static 
         );
     }
 
-    if s.contains("database or disk is full") || s.contains("disk full") || s.contains("os error 112")
+    if s.contains("database or disk is full")
+        || s.contains("disk full")
+        || s.contains("os error 112")
     {
         return (
             DbInitFailureKind::DiskFull,
@@ -1516,7 +1618,9 @@ pub fn diagnose_init_error(err: &anyhow::Error) -> (DbInitFailureKind, &'static 
         );
     }
 
-    if s.contains("os error 32") || s.contains("being used by another process") || s.contains("另一个程序正在使用此文件")
+    if s.contains("os error 32")
+        || s.contains("being used by another process")
+        || s.contains("另一个程序正在使用此文件")
     {
         return (
             DbInitFailureKind::FileLocked,
@@ -1541,7 +1645,10 @@ pub fn diagnose_init_error(err: &anyhow::Error) -> (DbInitFailureKind, &'static 
         );
     }
 
-    (DbInitFailureKind::Unknown, "未能自动归类根因；建议启用 RUST_BACKTRACE=1 并提供完整日志。")
+    (
+        DbInitFailureKind::Unknown,
+        "未能自动归类根因；建议启用 RUST_BACKTRACE=1 并提供完整日志。",
+    )
 }
 
 // Note: get_db_path and force_recovery functions moved to src-tauri
@@ -1586,11 +1693,7 @@ fn backup_and_reset_db(db_path: &Path) -> Result<()> {
                     );
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        "无法获取文件元数据 {}: {}",
-                        file_path.display(),
-                        e
-                    );
+                    tracing::warn!("无法获取文件元数据 {}: {}", file_path.display(), e);
                 }
             }
         } else {
@@ -1601,7 +1704,7 @@ fn backup_and_reset_db(db_path: &Path) -> Result<()> {
     // 多次重试删除，使用指数退避策略
     const MAX_ATTEMPTS: u32 = 5;
     const INITIAL_DELAY_MS: u64 = 200;
-    
+
     for attempt in 1..=MAX_ATTEMPTS {
         let mut all_removed = true;
         let mut failed_files = Vec::new();
@@ -1639,10 +1742,10 @@ fn backup_and_reset_db(db_path: &Path) -> Result<()> {
                             e
                         );
                         tracing::error!("{}", error_msg);
-                        
+
                         // 记录详细的错误信息
                         log_file_error_details(file_path, &e);
-                        
+
                         failed_files.push((file_path.clone(), error_kind, e.to_string()));
                         all_removed = false;
                     }
@@ -1671,22 +1774,16 @@ fn backup_and_reset_db(db_path: &Path) -> Result<()> {
     // 最后检查主数据库文件是否还存在
     if db_path.exists() {
         // 构建详细的错误消息
-        let mut error_details = format!(
-            "数据库文件删除失败 (尝试 {} 次后仍失败)\n",
-            MAX_ATTEMPTS
-        );
+        let mut error_details = format!("数据库文件删除失败 (尝试 {} 次后仍失败)\n", MAX_ATTEMPTS);
         error_details.push_str(&format!("数据库路径: {}\n", db_path.display()));
         error_details.push_str(&format!("操作系统: {}\n", os_info));
-        
+
         // 添加失败文件的详细信息
         for file_path in &files_to_remove {
             if file_path.exists() {
                 error_details.push_str(&format!("文件仍存在: {}\n", file_path.display()));
                 if let Ok(meta) = std::fs::metadata(file_path) {
-                    error_details.push_str(&format!(
-                        "  - 大小: {} 字节\n",
-                        meta.len()
-                    ));
+                    error_details.push_str(&format!("  - 大小: {} 字节\n", meta.len()));
                 }
             }
         }
@@ -1701,7 +1798,7 @@ fn backup_and_reset_db(db_path: &Path) -> Result<()> {
         error_details.push_str("6. 尝试以管理员权限运行应用程序\n");
 
         tracing::error!("{}", error_details);
-        
+
         Err(anyhow::anyhow!(
             "Failed to remove database file after {} attempts. Path: {}, OS: {}",
             MAX_ATTEMPTS,
@@ -1717,14 +1814,10 @@ fn backup_and_reset_db(db_path: &Path) -> Result<()> {
 /// 检查文件是否被锁定（通过尝试以独占模式打开）
 fn check_file_locked(file_path: &Path) -> bool {
     use std::fs::OpenOptions;
-    
+
     // 尝试以独占写入模式打开文件
     // 如果文件被其他进程锁定，这个操作会失败
-    match OpenOptions::new()
-        .write(true)
-        .create(false)
-        .open(file_path)
-    {
+    match OpenOptions::new().write(true).create(false).open(file_path) {
         Ok(_) => {
             // 能够打开文件，说明可能未被锁定（但可能仍有其他进程在读取）
             false
@@ -1754,10 +1847,10 @@ fn check_file_locked(file_path: &Path) -> bool {
 fn log_file_error_details(file_path: &Path, error: &std::io::Error) {
     // 记录文件路径
     tracing::error!("文件路径: {}", file_path.display());
-    
+
     // 记录错误类型
     tracing::error!("错误类型: {:?}", error.kind());
-    
+
     // 记录操作系统特定信息
     #[cfg(windows)]
     {
@@ -1766,13 +1859,13 @@ fn log_file_error_details(file_path: &Path, error: &std::io::Error) {
             tracing::error!("文件属性: 0x{:x}", metadata.file_attributes());
         }
     }
-    
+
     // 记录文件权限信息
     if let Ok(metadata) = std::fs::metadata(file_path) {
         tracing::error!("文件权限: {:?}", metadata.permissions());
         tracing::error!("文件大小: {} 字节", metadata.len());
     }
-    
+
     // 记录父目录信息
     if let Some(parent) = file_path.parent() {
         if let Ok(metadata) = std::fs::metadata(parent) {
@@ -1904,9 +1997,7 @@ pub async fn increment_skipped_stat(reason: &str) -> Result<()> {
                 qb.push_values(drained.iter(), |mut b, (reason, count)| {
                     b.push_bind(&today).push_bind(reason).push_bind(*count);
                 });
-                qb.push(
-                    " ON CONFLICT(date, reason) DO UPDATE SET count = count + excluded.count",
-                );
+                qb.push(" ON CONFLICT(date, reason) DO UPDATE SET count = count + excluded.count");
 
                 if let Err(e) = qb.build().execute(&pool).await {
                     tracing::warn!("flush skipped stats failed: {}", e);

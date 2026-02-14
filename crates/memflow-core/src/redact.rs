@@ -8,11 +8,15 @@ pub fn redact_secrets(input: &str) -> String {
 }
 
 fn redact_bearer_tokens(input: &str) -> String {
-    redact_after_prefix(input, "Bearer ", |c| c.is_whitespace() || c == '"' || c == '\'' || c == '\r' || c == '\n')
+    redact_after_prefix(input, "Bearer ", |c| {
+        c.is_whitespace() || c == '"' || c == '\'' || c == '\r' || c == '\n'
+    })
 }
 
 fn redact_incorrect_api_key(input: &str) -> String {
-    redact_after_prefix(input, "Incorrect API key provided:", |c| c.is_whitespace() || c == '"' || c == '\'' || c == '\r' || c == '\n' || c == '.')
+    redact_after_prefix(input, "Incorrect API key provided:", |c| {
+        c.is_whitespace() || c == '"' || c == '\'' || c == '\r' || c == '\n' || c == '.'
+    })
 }
 
 fn redact_sk_like_tokens(input: &str) -> String {

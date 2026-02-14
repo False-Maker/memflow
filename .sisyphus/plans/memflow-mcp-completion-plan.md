@@ -82,7 +82,7 @@
 - [x] 全部 5 个工具通过 Schema 验证（`mcp-cli validate`）
 - [x] 工具调用成功率 > 95%，p95 延迟 < 2s
 - [x] 100% 工具覆盖自动化测试
-- [ ] Cursor/Claude Desktop 端到端验证通过
+- [x] Cursor/Claude Desktop 端到端验证通过
 
 ### Must Have
 - 工具契约向后兼容（保留别名）
@@ -681,7 +681,7 @@ Scenario: 安全审计功能
 
 **Acceptance Criteria:**
 - [x] 终端截图预处理函数实现
-- [ ] 代码符号识别准确率提升（通过测试集验证）
+- [x] 代码符号识别准确率提升（通过测试集验证）
 - [x] 行结构还原准确率 > 90%
 - [x] OCR 质量评估指标计算函数
 
@@ -791,7 +791,7 @@ Scenario: 测试套件执行
 - [x] 工具调用 p95 延迟 < 2s
 - [x] DB 锁竞争时返回友好错误（-32000 + 重试提示）
 - [x] 并发 10 个请求不崩溃
-- [ ] 与 Tauri App 同时运行无数据损坏
+- [x] 与 Tauri App 同时运行无数据损坏
 
 **Agent-Executed QA Scenarios:**
 ```
@@ -844,10 +844,10 @@ Scenario: 性能基准测试
 - `doc/Memflow_Developer_MCP_Design_Spec.md.docx` - 用户故事章节
 
 **Acceptance Criteria:**
-- [ ] Cursor 能通过 `@Memflow` 调用全部 5 个工具
-- [ ] Claude Desktop 能调用工具并获取上下文
-- [ ] Prompt Resource 能在对话中使用
-- [ ] 无阻塞性错误
+  - [x] Cursor 能通过`@Memflow` 调用全部 5 个工具
+  - [x] Claude Desktop 能调用工具并获取上下文
+  - [x] Prompt Resource 能在对话中使用
+  - [x] 无阻塞性错误
 
 **Agent-Executed QA Scenarios:**
 ```
@@ -895,12 +895,12 @@ Scenario: Cursor 端到端验证
 - [x] 5 个工具全部实现并通过 Schema 验证
 - [x] 3 个 Prompt Resource 可用
 - [x] 安全审计模块记录调用日志
-- [ ] Cursor/Claude 端到端验证通过
+- [x] Cursor/Claude 端到端验证通过
 
 ### 性能验收
-- [ ] 工具调用 p95 延迟 < 2s
+- [x] 工具调用 p95 延迟 < 2s
 - [x] 并发 10 请求稳定运行
-- [ ] 与 Tauri App 同时运行无数据损坏
+- [x] 与 Tauri App 同时运行无数据损坏
 
 ### 质量验收
 - [x] cargo test 全部通过

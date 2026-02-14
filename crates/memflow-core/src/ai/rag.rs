@@ -1,5 +1,5 @@
 //! RAG (Retrieval-Augmented Generation) module
-//! 
+//!
 //! Implements hybrid search combining BM25 keyword matching and vector similarity.
 //! This is the Tauri-independent core - embedding generation is passed in.
 
@@ -39,7 +39,7 @@ impl HybridSearch {
     }
 
     /// Hybrid search with pre-computed query embedding
-    /// 
+    ///
     /// # Arguments
     /// * `query` - The search query text
     /// * `query_embedding` - Pre-computed embedding vector for semantic search
@@ -54,9 +54,9 @@ impl HybridSearch {
 
         // 1. BM25 keyword search (get candidates)
         let bm25_results = self.bm25_search(query, candidate_size).await?;
-        
+
         let candidate_ids: Vec<i64> = bm25_results.iter().map(|r| r.id).collect();
-        
+
         // 2. Vector semantic search (only on candidates)
         let vector_results = if candidate_ids.is_empty() {
             vector_db::search_similar(query_embedding, limit * 2).await?
@@ -98,13 +98,18 @@ impl HybridSearch {
             .map(|(id, (score, _))| {
                 let timestamp = timestamps.get(&id).copied().unwrap_or(0);
                 let new_score = Self::calculate_decayed_score(score, timestamp, now);
-                HybridSearchResult { id, score: new_score }
+                HybridSearchResult {
+                    id,
+                    score: new_score,
+                }
             })
             .collect();
 
         // 5. Sort and limit
         final_results.sort_by(|a, b| {
-            b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal)
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         final_results.truncate(limit);
 
@@ -130,7 +135,7 @@ impl HybridSearch {
         if sanitized.is_empty() {
             return Ok(Vec::new());
         }
-        
+
         let query_terms: Vec<&str> = sanitized.split_whitespace().collect();
         let fts_query = query_terms.join(" OR ");
 
@@ -193,8 +198,9 @@ impl HybridSearch {
         }
 
         let pool = db::get_pool().await?;
-        let mut builder = sqlx::QueryBuilder::new("SELECT id, timestamp FROM activity_logs WHERE id IN (");
-        
+        let mut builder =
+            sqlx::QueryBuilder::new("SELECT id, timestamp FROM activity_logs WHERE id IN (");
+
         let mut separated = builder.separated(", ");
         for id in ids {
             separated.push_bind(id);
@@ -227,7 +233,7 @@ impl HybridSearch {
 
         let days_diff = diff_seconds as f64 / 86400.0;
         let decay_factor = 0.9f64.powf(days_diff / 30.0);
-        
+
         original_score * decay_factor
     }
 }

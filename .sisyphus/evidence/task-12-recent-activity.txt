@@ -1,0 +1,7 @@
+
+thread 'main' (10200) panicked at C:\Users\wangx\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\ort-2.0.0-rc.11\src\lib.rs:191:41:
+Failed to load ONNX Runtime dylib: Error { code: GenericFailure, msg: "ort 2.0.0-rc.11 is not compatible with the ONNX Runtime binary found at `onnxruntime.dll`; expected version >= '1.23.x', but got '1.17.1'" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+2026-02-14T05:13:12.559368Z ERROR memflow_mcp: Embedding Model initialization panicked (likely ONNX Runtime version conflict). Using placeholder embeddings.
+2026-02-14T05:13:12.560817Z ERROR memflow_mcp: Get recent activities failed: 数据库未初始化
+{"jsonrpc":"2.0","error":{"code":-32000,"message":"数据库未初始化","data":null},"id":3}

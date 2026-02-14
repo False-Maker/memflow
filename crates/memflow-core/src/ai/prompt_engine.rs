@@ -2,22 +2,21 @@
 //!
 //! 支持 `{{variable}}` 语法的动态变量替换，实现 Prompt 逻辑与代码逻辑的解耦。
 
-use std::collections::HashMap;
-use regex::Regex;
 use once_cell::sync::Lazy;
+use regex::Regex;
+use std::collections::HashMap;
 
 /// 变量匹配正则：匹配 `{{variable_name}}` 格式
-static VARIABLE_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\{\{(\w+)\}\}").expect("Invalid regex pattern")
-});
+static VARIABLE_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\{\{(\w+)\}\}").expect("Invalid regex pattern"));
 
 /// Prompt 模板结构体
-/// 
+///
 /// # Example
 /// ```ignore
 /// use std::collections::HashMap;
 /// use memflow_core::ai::prompt_engine::PromptTemplate;
-/// 
+///
 /// let template = PromptTemplate::new("基于以下上下文回答：\n{{context}}\n用户问题：{{query}}");
 /// let mut vars = HashMap::new();
 /// vars.insert("context".to_string(), "今天天气很好".to_string());
@@ -43,35 +42,42 @@ impl PromptTemplate {
     }
 
     /// 渲染模板，将所有 `{{variable}}` 替换为对应的值
-    /// 
+    ///
     /// 如果变量未找到，保留原始占位符
     pub fn render(&self, variables: &HashMap<String, String>) -> String {
         let mut result = self.template.clone();
-        
+
         for cap in VARIABLE_REGEX.captures_iter(&self.template) {
             let full_match = cap.get(0).unwrap().as_str();
             let var_name = cap.get(1).unwrap().as_str();
-            
+
             if let Some(value) = variables.get(var_name) {
                 result = result.replace(full_match, value);
             }
         }
-        
+
         result
     }
 
     /// 渲染模板，未找到的变量替换为默认值
-    pub fn render_with_default(&self, variables: &HashMap<String, String>, default: &str) -> String {
+    pub fn render_with_default(
+        &self,
+        variables: &HashMap<String, String>,
+        default: &str,
+    ) -> String {
         let mut result = self.template.clone();
-        
+
         for cap in VARIABLE_REGEX.captures_iter(&self.template) {
             let full_match = cap.get(0).unwrap().as_str();
             let var_name = cap.get(1).unwrap().as_str();
-            
-            let value = variables.get(var_name).map(|s| s.as_str()).unwrap_or(default);
+
+            let value = variables
+                .get(var_name)
+                .map(|s| s.as_str())
+                .unwrap_or(default);
             result = result.replace(full_match, value);
         }
-        
+
         result
     }
 
@@ -120,7 +126,7 @@ pub mod templates {
              ## 回答要求\n\
              - 回答应简洁明了\n\
              - 引用上下文中的具体信息\n\
-             - 如果信息不足，请说明"
+             - 如果信息不足，请说明",
         )
     }
 
@@ -133,7 +139,7 @@ pub mod templates {
              ## 分析要求\n\
              - 识别主要任务/项目\n\
              - 总结工作模式\n\
-             - 提取关键文件和链接"
+             - 提取关键文件和链接",
         )
     }
 
@@ -142,7 +148,7 @@ pub mod templates {
         PromptTemplate::new(
             "解析用户查询的意图，提取搜索参数。\n\n\
              用户查询：{{query}}\n\n\
-             返回 JSON 格式的过滤参数。"
+             返回 JSON 格式的过滤参数。",
         )
     }
 }
@@ -156,7 +162,7 @@ mod tests {
         let template = PromptTemplate::new("Hello, {{name}}!");
         let mut vars = HashMap::new();
         vars.insert("name".to_string(), "World".to_string());
-        
+
         assert_eq!(template.render(&vars), "Hello, World!");
     }
 
@@ -167,7 +173,7 @@ mod tests {
         vars.insert("greeting".to_string(), "Hi".to_string());
         vars.insert("name".to_string(), "Alice".to_string());
         vars.insert("day".to_string(), "Monday".to_string());
-        
+
         assert_eq!(template.render(&vars), "Hi, Alice! Today is Monday.");
     }
 
@@ -176,7 +182,7 @@ mod tests {
         let template = PromptTemplate::new("Hello, {{name}}! Your id is {{id}}.");
         let mut vars = HashMap::new();
         vars.insert("name".to_string(), "Bob".to_string());
-        
+
         assert_eq!(template.render(&vars), "Hello, Bob! Your id is {{id}}.");
     }
 
@@ -185,15 +191,18 @@ mod tests {
         let template = PromptTemplate::new("Hello, {{name}}! Your id is {{id}}.");
         let mut vars = HashMap::new();
         vars.insert("name".to_string(), "Bob".to_string());
-        
-        assert_eq!(template.render_with_default(&vars, "N/A"), "Hello, Bob! Your id is N/A.");
+
+        assert_eq!(
+            template.render_with_default(&vars, "N/A"),
+            "Hello, Bob! Your id is N/A."
+        );
     }
 
     #[test]
     fn test_extract_variables() {
         let template = PromptTemplate::new("{{context}}\n{{query}}\n{{context}}");
         let vars = template.extract_variables();
-        
+
         // 注意：重复的变量会被多次提取
         assert_eq!(vars.len(), 3);
         assert!(vars.contains(&"context".to_string()));
@@ -203,18 +212,19 @@ mod tests {
     #[test]
     fn test_has_variable() {
         let template = PromptTemplate::new("Hello, {{name}}!");
-        
+
         assert!(template.has_variable("name"));
         assert!(!template.has_variable("unknown"));
     }
 
     #[test]
     fn test_chinese_content() {
-        let template = PromptTemplate::new("基于以下上下文回答：\n{{context}}\n用户问题：{{query}}");
+        let template =
+            PromptTemplate::new("基于以下上下文回答：\n{{context}}\n用户问题：{{query}}");
         let mut vars = HashMap::new();
         vars.insert("context".to_string(), "今天天气晴朗，温度25度".to_string());
         vars.insert("query".to_string(), "今天天气怎么样？".to_string());
-        
+
         let result = template.render(&vars);
         assert!(result.contains("今天天气晴朗"));
         assert!(result.contains("今天天气怎么样？"));

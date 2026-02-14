@@ -1,14 +1,6 @@
 {
-  "active_plan": "D:\\Demo\\memflow\\.sisyphus\\plans\\terminal-capture.md",
-  "started_at": "2026-02-12T06:47:25.391Z",
-  "session_ids": ["ses_3af935439ffe84qfNZtcGgaEBF", "ses_3af63daadffePWgEXSbTPN9XXd", "ses_3af63c721ffefQ16jTy1ZkJSA7", "ses_3af534a14ffetelFYpZlCqZZSG", "ses_3adacdfefffes9n1JK3Iz5o42I", "ses_3af530d09ffetjetyEfyBVN9NW", "ses_3adacdfefffes9n1JK3Iz5o42I"],
-  "plan_name": "terminal-capture",
-  "status": "COMPLETED",
-  "progress": {
-    "total_tasks": 16,
-    "completed": 16,
-    "remaining": 0,
-    "percentage": 100
-  },
-  "final_status": "ALL_TASKS_COMPLETE"
+  "active_plan": null,
+  "started_at": "2026-02-14T04:58:00.000Z",
+  "session_ids": [],
+  "plan_name": ""
 }

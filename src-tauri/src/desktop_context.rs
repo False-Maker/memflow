@@ -3,14 +3,14 @@
 //! This module provides the Tauri-specific implementation of the RuntimeContext trait,
 //! enabling the agent to use Tauri's capabilities (file paths, event emission) on the desktop.
 
-use memflow_core::context::{RuntimeContext, AiAnalysisResult, TaskContext};
-use tauri::{AppHandle, Manager, Emitter};
-use std::path::PathBuf;
+use memflow_core::context::{AiAnalysisResult, RuntimeContext, TaskContext};
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Tauri-specific implementation of RuntimeContext
-/// 
+///
 /// Wraps a Tauri AppHandle to provide platform capabilities to the agent module.
 pub struct TauriContext {
     pub app_handle: AppHandle,
@@ -30,18 +30,18 @@ impl RuntimeContext for TauriContext {
             .app_data_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
     }
-    
+
     fn resource_dir(&self) -> PathBuf {
         self.app_handle
             .path()
             .resource_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
     }
-    
+
     fn emit(&self, event: &str, payload: serde_json::Value) -> anyhow::Result<()> {
         self.app_handle.emit(event, payload).map_err(|e| e.into())
     }
-    
+
     fn analyze_for_proposals(
         &self,
         context_text: &str,
@@ -50,16 +50,20 @@ impl RuntimeContext for TauriContext {
         Box::pin(async move {
             // Call the existing AI analysis function from src-tauri
             let result = crate::ai::analyze_for_proposals(&context_text).await?;
-            
+
             // Convert from src-tauri's AiAnalysisResult to memflow_core's
             Ok(AiAnalysisResult {
-                tasks: result.tasks.into_iter().map(|t| TaskContext {
-                    title: t.title,
-                    summary: t.summary,
-                    related_urls: t.related_urls,
-                    related_files: t.related_files,
-                    related_apps: t.related_apps,
-                }).collect(),
+                tasks: result
+                    .tasks
+                    .into_iter()
+                    .map(|t| TaskContext {
+                        title: t.title,
+                        summary: t.summary,
+                        related_urls: t.related_urls,
+                        related_files: t.related_files,
+                        related_apps: t.related_apps,
+                    })
+                    .collect(),
             })
         })
     }

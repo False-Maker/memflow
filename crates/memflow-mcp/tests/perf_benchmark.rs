@@ -1,9 +1,9 @@
-use std::time::Instant;
 use memflow_mcp::protocol::*;
 use serde_json::json;
+use std::time::Instant;
 
 /// Performance benchmark for MCP tools
-/// 
+///
 /// Measures p50, p95, p99 latencies for tool calls
 pub struct PerformanceBenchmark {
     results: Vec<BenchmarkResult>,
@@ -25,12 +25,8 @@ impl PerformanceBenchmark {
     }
 
     /// Run benchmark for a specific tool
-    pub async fn benchmark_tool<F, Fut>(
-        &mut self,
-        tool_name: &str,
-        iterations: usize,
-        tool_call: F,
-    ) where
+    pub async fn benchmark_tool<F, Fut>(&mut self, tool_name: &str, iterations: usize, tool_call: F)
+    where
         F: Fn() -> Fut,
         Fut: std::future::Future<Output = Result<(), String>>,
     {
@@ -80,11 +76,8 @@ impl PerformanceBenchmark {
         report.push_str("# MCP Tool Performance Benchmark\n\n");
 
         // Get unique tool names
-        let tool_names: std::collections::HashSet<String> = self
-            .results
-            .iter()
-            .map(|r| r.tool_name.clone())
-            .collect();
+        let tool_names: std::collections::HashSet<String> =
+            self.results.iter().map(|r| r.tool_name.clone()).collect();
 
         for tool_name in tool_names {
             report.push_str(&format!("## {}\n\n", tool_name));
@@ -108,11 +101,8 @@ impl PerformanceBenchmark {
 
     /// Check if all tools meet performance criteria
     pub fn meets_criteria(&self, max_p95_ms: u64) -> bool {
-        let tool_names: std::collections::HashSet<String> = self
-            .results
-            .iter()
-            .map(|r| r.tool_name.clone())
-            .collect();
+        let tool_names: std::collections::HashSet<String> =
+            self.results.iter().map(|r| r.tool_name.clone()).collect();
 
         for tool_name in tool_names {
             if let Some(p) = self.calculate_percentiles(&tool_name) {
@@ -151,7 +141,7 @@ mod tests {
     #[test]
     fn test_benchmark_stores_results() {
         let mut bench = PerformanceBenchmark::new();
-        
+
         // Simulate adding results
         bench.results.push(BenchmarkResult {
             tool_name: "test_tool".to_string(),
@@ -159,7 +149,7 @@ mod tests {
             duration_ms: 100,
             success: true,
         });
-        
+
         let percentiles = bench.calculate_percentiles("test_tool");
         assert!(percentiles.is_some());
         assert_eq!(percentiles.unwrap().p50, 100);
@@ -168,7 +158,7 @@ mod tests {
     #[test]
     fn test_meets_criteria() {
         let mut bench = PerformanceBenchmark::new();
-        
+
         // Add results under threshold
         for i in 0..10 {
             bench.results.push(BenchmarkResult {
@@ -178,7 +168,7 @@ mod tests {
                 success: true,
             });
         }
-        
+
         assert!(bench.meets_criteria(100));
         assert!(!bench.meets_criteria(10));
     }
@@ -187,9 +177,9 @@ mod tests {
     fn test_concurrent_requests_handling() {
         // Simulate handling 10 concurrent requests without crashing
         // This test verifies the server can handle concurrent load
-        use std::thread;
-        use std::sync::Arc;
         use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use std::thread;
 
         let success_count = Arc::new(AtomicUsize::new(0));
         let mut handles = vec![];
