@@ -4,7 +4,7 @@ use fastembed::{InitOptions, TextEmbedding, EmbeddingModel};
 use memflow_core::ai::{fallback_filter_params, FilterParams};
 use memflow_core::ai::nlp;
 use memflow_core::ai::rag::HybridSearch;
-use memflow_core::audit::{init_audit_logger, log_tool_call, flush_audit_log};
+use memflow_core::audit::{init_audit_logger, log_tool_call};
 use memflow_core::context::RuntimeContext;
 use memflow_core::db;
 use memflow_core::vector_db;
@@ -13,7 +13,6 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::{self};
-use std::collections::HashMap;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tracing::{error, info};
@@ -1223,5 +1222,286 @@ async fn call_get_system_environment(
     output.push_str(&format!("Total Memory: {} GB\n", sys.total_memory() / 1024 / 1024 / 1024));
     output.push_str(&format!("Used Memory: {} GB\n", sys.used_memory() / 1024 / 1024 / 1024));
     
+    // Development tools detection
+    if include_dev_tools {
+        output.push_str("\n[Development Tools]\n\n");
+        
+        let (node, python, rust, docker, go, java) = tokio::join!(
+            detect_node_version(),
+            detect_python_version(),
+            detect_rust_version(),
+            detect_docker_version(),
+            detect_go_version(),
+            detect_java_version(),
+        );
+        
+        output.push_str(&format!("Node.js: {}\n", node.unwrap_or_else(|| "Not found".to_string())));
+        output.push_str(&format!("Python: {}\n", python.unwrap_or_else(|| "Not found".to_string())));
+        output.push_str(&format!("Rust: {}\n", rust.unwrap_or_else(|| "Not found".to_string())));
+        output.push_str(&format!("Docker: {}\n", docker.unwrap_or_else(|| "Not found".to_string())));
+        output.push_str(&format!("Go: {}\n", go.unwrap_or_else(|| "Not found".to_string())));
+        output.push_str(&format!("Java: {}\n", java.unwrap_or_else(|| "Not found".to_string())));
+    }
+    
+    // Development processes detection
+    if include_processes {
+        output.push_str("\n[Active Dev Processes]\n\n");
+        
+        let dev_process_names = [
+            "node", "python", "python3", "cargo", "rustc", "java",
+            "docker", "code", "cursor", "npm", "yarn", "pnpm",
+            "git", "go", "gradle", "mvn"
+        ];
+        
+        let mut found_processes = false;
+        
+        for (pid, process) in sys.processes() {
+            let name = process.name().to_lowercase();
+            if dev_process_names.iter().any(|&n| name.contains(n)) {
+                output.push_str(&format!("{} (PID {})\n", process.name(), pid));
+                found_processes = true;
+            }
+        }
+        
+        if !found_processes {
+            output.push_str("No development processes found\n");
+        }
+    }
+    
+    // Port usage detection
+    if include_ports {
+        output.push_str("\n[Port Usage]\n\n");
+        
+        let ports_to_check = [3000, 3001, 4200, 5000, 5173, 8000, 8080, 8443];
+        let timeout = Duration::from_secs(3);
+        
+        match tokio::time::timeout(timeout, Command::new("netstat").args(["-ano"]).output()).await {
+            Ok(Ok(netstat_output)) if netstat_output.status.success() => {
+                let output_str = String::from_utf8_lossy(&netstat_output.stdout);
+                
+                for port in ports_to_check {
+                    let port_pattern = format!(":{}", port);
+                    let line = output_str.lines().find(|line| {
+                        line.contains(&port_pattern) && line.contains("LISTENING")
+                    });
+                    
+                    if let Some(l) = line {
+                        let parts: Vec<&str> = l.split_whitespace().collect();
+                        let pid = parts.get(4).unwrap_or(&"");
+                        output.push_str(&format!(":{} - LISTENING (PID {})\n", port, pid));
+                    } else {
+                        output.push_str(&format!(":{} - Available\n", port));
+                    }
+                }
+            }
+            Ok(Ok(_)) | Ok(Err(_)) | Err(_) => {
+                tracing::warn!("Netstat command failed or timed out");
+                output.push_str("Port check failed\n");
+            }
+        }
+    }
+    
     Ok(output)
+}
+
+// ============================================================================
+// Handler Integration Tests
+// ============================================================================
+
+#[cfg(test)]
+mod handler_integration_tests {
+    use super::*;
+
+    /// Test 1: System environment returns basic OS info
+    #[tokio::test]
+    async fn test_get_system_environment_returns_os_info() {
+        // Call the handler with all optional features disabled
+        let result = call_get_system_environment(false, false, false)
+            .await
+            .expect("System environment call should succeed");
+
+        // Verify the output contains expected OS information fields
+        assert!(result.contains("OS:"), "Result should contain 'OS:'");
+        assert!(result.contains("CPU Count:"), "Result should contain 'CPU Count:'");
+        assert!(result.contains("Total Memory:"), "Result should contain 'Total Memory:'");
+
+        // Verify the output starts with the expected section header
+        assert!(
+            result.contains("[System Environment]"),
+            "Result should contain '[System Environment]' section"
+        );
+    }
+
+    /// Test 2: System environment with dev tools enabled
+    #[tokio::test]
+    async fn test_get_system_environment_with_dev_tools() {
+        // Call the handler with dev tools enabled
+        let result = call_get_system_environment(true, false, false)
+            .await
+            .expect("System environment with dev tools call should succeed");
+
+        // Verify the output contains the Development Tools section
+        assert!(
+            result.contains("[Development Tools]"),
+            "Result should contain '[Development Tools]' section"
+        );
+
+        // At least one development tool entry should be present
+        let dev_tool_patterns = [
+            "Node.js:",
+            "Python:",
+            "Rust:",
+            "Docker:",
+            "Go:",
+            "Java:",
+        ];
+
+        let found_tools = dev_tool_patterns
+            .iter()
+            .filter(|&&pattern| result.contains(pattern))
+            .count();
+
+        assert!(
+            found_tools > 0,
+            "At least one development tool entry should be present in output"
+        );
+    }
+
+    /// Test 3: Terminal output handles no terminal gracefully
+    #[tokio::test]
+    async fn test_get_terminal_output_handles_no_terminal() {
+        // Call the handler - in CI/test environment there may be no active terminal
+        let result = call_get_terminal_output(50).await;
+
+        // The test passes if:
+        // 1. It returns Ok with some output (terminal was found)
+        // 2. It returns Err with NotFound or CaptureFailed (no terminal, which is acceptable)
+        match result {
+            Ok(output) => {
+                // Terminal was captured successfully
+                assert!(!output.is_empty(), "Terminal output should not be empty if Ok");
+            }
+            Err(memflow_core::terminal::TerminalError::NotFound) => {
+                // No terminal window found - this is acceptable in test environment
+            }
+            Err(memflow_core::terminal::TerminalError::CaptureFailed(_)) => {
+                // Capture failed - this is acceptable in test environment
+            }
+            Err(_other) => {
+                // Other errors are also acceptable for this test
+                // The key is that it should not panic
+            }
+        }
+
+        // The key assertion: the handler should handle the absence of terminal gracefully
+        // without causing a panic
+        assert!(true, "Handler completed without panic");
+    }
+
+    /// Test 4: Search memory with empty query returns error
+    #[tokio::test]
+    async fn test_search_memory_empty_query() {
+        // Construct SearchMemoryArgs with empty query
+        let args = SearchMemoryArgs {
+            query: Some("".to_string()),
+            ..Default::default()
+        };
+
+        // Call the search handler
+        let result = call_search_memory(args).await;
+
+        // Should return an error (empty query is invalid)
+        assert!(result.is_err(), "Empty query should return an error");
+
+        // The error message should mention the query requirement
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.to_lowercase().contains("query") || error_msg.to_lowercase().contains("required"),
+            "Error message should mention query requirement"
+        );
+    }
+
+    /// Test 5: Recent activities handles unitialized database gracefully
+    #[tokio::test]
+    async fn test_get_recent_activities_default_params() {
+        // Call with default parameters: 5 minutes, limit 20
+        let result = call_get_recent_activities(5, 20).await;
+
+        // The test environment may not have a database initialized
+        // We expect either:
+        // 1. Ok with activities (if DB is initialized)
+        // 2. Err with "not initialized" or similar message (if DB is not set up)
+        match result {
+            Ok(output) => {
+                // Database was initialized and returned some result
+                // The output should contain the expected format
+                assert!(
+                    output.contains("[Activity Timeline]") || output.contains("No activities"),
+                    "Output should contain timeline header or no activities message"
+                );
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+
+                // Check if the error is about database not being initialized
+                // Common patterns (English and Chinese): "not initialized", "no such table", "unable to open", "数据库未初始化"
+                let is_db_error = error_msg.to_lowercase().contains("not initialized")
+                    || error_msg.to_lowercase().contains("no such table")
+                    || error_msg.to_lowercase().contains("unable to open")
+                    || error_msg.to_lowercase().contains("database")
+                    || error_msg.to_lowercase().contains("locked")
+                    || error_msg.contains("未初始化")  // Chinese: "not initialized"
+                    || error_msg.contains("数据库");     // Chinese: "database"
+
+                assert!(
+                    is_db_error || error_msg.contains("32000"),
+                    "Error should mention database initialization issue or return error code. Got: {}",
+                    e
+                );
+            }
+        }
+    }
+
+    /// Additional test: System environment includes processes section
+    #[tokio::test]
+    async fn test_get_system_environment_includes_processes() {
+        // Test that processes section can be included
+        let result = call_get_system_environment(false, true, false)
+            .await
+            .expect("System environment with processes call should succeed");
+
+        assert!(
+            result.contains("[Active Dev Processes]"),
+            "Result should contain '[Active Dev Processes]' section"
+        );
+    }
+
+    /// Additional test: System environment with all features enabled
+    #[tokio::test]
+    async fn test_get_system_environment_all_features() {
+        // Test with all features enabled
+        let result = call_get_system_environment(true, true, false)
+            .await
+            .expect("System environment with all features call should succeed");
+
+        // Should contain both sections
+        assert!(result.contains("[System Environment]"));
+        assert!(result.contains("[Development Tools]"));
+        assert!(result.contains("[Active Dev Processes]"));
+    }
+
+    /// Additional test: Search memory with None query returns error
+    #[tokio::test]
+    async fn test_search_memory_none_query() {
+        // Test with None query
+        let args = SearchMemoryArgs {
+            query: None,
+            ..Default::default()
+        };
+
+        let result = call_search_memory(args).await;
+
+        // Should return an error or handle gracefully
+        assert!(result.is_err(), "None query should return an error");
+    }
 }

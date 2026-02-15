@@ -7,6 +7,12 @@ use std::pin::Pin;
 
 pub struct McpContext;
 
+impl Default for McpContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl McpContext {
     pub fn new() -> Self {
         Self

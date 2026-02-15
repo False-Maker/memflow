@@ -1,11 +1,15 @@
+//! ⚠️ DEPRECATED: This module contains the legacy MCP server implementation.
+//! The active implementation is in main.rs using ToolName enum routing.
+//! This module is kept for reference only and should not be used.
+//! See: main.rs process_line() for the current implementation.
+
 use crate::context::McpContext;
 use crate::prompts;
 use crate::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse, ListToolsResult, Tool};
-use memflow_core::context::RuntimeContext;
 use memflow_core::db;
 use serde_json::{json, Value};
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::info;
 
 pub struct McpServer {
     context: Arc<McpContext>,

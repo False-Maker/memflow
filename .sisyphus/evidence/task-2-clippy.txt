@@ -1,0 +1,504 @@
+    Blocking waiting for file lock on build directory
+warning: unused import: `ImageBuffer`
+ --> crates\memflow-core\src\ocr_enhance.rs:9:24
+  |
+9 | use image::{GrayImage, ImageBuffer, Luma};
+  |                        ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: this function has too many arguments (8/7)
+   --> crates\memflow-core\src\db.rs:376:1
+    |
+376 | / pub async fn search_activities(
+377 | |     query: Option<String>,
+378 | |     app_name: Option<String>,
+379 | |     from_ts: Option<i64>,
+...   |
+384 | |     order_by: Option<String>,
+385 | | ) -> Result<(Vec<ActivityLog>, i64)> {
+    | |____________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: this function has too many arguments (9/7)
+   --> crates\memflow-core\src\db.rs:394:1
+    |
+394 | / pub async fn search_activities_impl(
+395 | |     pool: &SqlitePool,
+396 | |     query: Option<String>,
+397 | |     app_name: Option<String>,
+...   |
+403 | |     order_by: Option<String>,
+404 | | ) -> Result<(Vec<ActivityLog>, i64)> {
+    | |____________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#too_many_arguments
+
+warning: redundant pattern matching, consider using `is_err()`
+   --> crates\memflow-core\src\ocr_enhance.rs:224:12
+    |
+224 |     if let Err(_) = binarized.write_to(
+    |            ^^^^^^
+    |
+    = note: this will change drop order of the result, as well as all temporaries
+    = note: add `#[allow(clippy::redundant_pattern_matching)]` if this is important
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#redundant_pattern_matching
+    = note: `#[warn(clippy::redundant_pattern_matching)]` on by default
+help: try
+    |
+224 ~     if binarized.write_to(
+225 +         &mut std::io::Cursor::new(&mut output),
+226 +         image::ImageFormat::Png,
+227 ~     ).is_err() {
+    |
+
+warning: the loop variable `i` is used to index `matrix`
+   --> crates\memflow-core\src\ocr_enhance.rs:542:14
+    |
+542 |     for i in 0..=len_a {
+    |              ^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#needless_range_loop
+    = note: `#[warn(clippy::needless_range_loop)]` on by default
+help: consider using an iterator and enumerate()
+    |
+542 -     for i in 0..=len_a {
+542 +     for (i, <item>) in matrix.iter_mut().enumerate().take(len_a + 1) {
+    |
+
+warning: the loop variable `j` is used to index `matrix`
+   --> crates\memflow-core\src\ocr_enhance.rs:545:14
+    |
+545 |     for j in 0..=len_b {
+    |              ^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+    |
+545 -     for j in 0..=len_b {
+545 +     for (j, <item>) in matrix.iter_mut().enumerate().take(len_b + 1) {
+    |
+
+warning: `memflow-core` (lib) generated 6 warnings (run `cargo clippy --fix --lib -p memflow-core` to apply 1 suggestion)
+warning: unused import: `memflow_core::context::RuntimeContext`
+ --> crates\memflow-mcp\src\server.rs:4:5
+  |
+4 | use memflow_core::context::RuntimeContext;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `error`
+ --> crates\memflow-mcp\src\server.rs:8:15
+  |
+8 | use tracing::{error, info};
+  |               ^^^^^
+
+warning: field `context` is never read
+  --> crates\memflow-mcp\src\server.rs:11:5
+   |
+10 | pub struct McpServer {
+   |            --------- field in this struct
+11 |     context: Arc<McpContext>,
+   |     ^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: you should consider adding a `Default` implementation for `McpContext`
+  --> crates\memflow-mcp\src\context.rs:11:5
+   |
+11 | /     pub fn new() -> Self {
+12 | |         Self
+13 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#new_without_default
+   = note: `#[warn(clippy::new_without_default)]` on by default
+help: try adding this
+   |
+10 + impl Default for McpContext {
+11 +     fn default() -> Self {
+12 +         Self::new()
+13 +     }
+14 + }
+   |
+
+warning: method `from_str` can be confused for the standard trait method `std::str::FromStr::from_str`
+  --> crates\memflow-mcp\src\protocol.rs:78:5
+   |
+78 | /     pub fn from_str(name: &str) -> Option<Self> {
+79 | |         match name {
+80 | |             TOOL_SEARCH_MEMORY | TOOL_SEARCH_MEMORY_ALIAS => Some(Self::SearchMemory),
+81 | |             TOOL_GET_RECENT_ACTIVITY | TOOL_GET_RECENT_ACTIVITY_ALIAS => {
+...  |
+90 | |     }
+   | |_____^
+   |
+   = help: consider implementing the trait `std::str::FromStr` or choosing a less ambiguous method name
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#should_implement_trait
+   = note: `#[warn(clippy::should_implement_trait)]` on by default
+
+warning: `memflow-mcp` (lib) generated 5 warnings (run `cargo clippy --fix --lib -p memflow-mcp` to apply 3 suggestions)
+warning: function `show_or_create_debug_window` is never used
+  --> src-tauri\src\lib.rs:77:4
+   |
+77 | fn show_or_create_debug_window(app: &AppHandle) {
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unneeded `return` statement
+   --> src-tauri\src\ai\mod.rs:259:25
+    |
+259 |                         return Ok(answer);
+    |                         ^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#needless_return
+    = note: `#[warn(clippy::needless_return)]` on by default
+help: remove `return`
+    |
+259 -                         return Ok(answer);
+259 +                         Ok(answer)
+    |
+
+warning: unneeded `return` statement
+   --> src-tauri\src\ai\mod.rs:266:25
+    |
+266 | / ...   return Ok(format!(
+267 | | ...       "⚠️ Anthropic API 调用失败\n\n错误信息：{}\n\n请检查：\n1. API Key 是否有效\n2. 网络连接是否正常\n3. 模型名称是否正确（当前: {}）",
+268 | | ...       crate::redact::redact_secrets(&e.to_string()),
+269 | | ...       model_id
+270 | | ...   ));
+    | |________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#needless_return
+help: remove `return`
+    |
+266 ~                         Ok(format!(
+267 ~                             "⚠️ Anthropic API 调用失败\n\n错误信息：{}\n\n请检查：\n1. API Key 是否有效\n2. 网络连接是否正常\n3. 模型名称是否正确（当前: {}）",
+268 +                             crate::redact::redact_secrets(&e.to_string()),
+269 +                             model_id
+270 ~                         ))
+    |
+
+warning: unneeded `return` statement
+   --> src-tauri\src\ai\mod.rs:276:17
+    |
+276 | / ...   return Ok(format!(
+277 | | ...       "⚠️ 未配置 Anthropic API Key\n\n当前选择的模型是 {}，需要 Anthropic API Key。\n\n请在「设置」中配置 Anthropic API Key 后再试。",
+278 | | ...       model_id
+279 | | ...   ));
+    | |________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#needless_return
+help: remove `return`
+    |
+276 ~                 Ok(format!(
+277 ~                     "⚠️ 未配置 Anthropic API Key\n\n当前选择的模型是 {}，需要 Anthropic API Key。\n\n请在「设置」中配置 Anthropic API Key 后再试。",
+278 +                     model_id
+279 ~                 ))
+    |
+
+warning: unneeded `return` statement
+   --> src-tauri\src\ai\mod.rs:283:17
+    |
+283 | /                 return Ok(format!(
+284 | |                     "⚠️ 获取 API Key 失败：{}",
+285 | |                     crate::redact::redact_secrets(&e.to_string())
+286 | |                 ));
+    | |__________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#needless_return
+help: remove `return`
+    |
+283 ~                 Ok(format!(
+284 ~                     "⚠️ 获取 API Key 失败：{}",
+285 +                     crate::redact::redact_secrets(&e.to_string())
+286 ~                 ))
+    |
+
+warning: unneeded `return` statement
+   --> src-tauri\src\ai\mod.rs:303:25
+    |
+303 |                         return Ok(answer);
+    |                         ^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#needless_return
+help: remove `return`
+    |
+303 -                         return Ok(answer);
+303 +                         Ok(answer)
+    |
+
+warning: unneeded `return` statement
+   --> src-tauri\src\ai\mod.rs:310:25
+    |
+310 | / ...   return Ok(format!(
+311 | | ...       "⚠️ OpenAI API 调用失败\n\n错误信息：{}\n\n请检查：\n1. API Key 是否有效\n2. 网络连接是否正常\n3. 模型名称是否正确（当前: {}）\n4. 如果使用自定义 Base URL，请确认地址正确",
+312 | | ...       crate::redact::redact_secrets(&e.to_string()),
+313 | | ...       model_id
+314 | | ...   ));
+    | |________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#needless_return
+help: remove `return`
+    |
+310 ~                         Ok(format!(
+311 ~                             "⚠️ OpenAI API 调用失败\n\n错误信息：{}\n\n请检查：\n1. API Key 是否有效\n2. 网络连接是否正常\n3. 模型名称是否正确（当前: {}）\n4. 如果使用自定义 Base URL，请确认地址正确",
+312 +                             crate::redact::redact_secrets(&e.to_string()),
+313 +                             model_id
+314 ~                         ))
+    |
+
+warning: unneeded `return` statement
+   --> src-tauri\src\ai\mod.rs:320:17
+    |
+320 | / ...   return Ok(format!(
+321 | | ...       "⚠️ 未配置 OpenAI API Key\n\n当前选择的模型是 {}，需要 OpenAI API Key。\n\n请在「设置」中配置 OpenAI API Key 后再试。",
+322 | | ...       model_id
+323 | | ...   ));
+    | |________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#needless_return
+help: remove `return`
+    |
+320 ~                 Ok(format!(
+321 ~                     "⚠️ 未配置 OpenAI API Key\n\n当前选择的模型是 {}，需要 OpenAI API Key。\n\n请在「设置」中配置 OpenAI API Key 后再试。",
+322 +                     model_id
+323 ~                 ))
+    |
+
+warning: unneeded `return` statement
+   --> src-tauri\src\ai\mod.rs:327:17
+    |
+327 | /                 return Ok(format!(
+328 | |                     "⚠️ 获取 API Key 失败：{}",
+329 | |                     crate::redact::redact_secrets(&e.to_string())
+330 | |                 ));
+    | |__________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#needless_return
+help: remove `return`
+    |
+327 ~                 Ok(format!(
+328 ~                     "⚠️ 获取 API Key 失败：{}",
+329 +                     crate::redact::redact_secrets(&e.to_string())
+330 ~                 ))
+    |
+
+warning: this function has too many arguments (8/7)
+   --> src-tauri\src\commands.rs:266:1
+    |
+266 | / pub async fn search_activities(
+267 | |     query: Option<String>,
+268 | |     app_name: Option<String>,
+269 | |     from_ts: Option<i64>,
+...   |
+274 | |     order_by: Option<String>,
+275 | | ) -> Result<serde_json::Value, String> {
+    | |______________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: redundant closure
+   --> src-tauri\src\graph.rs:135:76
+    |
+135 |             DateTime::from_timestamp(activity.timestamp, 0).unwrap_or_else(|| Utc::now());
+    |                                                                            ^^^^^^^^^^^^^ help: replace the closure with the associated function itself: `Utc::now`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#redundant_closure
+    = note: `#[warn(clippy::redundant_closure)]` on by default
+
+warning: redundant redefinition of a binding `preprocess_enabled`
+  --> src-tauri\src\ocr_worker.rs:97:17
+   |
+97 |                 let preprocess_enabled = preprocess_enabled;
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: `preprocess_enabled` is initially defined here
+  --> src-tauri\src\ocr_worker.rs:63:13
+   |
+63 |         let preprocess_enabled = config.ocr_preprocess_enabled;
+   |             ^^^^^^^^^^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#redundant_locals
+   = note: `#[warn(clippy::redundant_locals)]` on by default
+
+warning: redundant redefinition of a binding `preprocess_target_width`
+  --> src-tauri\src\ocr_worker.rs:98:17
+   |
+98 |                 let preprocess_target_width = preprocess_target_width;
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: `preprocess_target_width` is initially defined here
+  --> src-tauri\src\ocr_worker.rs:64:13
+   |
+64 |         let preprocess_target_width = config.ocr_preprocess_target_width;
+   |             ^^^^^^^^^^^^^^^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#redundant_locals
+
+warning: redundant redefinition of a binding `preprocess_max_pixels`
+  --> src-tauri\src\ocr_worker.rs:99:17
+   |
+99 |                 let preprocess_max_pixels = preprocess_max_pixels;
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: `preprocess_max_pixels` is initially defined here
+  --> src-tauri\src\ocr_worker.rs:65:13
+   |
+65 |         let preprocess_max_pixels = config.ocr_preprocess_max_pixels;
+   |             ^^^^^^^^^^^^^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#redundant_locals
+
+warning: non-binding `let` on a future
+   --> src-tauri\src\recorder.rs:225:17
+    |
+225 | /                 let _ = tokio::spawn(async {
+226 | |                     let _ = db::increment_skipped_stat("privacy_mode").await;
+227 | |                 });
+    | |___________________^
+    |
+    = help: consider awaiting the future or dropping explicitly with `std::mem::drop`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#let_underscore_future
+    = note: `#[warn(clippy::let_underscore_future)]` on by default
+
+warning: non-binding `let` on a future
+   --> src-tauri\src\recorder.rs:232:13
+    |
+232 | /             let _ = tokio::spawn(async {
+233 | |                 let _ = db::increment_skipped_stat("privacy_mode").await;
+234 | |             });
+    | |_______________^
+    |
+    = help: consider awaiting the future or dropping explicitly with `std::mem::drop`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#let_underscore_future
+
+warning: non-binding `let` on a future
+   --> src-tauri\src\recorder.rs:259:17
+    |
+259 | /                 let _ = tokio::spawn(async {
+260 | |                     let _ = db::increment_skipped_stat("blocklist").await;
+261 | |                 });
+    | |___________________^
+    |
+    = help: consider awaiting the future or dropping explicitly with `std::mem::drop`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#let_underscore_future
+
+warning: this `if` statement can be collapsed
+   --> src-tauri\src\recorder.rs:264:16
+    |
+264 |           } else if config.blocklist_mode == "allowlist" {
+    |  ________________^
+265 | |             if !is_blocked {
+266 | |                 tracing::debug!(
+267 | |                     "App {} is not in allowlist, skipping",
+...   |
+275 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#collapsible_if
+    = note: `#[warn(clippy::collapsible_if)]` on by default
+help: collapse nested if block
+    |
+264 ~         } else if config.blocklist_mode == "allowlist"
+265 ~             && !is_blocked {
+266 |                 tracing::debug!(
+...
+273 |                 return Ok(());
+274 ~             }
+    |
+
+warning: non-binding `let` on a future
+   --> src-tauri\src\recorder.rs:270:17
+    |
+270 | /                 let _ = tokio::spawn(async {
+271 | |                     let _ = db::increment_skipped_stat("allowlist_miss").await;
+272 | |                 });
+    | |___________________^
+    |
+    = help: consider awaiting the future or dropping explicitly with `std::mem::drop`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#let_underscore_future
+
+warning: using `clone` on type `Option<u64>` which implements the `Copy` trait
+   --> src-tauri\src\recorder.rs:347:26
+    |
+347 |     let last_text_hash = LAST_TEXT_HASH.lock().await.clone();
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try dereferencing it: `*LAST_TEXT_HASH.lock().await`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#clone_on_copy
+    = note: `#[warn(clippy::clone_on_copy)]` on by default
+
+warning: non-binding `let` on a future
+   --> src-tauri\src\recorder.rs:370:9
+    |
+370 | /         let _ = tokio::spawn(async {
+371 | |             let _ = db::increment_skipped_stat("duplicate_frame").await;
+372 | |         });
+    | |___________^
+    |
+    = help: consider awaiting the future or dropping explicitly with `std::mem::drop`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#let_underscore_future
+
+warning: redundant redefinition of a binding `min_x`
+   --> src-tauri\src\recorder.rs:580:13
+    |
+580 |             let min_x = min_x;
+    |             ^^^^^^^^^^^^^^^^^^
+    |
+help: `min_x` is initially defined here
+   --> src-tauri\src\recorder.rs:550:9
+    |
+550 |     let min_x = monitors.iter().map(|m| m.x()).min().unwrap_or(0);
+    |         ^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#redundant_locals
+
+warning: redundant redefinition of a binding `min_y`
+   --> src-tauri\src\recorder.rs:581:13
+    |
+581 |             let min_y = min_y;
+    |             ^^^^^^^^^^^^^^^^^^
+    |
+help: `min_y` is initially defined here
+   --> src-tauri\src\recorder.rs:551:9
+    |
+551 |     let min_y = monitors.iter().map(|m| m.y()).min().unwrap_or(0);
+    |         ^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#redundant_locals
+
+warning: comparing with null is better expressed by the `.is_null()` method
+   --> src-tauri\src\uia.rs:221:12
+    |
+221 |         if hwnd.0 == std::ptr::null_mut() {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `hwnd.0.is_null()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#cmp_null
+    = note: `#[warn(clippy::cmp_null)]` on by default
+
+warning: comparing with null is better expressed by the `.is_null()` method
+  --> src-tauri\src\window_info.rs:17:12
+   |
+17 |         if hwnd.0 == std::ptr::null_mut() {
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `hwnd.0.is_null()`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#cmp_null
+
+    Checking memflow-mcp v0.1.0 (D:\Demo\memflow\crates\memflow-mcp)
+warning: `memflow` (lib) generated 25 warnings (run `cargo clippy --fix --lib -p memflow` to apply 13 suggestions)
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> crates\memflow-mcp\src\main.rs:990:5
+    |
+990 |     search_args.query = Some(query.clone());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `SearchMemoryArgs { query: Some(query.clone()), limit: Some(limit), mode: Some("hybrid".to_string()), ..Default::default() }` and removing relevant reassignments
+   --> crates\memflow-mcp\src\main.rs:989:5
+    |
+989 |     let mut search_args = SearchMemoryArgs::default();
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.91.0/index.html#field_reassign_with_default
+    = note: `#[warn(clippy::field_reassign_with_default)]` on by default
+
+warning: `memflow-mcp` (bin "memflow-mcp") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.71s
