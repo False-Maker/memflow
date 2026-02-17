@@ -29,11 +29,9 @@
       "icons/icon.ico"
     ],
     "resources": [],
-    "externalBin": [
+  "externalBin": [
       "../target/release/memflow-mcp",
-      "../target/x86_64-pc-windows-msvc/release/memflow-mcp",
-      "../target/aarch64-apple-darwin/release/memflow-mcp",
-      "../target/x86_64-unknown-linux-gnu/release/memflow-mcp"
+      "../target/x86_64-pc-windows-msvc/release/memflow-mcp"
     ],
     "copyright": "",
     "category": "Utility",

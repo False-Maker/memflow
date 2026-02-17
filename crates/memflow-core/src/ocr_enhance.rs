@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use image::{GrayImage, ImageBuffer, Luma};
+use image::{GrayImage, Luma};
 
 /// Programming language detection result
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
