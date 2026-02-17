@@ -56,5 +56,11 @@ config.json
 crates/memflow-mcp/ort/
 .aider*
 
+# Local scratch / temp outputs
+tmp/
+test_output.txt
+doc/*.tmp
+doc/*BACKUP*.md
+
 # Windows reserved name (accidental file)
 /nul
