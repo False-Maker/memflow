@@ -2,14 +2,13 @@ import { useState, useEffect } from 'react'
 import Timeline from './Timeline'
 import KnowledgeGraph from './KnowledgeGraph'
 import FlowState from './FlowState'
-import QnA from './QnA'
 import GalleryView from './GalleryView'
 import ActivityHeatmap from './ActivityHeatmap'
 import ContextSidebar from './ContextSidebar'
 import ImmersiveReplay from './ImmersiveReplay'
 import { useApp } from '../contexts/AppContext'
 import { invoke } from '@tauri-apps/api/core'
-import { Settings, History, MessageSquare, BarChart3, Calendar, X } from 'lucide-react'
+import { Settings, BarChart3, Calendar, X } from 'lucide-react'
 
 interface SystemStatus {
   recording: boolean
@@ -32,31 +31,12 @@ interface SystemStatus {
 
 interface LayoutProps {
   onOpenSettings: () => void
-  onOpenChatHistory: () => void
-  onOpenFeedback: () => void
   onOpenPerformance: () => void
-  // 对话会话相关
-  currentSessionId?: number | null
-  shouldSwitchToQA?: boolean
-  onViewSwitched?: () => void
-  onSessionCreated?: (sessionId: number) => void
-  onStartNewChat?: () => void
-  qaDraft?: string | null
-  onSendToQA?: (text: string) => void
 }
 
 export default function Layout({
-  // ... (props unchanged)
   onOpenSettings,
-  onOpenChatHistory,
-  onOpenFeedback,
   onOpenPerformance,
-  currentSessionId,
-  shouldSwitchToQA,
-  onViewSwitched,
-  onSessionCreated,
-  qaDraft,
-  onSendToQA,
 }: LayoutProps) {
   const { state, dispatch, startRecording, stopRecording } = useApp()
   const [heatmapOpen, setHeatmapOpen] = useState(false)
@@ -64,15 +44,7 @@ export default function Layout({
   const [statusLoading, setStatusLoading] = useState(true)
   const [statusError, setStatusError] = useState<string | null>(null)
 
-  // 当需要切换到问答视图时自动切换
-  useEffect(() => {
-    if (shouldSwitchToQA) {
-      dispatch({ type: 'SET_VIEW', payload: 'qa' })
-      onViewSwitched?.()
-    }
-  }, [shouldSwitchToQA, onViewSwitched, dispatch])
-
-  useEffect(() => {
+useEffect(() => {
     let mounted = true
     let initial = true
     const fetchStatus = async () => {
@@ -105,7 +77,7 @@ export default function Layout({
     }
   }, [])
 
-  const setCurrentView = (view: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay') => {
+const setCurrentView = (view: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'gallery' | 'replay') => {
     dispatch({ type: 'SET_VIEW', payload: view })
   }
 
@@ -201,7 +173,7 @@ export default function Layout({
 
         {/* 右侧操作按钮 - Minimal Icons */}
         <div className="flex items-center gap-1">
-          <button
+        <button
             onClick={() => setHeatmapOpen(true)}
             className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
             title="Activity"
@@ -209,25 +181,11 @@ export default function Layout({
             <Calendar className="w-4 h-4" />
           </button>
           <button
-            onClick={onOpenChatHistory}
-            className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
-            title="History"
-          >
-            <History className="w-4 h-4" />
-          </button>
-          <button
             onClick={onOpenPerformance}
             className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
             title="Performance"
           >
             <BarChart3 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onOpenFeedback}
-            className="p-2 text-zinc-500 hover:text-signal hover:bg-zinc-900 transition-all rounded-sm"
-            title="Feedback"
-          >
-            <MessageSquare className="w-4 h-4" />
           </button>
           <button
             onClick={onOpenSettings}
@@ -330,20 +288,13 @@ export default function Layout({
                 )}
               </div>
             )}
-            {currentView === 'timeline' && <Timeline />}
+          {currentView === 'timeline' && <Timeline />}
             {currentView === 'gallery' && <GalleryView />}
             {currentView === 'replay' && <ImmersiveReplay />}
             {currentView === 'graph' && <KnowledgeGraph />}
             {currentView === 'stats' && <FlowState />}
-            {currentView === 'qa' && (
-              <QnA
-                initialSessionId={currentSessionId}
-                onSessionCreated={onSessionCreated}
-                draft={qaDraft}
-              />
-            )}
           </div>
-          {currentView !== 'dashboard' && <ContextSidebar onSendToQA={onSendToQA} />}
+          {currentView !== 'dashboard' && <ContextSidebar />}
         </div>
 
         {/* Heatmap Modal Overlay */}
