@@ -47,7 +47,7 @@ export default function Layout({
 useEffect(() => {
     let mounted = true
     let initial = true
-    const fetchStatus = async () => {
+  const fetchStatus = async () => {
       if (initial) {
         setStatusLoading(true)
       }
@@ -61,6 +61,21 @@ useEffect(() => {
         if (mounted) {
           const message = error instanceof Error ? error.message : String(error)
           setStatusError(message)
+          // Set fallback system status to prevent black screen
+          setSystemStatus({
+            recording: state.isRecording,
+            ocrServiceRunning: false,
+            lastActivity: undefined,
+            dbSizeBytes: 0,
+            screenshotsSizeBytes: 0,
+            ocrQueue: {
+              pending: 0,
+              processing: 0,
+              done: 0,
+              failed: 0
+            },
+            mcpStatus: 'error'
+          })
         }
       } finally {
         if (mounted) {

@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
-import { ChevronLeft, ChevronRight, Lightbulb, Clock, ExternalLink, Search, Copy, Check, Sparkles } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Lightbulb, Clock, ExternalLink, Search, Copy, Check } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
-import AgentModal from './AgentModal'
 
 type SuggestedAction = {
   label: string
@@ -27,12 +26,11 @@ type ContextSuggestionPayload = {
   suggestedActions: SuggestedAction[]
 }
 
-export default function ContextSidebar({ onSendToQA }: { onSendToQA?: (text: string) => void }) {
+export default function ContextSidebar() {
   const { state, dispatch, searchActivities } = useApp()
   const [open, setOpen] = useState(true)
   const [displayed, setDisplayed] = useState<ContextSuggestionPayload | null>(null)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
-  const [isAgentOpen, setIsAgentOpen] = useState(false)
   const pendingRef = useRef<ContextSuggestionPayload | null>(null)
   const timerRef = useRef<number | null>(null)
 
@@ -133,9 +131,7 @@ export default function ContextSidebar({ onSendToQA }: { onSendToQA?: (text: str
   })()
 
   return (
-    <>
-      <AgentModal open={isAgentOpen} onClose={() => setIsAgentOpen(false)} onSendToQA={onSendToQA} />
-      <aside
+    <aside
         className={`h-full border-l border-zinc-800 bg-void transition-all duration-300 ${open ? 'w-[320px]' : 'w-[52px]'
           } flex flex-col shrink-0 z-20`}
       >
@@ -180,20 +176,6 @@ export default function ContextSidebar({ onSendToQA }: { onSendToQA?: (text: str
                 <span>Model: {modelLabel}</span>
                 <span>{proactiveReady ? 'ACTIVE' : disabledReason ? disabledReason : 'INACTIVE'}</span>
               </div>
-
-              {/* Agent Trigger */}
-              <button
-                onClick={() => setIsAgentOpen(true)}
-                className="w-full flex items-center gap-3 p-3 border border-zinc-800 hover:border-signal/50 hover:bg-zinc-900/50 transition-all group"
-              >
-                <div className="p-2 bg-zinc-900 text-zinc-400 group-hover:text-signal transition-colors">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div className="text-left">
-                  <div className="text-xs font-bold text-zinc-300 group-hover:text-signal uppercase tracking-wider transition-colors">Deep Automation</div>
-                  <div className="text-[10px] text-zinc-600 font-mono">GENERATE_WORKFLOW</div>
-                </div>
-              </button>
 
               {!displayed ? (
                 <div className="flex flex-col items-center justify-center h-40 text-gray-500 gap-2 opacity-60">
@@ -275,6 +257,5 @@ export default function ContextSidebar({ onSendToQA }: { onSendToQA?: (text: str
           )}
         </div>
       </aside>
-    </>
   )
 }
