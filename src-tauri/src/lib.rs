@@ -25,6 +25,7 @@ use std::time::Duration;
 use tauri::image::Image;
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
+use tauri::Emitter;
 use tauri::Manager;
 use tauri::{AppHandle, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
@@ -368,22 +369,30 @@ fn run_with_mode(run_mode: RunMode) {
                 }
             });
 
-            let status = MenuItemBuilder::with_id("status", "Status: Initializing")
+        let status = MenuItemBuilder::with_id("status", "Status: Initializing")
                 .enabled(true)
                 .build(app)?;
             let show = MenuItemBuilder::with_id("show", "Open Dashboard").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit Memflow").build(app)?;
+            
+            let show_main = MenuItemBuilder::with_id("show-main", "显示主窗口").build(app)?;
+            let start_recording = MenuItemBuilder::with_id("start-recording", "开始录制").build(app)?;
+            let stop_recording = MenuItemBuilder::with_id("stop-recording", "停止录制").build(app)?;
+            let settings = MenuItemBuilder::with_id("settings", "设置").build(app)?;
 
             let menu = MenuBuilder::new(app)
+                .items(&[&show_main, &start_recording, &stop_recording, &settings])
+                .separator()
                 .items(&[&status, &show])
                 .separator()
                 .items(&[&quit])
                 .build()?;
 
-            let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))?;
-            let _tray = TrayIconBuilder::new()
+          let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))?;
+            let tray = TrayIconBuilder::new()
                 .menu(&menu)
                 .icon(icon)
+                .tooltip("MemFlow")
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "status" => {
                         let message = format_status_dialog(app);
@@ -394,7 +403,19 @@ fn run_with_mode(run_mode: RunMode) {
                             .buttons(MessageDialogButtons::Ok)
                             .show(|_| {});
                     }
-                    "show" => show_or_create_main_window(app),
+                    "show" | "show-main" => show_or_create_main_window(&app),
+                    "start-recording" => {
+                        let _ = app.emit("start_recording", ());
+                    }
+                    "stop-recording" => {
+                        let _ = app.emit("stop_recording", ());
+                    }
+                    "settings" => {
+                        // Open settings - trigger settings modal or command
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("open-settings", {});
+                        }
+                    }
                     "quit" => std::process::exit(0),
                     _ => {}
                 })
@@ -418,10 +439,9 @@ fn run_with_mode(run_mode: RunMode) {
 
             Ok(())
         })
-        .on_window_event(move |window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+      .on_window_event(move |window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
                 if run_mode != RunMode::Ui {
-                    api.prevent_close();
                     let _ = window.hide();
                     return;
                 }
