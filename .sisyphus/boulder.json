@@ -1,6 +1,9 @@
 {
-  "active_plan": null,
-  "started_at": "2026-02-14T04:58:00.000Z",
-  "session_ids": [],
-  "plan_name": ""
+  "active_plan": "D:\\Demo\\memflow\\.sisyphus\\plans\\remove-unused-qa-and-agent.md",
+  "started_at": "2026-02-20T06:08:11.685Z",
+  "session_ids": [
+    "ses_386d07201ffeqVuUt33BKWUTOB"
+  ],
+  "plan_name": "remove-unused-qa-and-agent",
+  "agent": "atlas"
 }

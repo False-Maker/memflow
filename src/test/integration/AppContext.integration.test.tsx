@@ -364,12 +364,12 @@ describe('AppContext Integration Tests', () => {
 
       expect(result.current.state.currentView).toBe('graph')
 
-      // 切换到问答视图
+      // 切换到统计视图
       act(() => {
-        result.current.dispatch({ type: 'SET_VIEW', payload: 'qa' })
+        result.current.dispatch({ type: 'SET_VIEW', payload: 'stats' })
       })
 
-      expect(result.current.state.currentView).toBe('qa')
+      expect(result.current.state.currentView).toBe('stats')
     })
   })
 

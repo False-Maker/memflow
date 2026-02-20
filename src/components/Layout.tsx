@@ -4,7 +4,6 @@ import KnowledgeGraph from './KnowledgeGraph'
 import FlowState from './FlowState'
 import GalleryView from './GalleryView'
 import ActivityHeatmap from './ActivityHeatmap'
-import ContextSidebar from './ContextSidebar'
 import ImmersiveReplay from './ImmersiveReplay'
 import { useApp } from '../contexts/AppContext'
 import { invoke } from '@tauri-apps/api/core'
@@ -171,7 +170,6 @@ const setCurrentView = (view: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'ga
             { id: 'replay', label: 'REPLAY' },
             { id: 'graph', label: 'GRAPH' },
             { id: 'stats', label: 'STATS' },
-            { id: 'qa', label: 'Q&A' },
           ].map((view) => (
             <button
               key={view.id}
@@ -304,13 +302,12 @@ const setCurrentView = (view: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'ga
               </div>
             )}
           {currentView === 'timeline' && <Timeline />}
-            {currentView === 'gallery' && <GalleryView />}
-            {currentView === 'replay' && <ImmersiveReplay />}
-            {currentView === 'graph' && <KnowledgeGraph />}
-            {currentView === 'stats' && <FlowState />}
-          </div>
-          {currentView !== 'dashboard' && <ContextSidebar />}
-        </div>
+             {currentView === 'gallery' && <GalleryView />}
+             {currentView === 'replay' && <ImmersiveReplay />}
+             {currentView === 'graph' && <KnowledgeGraph />}
+             {currentView === 'stats' && <FlowState />}
+           </div>
+         </div>
 
         {/* Heatmap Modal Overlay */}
         {heatmapOpen && (

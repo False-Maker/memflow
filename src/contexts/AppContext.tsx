@@ -16,7 +16,7 @@ export interface ActivityLog {
 export interface AppState {
   isRecording: boolean
   activities: ActivityLog[]
-  currentView: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay'
+  currentView: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'gallery' | 'replay'
   config: AppConfig
   configLoaded: boolean
   configError: string | null
@@ -66,7 +66,7 @@ type AppAction =
   | { type: 'ADD_ACTIVITY'; payload: ActivityLog }
   | { type: 'UPDATE_ACTIVITY_OCR'; payload: { id: number; ocrText: string } }
   | { type: 'SET_ACTIVITIES'; payload: ActivityLog[] }
-  | { type: 'SET_VIEW'; payload: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'qa' | 'gallery' | 'replay' }
+  | { type: 'SET_VIEW'; payload: 'dashboard' | 'timeline' | 'graph' | 'stats' | 'gallery' | 'replay' }
   | { type: 'SET_CONFIG'; payload: AppConfig }
   | { type: 'SET_CONFIG_ERROR'; payload: string }
   | { type: 'SET_SEARCH_PARAMS'; payload: SearchParams }

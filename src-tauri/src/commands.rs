@@ -5,14 +5,11 @@ use crate::ai::provider::{
 use crate::app_config;
 use crate::chat;
 use crate::db;
-use crate::desktop_context::TauriContext;
 use crate::graph;
 use crate::performance;
 use crate::recorder;
-use memflow_core::agent;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::sync::Arc;
 use tauri::Manager;
 
 // ActivityLog is imported from crate::db (re-exported from memflow_core)
@@ -958,46 +955,6 @@ pub async fn get_user_feedbacks(limit: Option<i64>) -> Result<Vec<chat::UserFeed
     chat::get_feedbacks(limit).await.map_err(|e| e.to_string())
 }
 
-// ============================================
-// 智能代理（自动化提案/执行/审计）相关命令
-// ============================================
-
-#[tauri::command]
-pub async fn agent_propose_automation(
-    params: Option<agent::AgentProposeParams>,
-    app_handle: tauri::AppHandle,
-) -> Result<Vec<agent::AutomationProposalDto>, String> {
-    let ctx = Arc::new(TauriContext::new(app_handle));
-    agent::propose_automation(params.unwrap_or_default(), ctx)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn agent_execute_automation(
-    proposal_id: i64,
-    app_handle: tauri::AppHandle,
-) -> Result<agent::ExecutionResultDto, String> {
-    tracing::info!(
-        "agent_execute_automation called: proposal_id={}",
-        proposal_id
-    );
-    let ctx = Arc::new(TauriContext::new(app_handle));
-    agent::execute_automation(proposal_id, ctx)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn agent_list_executions(
-    limit: Option<i64>,
-    offset: Option<i64>,
-) -> Result<Vec<agent::ExecutionDto>, String> {
-    agent::list_executions(limit.unwrap_or(50), offset.unwrap_or(0))
-        .await
-        .map_err(|e| e.to_string())
-}
-
 #[tauri::command]
 pub async fn run_retention_cleanup(dry_run: Option<bool>) -> Result<db::CleanupStats, String> {
     let config = app_config::get_config().await.map_err(|e| e.to_string())?;
@@ -1007,13 +964,4 @@ pub async fn run_retention_cleanup(dry_run: Option<bool>) -> Result<db::CleanupS
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub async fn agent_cancel_execution(execution_id: i64) -> Result<(), String> {
-    tracing::info!(
-        "agent_cancel_execution called: execution_id={}",
-        execution_id
-    );
-    agent::cancel_execution(execution_id)
-        .await
-        .map_err(|e| e.to_string())
-}
+

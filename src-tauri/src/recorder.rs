@@ -2,7 +2,6 @@ use crate::app_config;
 use crate::commands::ActivityLog;
 use crate::db;
 use crate::focus_analytics;
-use crate::proactive_context;
 use crate::window_info;
 use anyhow::Result;
 use image::DynamicImage;
@@ -238,12 +237,6 @@ async fn capture_and_save() -> Result<()> {
 
     // 1. 获取前台窗口信息
     let window_info = window_info::get_foreground_window_info()?;
-
-    // 1.5 触发主动上下文助理（非阻塞，内部 spawn async task）
-    {
-        let app_handle = APP_HANDLE.lock().await.clone();
-        proactive_context::maybe_trigger(&window_info, app_handle);
-    }
 
     // Check Blocklist
     if config.blocklist_enabled {

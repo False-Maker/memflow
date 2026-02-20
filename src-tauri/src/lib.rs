@@ -9,7 +9,6 @@ pub mod graph;
 pub mod ocr;
 pub mod ocr_worker;
 pub mod performance;
-pub mod proactive_context;
 pub mod protocol;
 pub mod recorder;
 pub mod redact;
@@ -264,11 +263,6 @@ fn run_with_mode(run_mode: RunMode) {
             commands::rate_message,
             commands::submit_feedback,
             commands::get_user_feedbacks,
-            // 智能代理（自动化提案/执行/审计）
-            commands::agent_propose_automation,
-            commands::agent_execute_automation,
-            commands::agent_list_executions,
-            commands::agent_cancel_execution,
             commands::run_retention_cleanup,
             commands::get_recording_stats,
             commands::get_ocr_queue_stats,
