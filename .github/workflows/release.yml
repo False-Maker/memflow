@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*-desktop'
+      - 'v*-mcp'
+
+jobs:
+  release-desktop:
+    name: Build & Release Desktop App (Windows)
+    if: endsWith(github.ref_name, '-desktop')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Build MCP binary
+        run: pnpm build:mcp:win
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'MemFlow Desktop App ${{ github.ref_name }}'
+          releaseBody: |
+            ## MemFlow Desktop App ${{ github.ref_name }}
+
+            ### 安装
+            1. 下载 `.msi` 安装包
+            2. 双击运行安装
+            3. 启动 MemFlow
+
+            > **系统要求**: Windows 10/11 (64-bit)
+          releaseDraft: false
+          prerelease: false
+
+  release-mcp:
+    name: Build & Release Developer MCP (Windows)
+    if: endsWith(github.ref_name, '-mcp')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build MCP binary
+        run: cargo build -p memflow-mcp --release --target x86_64-pc-windows-msvc
+
+      - name: Create Release and Upload Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 'MemFlow Developer MCP ${{ github.ref_name }}'
+          body: |
+            ## MemFlow Developer MCP ${{ github.ref_name }}
+            
+            ### 安装
+            1. 下载 `memflow-mcp.exe`
+            2. 在 Claude Desktop / Cursor 中配置 MCP 服务器路径指向该 `.exe`
+            3. 重启 IDE 生效
+            
+            > **系统要求**: Windows 10/11 (64-bit)
+          files: target/x86_64-pc-windows-msvc/release/memflow-mcp.exe
