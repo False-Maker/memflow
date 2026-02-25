@@ -50,15 +50,16 @@ jobs:
         run: pnpm install
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm tauri build --bundles msi
+
+      - name: Create Release and Upload Asset
+        uses: softprops/action-gh-release@v2
         with:
-          tagName: v0.1.0-desktop
-          releaseName: 'MemFlow Desktop App ${{ github.ref_name }}'
-          args: --no-version-check
-          releaseBody: |
+          name: 'MemFlow Desktop App ${{ github.ref_name }}'
+          body: |
             ## MemFlow Desktop App ${{ github.ref_name }}
+
+            这是由 GitHub Actions 自动构建的桌面全能版（.msi 安装包）。
 
             ### 安装
             1. 下载 `.msi` 安装包
@@ -66,8 +67,7 @@ jobs:
             3. 启动 MemFlow
 
             > **系统要求**: Windows 10/11 (64-bit)
-          releaseDraft: false
-          prerelease: false
+          files: src-tauri/target/release/bundle/msi/*.msi
 
 
   release-mcp:
