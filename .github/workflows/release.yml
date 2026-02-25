@@ -57,8 +57,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
+          tagName: v0.1.0-desktop
           releaseName: 'MemFlow Desktop App ${{ github.ref_name }}'
+          args: --no-version-check
           releaseBody: |
             ## MemFlow Desktop App ${{ github.ref_name }}
 
