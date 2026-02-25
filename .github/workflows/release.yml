@@ -52,14 +52,16 @@ jobs:
       - name: Build MCP binary
         run: pnpm build:mcp:win
 
-      - name: Build Tauri app
+      - name: Build Tauri app (Manual)
+        run: pnpm tauri build --bundles msi
+        
+      - name: Create Release and Upload
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v0.1.0-desktop
           releaseName: 'MemFlow Desktop App ${{ github.ref_name }}'
-          args: --no-version-check
           releaseBody: |
             ## MemFlow Desktop App ${{ github.ref_name }}
 
@@ -69,8 +71,12 @@ jobs:
             3. 启动 MemFlow
 
             > **系统要求**: Windows 10/11 (64-bit)
-          releaseDraft: false
-          prerelease: false
+          includeRelease: true
+          includeAssets: true
+          # includeRelease: true ensures it creates the release if it doesn't exist
+          # includeAssets: true ensures it uploads the built artifacts from src-tauri/target/release/bundle/msi/
+          args: --no-version-check # Keep this but as part of tauri-action's own check if it still runs it
+
 
   release-mcp:
     name: Build & Release Developer MCP (Windows)
