@@ -41,30 +41,22 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            src-tauri/target/
+            target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
       - name: Install frontend dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install
 
-      - name: Build frontend
-        run: pnpm build
-
-      - name: Build MCP binary
-        run: pnpm build:mcp:win
-
-      - name: Build Tauri app (Manual)
-        run: pnpm tauri build --bundles msi
-        
-      - name: Create Release and Upload
+      - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v0.1.0-desktop
           releaseName: 'MemFlow Desktop App ${{ github.ref_name }}'
+          args: --no-version-check
           releaseBody: |
             ## MemFlow Desktop App ${{ github.ref_name }}
 
@@ -74,11 +66,8 @@ jobs:
             3. 启动 MemFlow
 
             > **系统要求**: Windows 10/11 (64-bit)
-          includeRelease: true
-          includeAssets: true
-          # includeRelease: true ensures it creates the release if it doesn't exist
-          # includeAssets: true ensures it uploads the built artifacts from src-tauri/target/release/bundle/msi/
-          args: --no-version-check # Keep this but as part of tauri-action's own check if it still runs it
+          releaseDraft: false
+          prerelease: false
 
 
   release-mcp:
