@@ -30,7 +30,8 @@
     "version:minor": "bash scripts/version.sh minor || powershell -ExecutionPolicy Bypass -File scripts/version.ps1 minor",
     "version:major": "bash scripts/version.sh major || powershell -ExecutionPolicy Bypass -File scripts/version.ps1 major",
     "download:rapidocr": "powershell -ExecutionPolicy Bypass -File ./scripts/download_rapidocr.ps1",
-    "test:ocr": "powershell -ExecutionPolicy Bypass -File ./scripts/test_ocr.ps1"
+    "test:ocr": "powershell -ExecutionPolicy Bypass -File ./scripts/test_ocr.ps1",
+    "build:mcp:win": "cargo build -p memflow-mcp --release --target x86_64-pc-windows-msvc"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
