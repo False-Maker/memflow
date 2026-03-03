@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '../contexts/AppContext'
 import { Virtuoso } from 'react-virtuoso'
-import { Clock, Monitor, FileText, Search, Filter, X, Calendar, Sparkles } from 'lucide-react'
+import { Clock, Monitor, FileText, Search, Filter, X, Sparkles } from 'lucide-react'
 import { getScreenshotUrl } from '../utils/imageLoader'
 import ImagePreviewModal from './ImagePreviewModal'
 import { ActivityLog } from '../contexts/AppContext'
@@ -391,134 +391,156 @@ export default function Timeline() {
         onClose={() => setPreviewActivity(null)}
       />
 
-      <div className="border-b border-zinc-800 px-6 py-4 space-y-4 bg-void">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-zinc-100 uppercase tracking-widest font-mono flex items-center gap-2">
-            <Clock className="w-4 h-4 text-signal" />
-            ACTIVITY_LOG
-          </h2>
-          <div className="text-xs text-zinc-500 font-mono">
-            COUNT: {state.activities?.length ?? 0}
-          </div>
-        </div>
+      <div className="border-b border-zinc-800 px-4 py-2 flex items-center gap-2 bg-void">
+        {/* 标题 */}
+        <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono flex items-center gap-2 mr-2">
+          <Clock className="w-3.5 h-3.5 text-neon-cyan" />
+          LOG
+        </h2>
 
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="SEARCH_ACTIVITIES..."
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-sm pl-9 pr-4 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-signal transition-colors placeholder:text-zinc-600"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            {query && (
-              <button
-                onClick={() => setQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2"
-                aria-label="Clear Search"
-              >
-                <X className="w-4 h-4 text-zinc-500 hover:text-zinc-300" />
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 rounded-sm border transition-all ${showFilters
-              ? 'bg-zinc-800 border-signal text-signal'
-              : 'border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200'
-              }`}
-          >
-            <Filter className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={handleSmartSearch}
-            disabled={isParsingIntent}
-            className={`p-2 rounded-sm border transition-all ${isParsingIntent
-              ? 'bg-zinc-800 border-signal text-signal animate-pulse cursor-wait'
-              : 'border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-signal'
-              }`}
-            title="AI Smart Search"
-          >
-            <Sparkles className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleSearch}
-            className="px-4 py-2 bg-zinc-100 text-black text-xs font-bold uppercase tracking-wider rounded-sm hover:bg-white transition-colors border border-transparent hover:border-signal"
-          >
-            SEARCH
-          </button>
-          {(query || appName || hasOcr || startDate || endDate) && (
+        {/* 紧凑搜索框 */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+          <input
+            type="text"
+            placeholder="搜索活动记录..."
+            className="w-full bg-void border border-white/10 rounded-sm pl-8 pr-8 py-1.5 text-xs font-mono text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan/50 transition-all backdrop-blur-sm"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          />
+          {query && (
             <button
-              onClick={clearSearch}
-              className="px-3 py-2 border border-zinc-800 text-zinc-500 rounded-sm hover:bg-zinc-900 hover:text-zinc-300 transition-colors text-xs font-mono uppercase"
+              onClick={() => setQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2"
+              aria-label="Clear Search"
             >
-              RESET
+              <X className="w-3 h-3 text-zinc-500 hover:text-zinc-300" />
             </button>
           )}
         </div>
 
-        {(smartSearchNotice || smartSearchError) && (
-          <div
-            className={`text-xs px-3 py-2 rounded-lg border ${smartSearchError
-              ? 'border-neon-red/30 bg-neon-red/10 text-neon-red'
-              : 'border-neon-purple/30 bg-neon-purple/10 text-neon-purple'
-              }`}
+        {/* 功能按钮组 */}
+        <div className="flex items-center gap-1">
+          {/* 筛选按钮 */}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+className={`p-1.5 rounded-sm border transition-all ${
+              showFilters || appName || hasOcr || startDate || endDate
+                ? 'bg-neon-cyan/20 border-neon-cyan text-neon-cyan'
+                : 'border-white/10 hover:border-neon-cyan/50 text-zinc-500 hover:text-neon-cyan'
+            }`}
+            title="筛选"
           >
-            {smartSearchError ?? smartSearchNotice}
-          </div>
-        )}
+            <Filter className="w-3.5 h-3.5" />
+          </button>
 
-        {showFilters && (
-          <div className="grid grid-cols-2 gap-4 p-4 bg-surface/30 rounded-lg animate-in slide-in-from-top-2">
+          {/* AI 智能搜索 */}
+          <button
+            onClick={handleSmartSearch}
+            disabled={isParsingIntent}
+className={`p-1.5 rounded-sm border border-white/10 transition-all ${
+              isParsingIntent
+                ? 'bg-neon-cyan/20 text-neon-cyan animate-pulse cursor-wait'
+                : 'text-zinc-500 hover:text-neon-cyan hover:border-neon-cyan'
+            }`}
+            title="AI 智能搜索"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+          </button>
+
+          {/* 搜索按钮 */}
+          <button
+            onClick={handleSearch}
+            className="px-3 py-1.5 bg-zinc-100 text-black text-[10px] font-bold uppercase tracking-wider rounded-sm hover:bg-white transition-colors"
+          >
+            搜索
+          </button>
+
+          {/* 重置 */}
+          {(query || appName || hasOcr || startDate || endDate) && (
+            <button
+              onClick={clearSearch}
+              className="px-2 py-1.5 text-zinc-500 text-[10px] font-mono uppercase hover:text-zinc-300 transition-colors"
+            >
+              重置
+            </button>
+          )}
+        </div>
+
+        {/* 计数 */}
+        <div className="text-[10px] text-zinc-600 font-mono hidden sm:block">
+          {state.activities?.length ?? 0} 条
+        </div>
+      </div>
+
+      {/* AI 搜索提示 */}
+      {(smartSearchNotice || smartSearchError) && (
+        <div
+className={`mx-4 mt-2 text-[10px] px-3 py-2 rounded-lg border ${
+            smartSearchError
+              ? 'border-red-500/30 bg-red-500/10 text-red-400'
+              : 'border-neon-cyan/30 bg-neon-cyan/10 text-neon-cyan'
+          }`}
+        >
+          {smartSearchError ?? smartSearchNotice}
+        </div>
+      )}
+
+      {/* 折叠的筛选面板 */}
+      {showFilters && (
+        <div className="px-4 py-3 bg-zinc-900/30 border-b border-zinc-800 animate-in slide-in-from-top-2 duration-200">
+          <div className="grid grid-cols-4 gap-3 text-xs">
+            {/* 应用名称 */}
             <div className="space-y-1">
-              <label className="text-xs text-gray-400">应用名称</label>
+              <label className="text-[10px] text-zinc-500 font-mono uppercase">应用</label>
               <input
                 type="text"
-                placeholder="例如: Chrome"
-                className="w-full bg-surface/50 border border-glass-border rounded px-3 py-1.5 text-sm text-white"
+                placeholder="Chrome"
+                className="w-full bg-void border border-white/10 rounded px-2 py-1.5 text-zinc-300 placeholder:text-zinc-600 focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan/50 transition-all backdrop-blur-sm"
                 value={appName}
                 onChange={(e) => setAppName(e.target.value)}
               />
             </div>
 
+            {/* 开始日期 */}
             <div className="space-y-1">
-              <label className="text-xs text-gray-400 flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> 日期范围
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  className="w-full bg-surface/50 border border-glass-border rounded px-2 py-1.5 text-sm text-white [color-scheme:dark]"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-                <span className="text-gray-500">-</span>
-                <input
-                  type="date"
-                  className="w-full bg-surface/50 border border-glass-border rounded px-2 py-1.5 text-sm text-white [color-scheme:dark]"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
-              </div>
+              <label className="text-[10px] text-zinc-500 font-mono uppercase">从</label>
+              <input
+                type="date"
+                className="w-full bg-void border border-white/10 rounded px-2 py-1.5 text-zinc-300 [color-scheme:dark] focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan/50 transition-all backdrop-blur-sm"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
             </div>
 
-            <div className="flex items-end col-span-2">
-              <label className="flex items-center gap-2 cursor-pointer">
+            {/* 结束日期 */}
+            <div className="space-y-1">
+              <label className="text-[10px] text-zinc-500 font-mono uppercase">至</label>
+              <input
+                type="date"
+                className="w-full bg-void border border-white/10 rounded px-2 py-1.5 text-zinc-300 [color-scheme:dark] focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan/50 transition-all backdrop-blur-sm"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+
+            {/* OCR 筛选 */}
+            <div className="space-y-1">
+              <label className="text-[10px] text-zinc-500 font-mono uppercase">选项</label>
+              <label className="flex items-center gap-2 cursor-pointer h-full pt-1.5">
                 <input
                   type="checkbox"
-                  className="rounded border-glass-border bg-surface/50 text-neon-blue focus:ring-neon-blue"
+                  className="rounded border-white/10 bg-void accent-neon-cyan"
                   checked={hasOcr}
                   onChange={(e) => setHasOcr(e.target.checked)}
                 />
-                <span className="text-sm text-gray-300">仅显示含 OCR 文本</span>
+                <span className="text-zinc-400">含 OCR</span>
               </label>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-hidden">
         {!state.activities || state.activities.length === 0 ? (
@@ -545,8 +567,8 @@ export default function Timeline() {
                       {formatDate(activity.timestamp)}
                     </div>
                   )}
-                  <div className="glass mx-6 mb-3 p-4 border border-zinc-800 bg-void hover:bg-zinc-900/30 transition-all rounded-sm group relative">
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover:bg-signal transition-colors"></div>
+<div className="glass mx-6 mb-3 p-4 border border-white/10 bg-void hover:bg-neon-cyan/5 transition-all rounded-sm group relative hover:shadow-[0_0_15px_rgba(0,240,255,0.3)]">
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover:bg-neon-cyan transition-colors"></div>
                     <div className="flex items-start gap-4">
                       {/* 截图缩略图 */}
                       <div className="flex-shrink-0">
@@ -615,7 +637,7 @@ function ScreenshotImage({
   if (loading) {
     return (
       <div className="w-32 h-20 bg-zinc-900 rounded-sm border border-zinc-800 flex items-center justify-center">
-        <div className="w-4 h-4 border-2 border-signal border-t-transparent rounded-full animate-spin" />
+        <div className="w-4 h-4 border-2 border-neon-cyan border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
-import { ChevronLeft, ChevronRight, Lightbulb, Clock, ExternalLink, Search, Copy, Check, Sparkles } from 'lucide-react'
+import { ChevronLeft, Lightbulb, Clock, ExternalLink, Search, Copy, Check, Sparkles } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import AgentModal from './AgentModal'
 
@@ -29,7 +29,6 @@ type ContextSuggestionPayload = {
 
 export default function ContextSidebar({ onSendToQA }: { onSendToQA?: (text: string) => void }) {
   const { state, dispatch, searchActivities } = useApp()
-  const [open, setOpen] = useState(true)
   const [displayed, setDisplayed] = useState<ContextSuggestionPayload | null>(null)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const [isAgentOpen, setIsAgentOpen] = useState(false)
@@ -135,144 +134,139 @@ export default function ContextSidebar({ onSendToQA }: { onSendToQA?: (text: str
   return (
     <>
       <AgentModal open={isAgentOpen} onClose={() => setIsAgentOpen(false)} onSendToQA={onSendToQA} />
+      {/* 悬浮展开式侧边栏 */}
       <aside
-        className={`h-full border-l border-zinc-800 bg-void transition-all duration-300 ${open ? 'w-[320px]' : 'w-[52px]'
-          } flex flex-col shrink-0 z-20`}
+        className="fixed right-0 top-14 bottom-0 w-12 bg-void/95 backdrop-blur border-l border-zinc-800 transition-all duration-300 group z-30 hover:w-72"
       >
-        <div className="h-full flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-3 border-b border-zinc-800 bg-zinc-900/30">
-            <div className="flex items-center gap-3 min-w-0">
-              {/* Technical Monogram Logo (Mini) */}
-              <div className={`w-8 h-8 flex items-center justify-center border border-zinc-700 bg-void transition-all duration-300 hover:border-signal shrink-0 ${!open && 'mx-auto'}`}>
-                <span className="font-mono font-bold text-lg text-zinc-100 transition-colors duration-300 hover:text-signal">E</span>
-              </div>
-              {open && (
-                <div className="min-w-0 flex-1 animate-in fade-in slide-in-from-left-2 duration-200">
-                  <div className="text-xs font-bold text-zinc-100 uppercase tracking-wider truncate">{headerTitle}</div>
-                  {displayed && (
-                    <div className="text-[10px] font-mono text-zinc-500 truncate">{displayed.context.windowTitle}</div>
-                  )}
-                </div>
-              )}
-            </div>
-            {open && (
-              <button
-                onClick={() => setOpen(false)}
-                className="p-1.5 rounded-md text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
+        {/* 默认状态：仅图标 */}
+        <div className="w-12 h-full flex flex-col items-center py-3 gap-3">
+          {/* 状态指示 */}
+          <div 
+            className={`w-2 h-2 rounded-full transition-all ${
+proactiveReady 
+                ? 'bg-neon-cyan shadow-[0_0_8px_rgba(0,240,255,0.5)] animate-pulse' 
+                : 'bg-zinc-800'
+            }`} 
+            title={proactiveReady ? 'AI 助理活跃' : disabledReason || '未启用'}
+          />
+          
+          {/* 展开提示 - 悬停自动展开 */}
+          <div className="p-2 text-zinc-600 group-hover:text-neon-cyan transition-colors">
+            <Sparkles className="w-4 h-4" />
           </div>
+          
+          <div className="flex-1" />
+          
+          {/* 展开箭头 */}
+          <ChevronLeft className="w-3 h-3 text-zinc-700 group-hover:rotate-180 transition-transform duration-300" />
+        </div>
+        
+        {/* 展开内容 - 悬浮显示 */}
+        <div className="absolute left-12 top-0 w-60 h-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto">
+          <div className="h-full flex flex-col overflow-hidden border-l border-zinc-800/50 bg-void/95">
+            {/* 头部 */}
+            <div className="flex items-center justify-between px-3 py-3 border-b border-zinc-800 bg-zinc-900/30">
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-bold text-zinc-100 uppercase tracking-wider truncate">
+                  {headerTitle}
+                </div>
+                {displayed && (
+                  <div className="text-[10px] font-mono text-zinc-500 truncate">
+                    {displayed.context.windowTitle}
+                  </div>
+                )}
+              </div>
+            </div>
 
-          {!open && (
-            <button
-              onClick={() => setOpen(true)}
-              className="mt-2 mx-auto p-2 rounded-md text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-          )}
-
-          {open && (
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+            {/* 内容区 */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
+              {/* 状态栏 */}
               <div className="flex items-center justify-between px-1 text-[10px] font-mono text-zinc-600 uppercase tracking-wider">
-                <span>Model: {modelLabel}</span>
-                <span>{proactiveReady ? 'ACTIVE' : disabledReason ? disabledReason : 'INACTIVE'}</span>
+                <span className="truncate">{modelLabel}</span>
+                <span className={proactiveReady ? 'text-neon-cyan' : ''}>
+                  {proactiveReady ? 'ACTIVE' : disabledReason ? disabledReason : 'INACTIVE'}
+                </span>
               </div>
 
-              {/* Agent Trigger */}
+              {/* Deep Automation 按钮 */}
               <button
                 onClick={() => setIsAgentOpen(true)}
-                className="w-full flex items-center gap-3 p-3 border border-zinc-800 hover:border-signal/50 hover:bg-zinc-900/50 transition-all group"
+className="w-full flex items-center gap-2 p-2 border border-zinc-800 hover:border-neon-cyan/50 hover:bg-zinc-900/50 transition-all group/btn"
               >
-                <div className="p-2 bg-zinc-900 text-zinc-400 group-hover:text-signal transition-colors">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div className="text-left">
-                  <div className="text-xs font-bold text-zinc-300 group-hover:text-signal uppercase tracking-wider transition-colors">Deep Automation</div>
-                  <div className="text-[10px] text-zinc-600 font-mono">GENERATE_WORKFLOW</div>
-                </div>
+                <Sparkles className="w-4 h-4 text-zinc-500 group-hover/btn:text-neon-cyan transition-colors" />
+                <span className="text-xs font-bold text-zinc-400 group-hover/btn:text-neon-cyan uppercase tracking-wider transition-colors">
+                  Deep Automation
+                </span>
               </button>
 
+              {/* 等待状态 */}
               {!displayed ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-500 gap-2 opacity-60">
-                  <div className="w-2 h-2 bg-neon-blue rounded-full animate-ping" />
-                  <span className="text-xs">
-                    {proactiveReady ? '等待上下文触发...' : disabledReason ? `上下文助理不可用：${disabledReason}` : '上下文助理未启用'}
+                <div className="flex flex-col items-center justify-center py-8 text-zinc-600 gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full ${proactiveReady ? 'bg-neon-cyan animate-pulse' : 'bg-zinc-800'}`} />
+                  <span className="text-[10px] font-mono text-center">
+                    {proactiveReady ? '等待触发...' : disabledReason || '未启用'}
                   </span>
                 </div>
               ) : (
                 <>
-                  {/* 1. Context Info */}
-                  <div className="flex items-center gap-2 text-xs text-gray-500 px-1">
+                  {/* 触发时间 */}
+                  <div className="flex items-center gap-2 text-[10px] text-zinc-500 px-1">
                     <Clock className="w-3 h-3" />
-                    <span>触发于 {formatTime(displayed.context.triggeredAt)}</span>
+                    <span>{formatTime(displayed.context.triggeredAt)}</span>
                   </div>
 
-                  {/* 2. Suggested Actions */}
+                  {/* 建议操作 */}
                   {displayed.suggestedActions.length > 0 && (
-                    <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300 delay-100">
-                      <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest px-1 font-mono">
-                        SUGGESTED_ACTIONS
-                      </h3>
-                      <div className="grid gap-2">
-                        {displayed.suggestedActions.map((action, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => handleAction(action, idx)}
-                            className="flex items-center gap-3 p-3 bg-void border border-zinc-800 hover:border-signal/50 hover:bg-zinc-900 transition-all group text-left"
-                          >
-                            <div className="shrink-0 p-2 bg-zinc-900 group-hover:bg-zinc-800 transition-colors">
-                              {getActionIcon(action.action, idx)}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-xs font-bold text-zinc-300 group-hover:text-signal transition-colors uppercase">
-                                {action.label}
-                              </div>
-                              <div className="text-[10px] text-zinc-600 font-mono truncate">
-                                {action.action === 'open_url' ? 'LINK' : action.action === 'search' ? 'SEARCH' : 'COPY'}
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </section>
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-mono text-zinc-600 uppercase px-1 block">
+                        Actions
+                      </span>
+                      {displayed.suggestedActions.map((action, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleAction(action, idx)}
+                          className="w-full flex items-center gap-2 p-2 bg-void border border-zinc-800 hover:border-neon-cyan/50 transition-all group text-left"
+                        >
+                          <div className="shrink-0 p-1.5 bg-zinc-900 group-hover:bg-zinc-800 transition-colors">
+                            {getActionIcon(action.action, idx)}
+                          </div>
+                          <span className="text-xs text-zinc-400 group-hover:text-zinc-300 truncate">
+                            {action.label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   )}
 
-                  {/* 3. Related Memories */}
-                  <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300 delay-200">
-                    <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest px-1 font-mono">
-                      RELATED_MEMORIES
-                    </h3>
-                    {displayed.relatedMemories.length === 0 ? (
-                      <div className="text-xs text-zinc-600 font-mono italic px-1">NO_DATA</div>
-                    ) : (
-                      <div className="space-y-2">
-                        {displayed.relatedMemories.map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => void jumpToMemory(m)}
-                            className="w-full text-left p-3 bg-void border border-zinc-800 hover:border-signal/50 hover:bg-zinc-900 transition-all group relative"
-                          >
-                            <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-transparent group-hover:bg-signal transition-colors" />
-                            <div className="text-xs font-bold text-zinc-300 group-hover:text-white truncate mb-1">
-                              {m.windowTitle}
-                            </div>
-                            <div className="flex items-center justify-between text-[10px] text-zinc-600 font-mono">
-                              <span className="truncate max-w-[70%] uppercase">{m.appName}</span>
-                              <span>{new Date(m.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </section>
+                  {/* 相关记忆 */}
+                  {displayed.relatedMemories.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-mono text-zinc-600 uppercase px-1 block">
+                        Memories
+                      </span>
+                      {displayed.relatedMemories.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => void jumpToMemory(m)}
+className="w-full text-left p-2 bg-void border border-zinc-800 hover:border-neon-cyan/50 transition-all group relative"
+                        >
+                          <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-transparent group-hover:bg-neon-cyan transition-colors" />
+                          <div className="text-xs text-zinc-400 group-hover:text-zinc-300 truncate">
+                            {m.windowTitle}
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-zinc-600 font-mono mt-1">
+                            <span className="truncate uppercase">{m.appName}</span>
+                            <span>{new Date(m.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>
-          )}
+          </div>
         </div>
       </aside>
     </>

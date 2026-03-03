@@ -38,8 +38,8 @@ export default function GalleryView() {
       />
 
       {/* Sidebar - App Visual Index */}
-      <div className="w-64 flex-shrink-0 border-r border-glass-border bg-surface/30 flex flex-col">
-        <div className="p-4 border-b border-glass-border">
+      <div className="w-64 flex-shrink-0 border-r border-white/10 bg-surface/30 flex flex-col">
+        <div className="p-4 border-b border-white/10">
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
             <Layers className="w-4 h-4" />
             应用索引
@@ -51,7 +51,7 @@ export default function GalleryView() {
             onClick={() => setSelectedApp(null)}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
               selectedApp === null
-                ? 'bg-neon-blue/20 text-neon-blue border border-neon-blue/50'
+                ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50'
                 : 'text-gray-300 hover:bg-surface/50 hover:text-white border border-transparent'
             }`}
           >
@@ -62,7 +62,7 @@ export default function GalleryView() {
             <span className="text-xs opacity-60">{state.activities.length}</span>
           </button>
 
-          <div className="my-2 border-t border-glass-border/50" />
+          <div className="my-2 border-t border-white/10" />
 
           {appStats.map((app) => (
             <button
@@ -70,7 +70,7 @@ export default function GalleryView() {
               onClick={() => setSelectedApp(app.name)}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
                 selectedApp === app.name
-                  ? 'bg-neon-blue/20 text-neon-blue border border-neon-blue/50'
+                  ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50'
                   : 'text-gray-300 hover:bg-surface/50 hover:text-white border border-transparent'
               }`}
             >
@@ -92,12 +92,12 @@ export default function GalleryView() {
             <h3 className="text-lg font-medium text-white flex items-center gap-2">
                 {selectedApp ? (
                     <>
-                        <Monitor className="w-5 h-5 text-neon-blue" />
+                        <Monitor className="w-5 h-5 text-neon-cyan" />
                         {selectedApp}
                     </>
                 ) : (
                     <>
-                        <LayoutGrid className="w-5 h-5 text-neon-blue" />
+                        <LayoutGrid className="w-5 h-5 text-neon-cyan" />
                         全部视图
                     </>
                 )}
@@ -107,7 +107,7 @@ export default function GalleryView() {
             </span>
         </div>
 
-        <div className="flex-1 border border-glass-border/30 rounded-xl bg-surface/10 overflow-hidden">
+        <div className="flex-1 border border-white/10 rounded-xl bg-surface/10 overflow-hidden">
             {filteredActivities.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500">
                 <div className="text-center">
@@ -196,12 +196,12 @@ function GalleryItem({ activity, onClick }: { activity: ActivityLog; onClick: ()
 
   return (
     <div 
-      className="group relative aspect-video bg-surface rounded-lg border border-glass-border overflow-hidden cursor-pointer hover:border-neon-blue hover:shadow-[0_0_15px_rgba(0,243,255,0.3)] transition-all duration-300"
+      className="group relative aspect-video bg-surface rounded-lg border border-white/10 overflow-hidden cursor-pointer hover:border-neon-cyan hover:shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all duration-300 hover:scale-[1.02]"
       onClick={onClick}
     >
       {loading ? (
         <div className="w-full h-full flex items-center justify-center bg-surface">
-          <div className="w-6 h-6 border-2 border-neon-blue border-t-transparent rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-neon-cyan border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
         <img
@@ -219,8 +219,8 @@ function GalleryItem({ activity, onClick }: { activity: ActivityLog; onClick: ()
       {/* 悬停显示元数据 - 增强版 */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
         <div className="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-          <div className="flex items-center justify-between text-xs text-neon-blue mb-1.5">
-            <span className="flex items-center gap-1.5 bg-neon-blue/10 px-2 py-0.5 rounded-full border border-neon-blue/20">
+          <div className="flex items-center justify-between text-xs text-neon-cyan mb-1.5">
+            <span className="flex items-center gap-1.5 bg-neon-cyan/10 px-2 py-0.5 rounded-full border border-neon-cyan/20">
               <Clock className="w-3 h-3" />
               {formatDate(activity.timestamp)} {formatTime(activity.timestamp)}
             </span>
