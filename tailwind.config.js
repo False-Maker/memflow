@@ -6,18 +6,21 @@ export default {
   ],
   theme: {
     extend: {
-      colors: {
+    colors: {
         void: '#050505', // Deep Matte Black
         surface: '#18181B', // Zinc 900
-        signal: '#F59E0B', // Amber 500
+        signal: '#00f0ff', // Neon Cyan - Primary emphasis
         muted: '#71717A', // Zinc 500
         border: '#27272A', // Zinc 800
 
+        // Neon colors for UI elements
+        'neon-cyan': '#00f0ff', // Primary emphasis color
+        'neon-red': '#ff003c', // Secondary emphasis/Danger color
+
         // Legacy Compatibility (Mapped to Elucid)
-        'neon-blue': '#F59E0B', // Map to Signal
+        'neon-blue': '#00f0ff', // Map to Neon Cyan
         'neon-purple': '#A1A1AA', // Zinc 400
         'neon-green': '#10B981', // Emerald 500
-        'neon-red': '#EF4444', // Red 500
         'neon-pink': '#EC4899', // Pink 500
         'glass-border': '#27272A', // Map to Border
       },

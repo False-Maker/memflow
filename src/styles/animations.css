@@ -1,0 +1,64 @@
+/* 动画系统 - 基础动画类 */
+
+/* 入场动画 */
+.animate-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 退场动画 */
+.animate-out {
+  animation: slideOut 0.3s ease-in forwards;
+}
+
+@keyframes slideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+/* 悬停提升效果 */
+.hover-lift {
+  transition: all 0.2s ease-out;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* 悬停发光效果 */
+.hover-glow {
+  transition: all 0.2s ease-out;
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* 响应式动画支持 - 用户偏好无动画时禁用 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .animate-out,
+  .hover-lift:hover,
+  .hover-glow:hover {
+    animation: none;
+    transition: none;
+  }
+}

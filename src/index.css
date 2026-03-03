@@ -42,15 +42,21 @@
     @apply bg-void border border-zinc-800 relative;
   }
 
-  /* Legacy Compatibility - Auto-Brutalism */
+/* Legacy Compatibility - Auto-Brutalism */
   .glass {
-    @apply bg-void border border-zinc-800 relative;
-    /* Remove blur, solid bg */
+    @apply bg-white/5 backdrop-blur-md border border-white/10 relative;
+  }
+
+  .glass-strong {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20 relative;
+  }
+
+  .glass-subtle {
+    @apply bg-white/3 backdrop-blur-sm border border-white/5 relative;
   }
 
   .neon-glow {
-    @apply shadow-none;
-    /* Remove glow */
+    @apply shadow-[0_0_15px_rgba(0,240,255,0.3)];
   }
 
   .elucid-btn {
