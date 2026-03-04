@@ -178,36 +178,90 @@ export default function Layout({
           </div>
         </div>
 
-        {/* 视图切换 - 高级胶囊样式 */}
-        <div className="flex items-center gap-1 bg-zinc-900/80 rounded-xl p-1.5 border border-white/5 backdrop-blur-sm relative overflow-hidden">
-          {/* 背景发光 */}
-          <div className="absolute inset-0 bg-gradient-to-r from-neon-cyan/5 via-neon-cyan/10 to-neon-cyan/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+        {/* 视图切换 - 超炫科技胶囊 */}
+<div className="flex items-center">
+  {/* 左装饰线 */}
+  <div className="w-8 h-px bg-gradient-to-r from-transparent to-neon-cyan/50 mr-2" />
+  
+  <div className="flex items-center gap-0.5 bg-zinc-900/60 rounded-2xl p-1 border border-white/10 backdrop-blur-md relative overflow-hidden group">
+    {/* 动态背景 - 扫描效果 */}
+    <div className="absolute inset-0 opacity-20">
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-neon-cyan/30 to-transparent animate-scan" />
+    </div>
+    
+    {/* 网格图案 */}
+    <div className="absolute inset-0 opacity-10" style={{
+      backgroundImage: `
+        linear-gradient(rgba(0, 240, 255, 0.3) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.3) 1px, transparent 1px)
+      `,
+      backgroundSize: '8px 8px'
+    }} />
 
-          {[
-            { id: 'timeline', label: 'T', full: 'TIME' },
-            { id: 'gallery', label: 'G', full: 'GALLERY' },
-            { id: 'replay', label: 'R', full: 'REPLAY' },
-            { id: 'graph', label: 'K', full: 'KNOWLEDGE' },
-            { id: 'stats', label: 'S', full: 'STATS' },
-            { id: 'qa', label: 'Q', full: 'Q&A' },
-          ].map((view) => (
-            <button
-              key={view.id}
-              onClick={() => setCurrentView(view.id as any)}
-              className={`relative px-3 py-2 text-[10px] font-mono font-bold tracking-widest rounded-lg transition-all duration-300 hover:scale-105 active:scale-95 ${
-                currentView === view.id
-                  ? 'bg-neon-cyan text-black shadow-[0_0_20px_rgba(0,240,255,0.5)]'
-                  : 'text-zinc-500 hover:text-neon-cyan hover:bg-white/5'
-              }`}
-              title={view.full}
-            >
-              {currentView === view.id && (
-                <div className="absolute inset-0 bg-neon-cyan/20 rounded-lg animate-pulse" />
-              )}
-              <span className="relative z-10">{view.label}</span>
-            </button>
-          ))}
-        </div>
+    {[
+      { id: 'timeline', label: 'T', full: 'TIME' },
+      { id: 'gallery', label: 'G', full: 'GALLERY' },
+      { id: 'replay', label: 'R', full: 'REPLAY' },
+      { id: 'graph', label: 'K', full: 'KNOWLEDGE' },
+      { id: 'stats', label: 'S', full: 'STATS' },
+      { id: 'qa', label: 'Q', full: 'Q&A' },
+    ].map((view, index) => (
+      <button
+        key={view.id}
+        onClick={() => setCurrentView(view.id as any)}
+        className={`relative px-4 py-2.5 text-xs font-mono font-bold tracking-wider rounded-xl transition-all duration-300 ${
+          currentView === view.id
+            ? 'bg-neon-cyan text-black shadow-[0_0_25px_rgba(0,240,255,0.6)] scale-105'
+            : 'text-zinc-500 hover:text-neon-cyan hover:scale-105'
+        }`}
+        title={view.full}
+        style={{
+          textShadow: currentView === view.id ? '0 0 10px rgba(0,240,255,0.8)' : 'none'
+        }}
+      >
+        {/* 激活状态下的内部动画 */}
+        {currentView === view.id && (
+          <>
+            <div className="absolute inset-0 bg-neon-cyan/30 rounded-xl animate-pulse" />
+            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-xl" />
+            {/* 扫描光效 */}
+            <div className="absolute inset-0 overflow-hidden rounded-xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 animate-shimmer" />
+            </div>
+          </>
+        )}
+        
+        {/* 悬停光效 */}
+        <div className="absolute inset-0 rounded-xl opacity-0 hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-neon-cyan/10 to-transparent pointer-events-none" />
+        
+        {/* 分隔线 */}
+        {index < 5 && (
+          <div className={`absolute right-0 top-1/2 -translate-y-1/2 h-4 w-px ${
+            currentView === view.id || currentView === [
+              { id: 'timeline', label: 'T' },
+              { id: 'gallery', label: 'G' },
+              { id: 'replay', label: 'R' },
+              { id: 'graph', label: 'K' },
+              { id: 'stats', label: 'S' },
+              { id: 'qa', label: 'Q' },
+            ][index + 1]?.id
+              ? 'bg-transparent'
+              : 'bg-white/10'
+          }`} />
+        )}
+        
+        {/* 角标装饰 */}
+        <div className="absolute top-1 left-1.5 w-1 h-1 rounded-full bg-neon-cyan/50" />
+        <div className="absolute bottom-1 right-1.5 w-1 h-1 rounded-full bg-neon-cyan/50" />
+        
+        <span className="relative z-10">{view.label}</span>
+      </button>
+    ))}
+  </div>
+  
+  {/* 右装饰线 */}
+  <div className="w-8 h-px bg-gradient-to-l from-transparent to-neon-cyan/50 ml-2" />
+</div>
 
         {/* 右侧操作按钮 - 增强图标样式 */}
         <div className="flex items-center gap-1">

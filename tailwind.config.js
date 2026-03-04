@@ -32,18 +32,23 @@ export default {
         'none': '0',
         'sm': '2px', // Very slight radius for "engineered" look
       },
-      animation: {
+    animation: {
         'scan': 'scan 2s linear infinite',
         'blink': 'blink 1s steps(2, start) infinite',
+        'shimmer': 'shimmer 2s linear infinite',
       },
       keyframes: {
         scan: {
           '0%': { backgroundPosition: '0% 0%' },
           '100%': { backgroundPosition: '0% 100%' },
         },
-        blink: {
+      blink: {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0' },
+        },
+        shimmer: {
+          '0%': { transform: 'translateX(-100%) skewX(-12deg)' },
+          '100%': { transform: 'translateX(200%) skewX(-12deg)' },
         }
       }
     },
