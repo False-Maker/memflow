@@ -49,7 +49,6 @@ function App() {
       <Layout
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenChatHistory={() => setChatHistoryOpen(true)}
-        onOpenFeedback={() => setFeedbackOpen(true)}
         onOpenPerformance={() => setPerformanceOpen(true)}
         currentSessionId={currentSessionId}
         shouldSwitchToQA={shouldSwitchToQA}
