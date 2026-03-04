@@ -161,7 +161,7 @@ export default function FeedbackModal({
             onClick={() => setActiveTab('submit')}
             className={`flex-1 py-3 text-center transition-colors ${
               activeTab === 'submit'
-                ? 'text-neon-blue border-b-2 border-neon-blue'
+                ? 'text-neon-cyan border-b-2 border-neon-cyan'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -171,7 +171,7 @@ export default function FeedbackModal({
             onClick={() => setActiveTab('list')}
             className={`flex-1 py-3 text-center transition-colors ${
               activeTab === 'list'
-                ? 'text-neon-blue border-b-2 border-neon-blue'
+                ? 'text-neon-cyan border-b-2 border-neon-cyan'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -202,8 +202,8 @@ export default function FeedbackModal({
                         onClick={() => setFormData((prev) => ({ ...prev, category: cat }))}
                         className={`flex flex-col items-center gap-1 p-3 rounded-lg border transition-all ${
                           formData.category === cat
-                            ? 'border-neon-blue bg-neon-blue/10 text-neon-blue'
-                            : 'border-glass-border bg-surface/50 text-gray-400 hover:border-neon-blue/50'
+                            ? 'border-neon-cyan bg-neon-cyan/10 text-neon-cyan'
+                            : 'border-glass-border bg-surface/50 text-gray-400 hover:border-neon-cyan/50'
                         }`}
                       >
                         <span className="text-xl">{config.icon}</span>
@@ -227,7 +227,7 @@ export default function FeedbackModal({
                     setErrors((prev) => ({ ...prev, title: undefined }))
                   }}
                   placeholder="简要描述你遇到的问题或建议..."
-                  className={`w-full px-4 py-2.5 bg-surface border rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-neon-blue/30 ${
+                  className={`w-full px-4 py-2.5 bg-surface border rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-neon-cyan/30 ${
                     errors.title ? 'border-red-400' : 'border-glass-border'
                   }`}
                 />
@@ -249,7 +249,7 @@ export default function FeedbackModal({
                   }}
                   placeholder={`请详细描述：\n- 问题的具体表现\n- 复现步骤（如果是 Bug）\n- 期望的行为`}
                   rows={6}
-                  className={`w-full px-4 py-2.5 bg-surface border rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-neon-blue/30 resize-none ${
+                  className={`w-full px-4 py-2.5 bg-surface border rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-neon-cyan/30 resize-none ${
                     errors.content ? 'border-red-400' : 'border-glass-border'
                   }`}
                 />
@@ -270,7 +270,7 @@ export default function FeedbackModal({
             <div className="space-y-3">
               {loading ? (
                 <div className="flex justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-neon-blue" />
+                  <Loader2 className="w-6 h-6 animate-spin text-neon-cyan" />
                 </div>
               ) : feedbacks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-500">
@@ -327,7 +327,7 @@ export default function FeedbackModal({
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="flex items-center gap-2 px-6 py-2 bg-neon-blue/20 text-neon-blue rounded-lg hover:bg-neon-blue/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-6 py-2 bg-neon-cyan/20 text-neon-cyan rounded-lg hover:bg-neon-cyan/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? (
                 <>

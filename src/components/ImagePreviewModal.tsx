@@ -174,7 +174,7 @@ export default function ImagePreviewModal({
         >
           {loading ? (
             <div className="flex items-center justify-center h-full">
-              <div className="w-8 h-8 border-2 border-neon-blue border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-neon-cyan border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center">

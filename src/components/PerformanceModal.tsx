@@ -70,7 +70,7 @@ export default function PerformanceModal({ open, onClose }: PerformanceModalProp
             <div className="grid grid-cols-2 gap-4">
               <div className="glass p-4 rounded-lg">
                 <div className="text-sm text-gray-400 mb-1">内存使用</div>
-                <div className="text-2xl font-bold text-neon-blue">
+                <div className="text-2xl font-bold text-neon-cyan">
                   {metrics.memory_usage_mb.toFixed(2)} MB
                 </div>
               </div>
@@ -104,7 +104,7 @@ export default function PerformanceModal({ open, onClose }: PerformanceModalProp
             <div className="flex gap-3">
               <button
                 onClick={loadMetrics}
-                className="flex-1 px-4 py-2 rounded-lg bg-neon-blue/20 text-neon-blue hover:bg-neon-blue/30 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 rounded-lg bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors flex items-center justify-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
                 刷新

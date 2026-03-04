@@ -215,7 +215,7 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
   }
 
   const statusLabel = (status: string) => {
-    if (status === 'running') return { text: '执行中', cls: 'text-neon-blue' }
+    if (status === 'running') return { text: '执行中', cls: 'text-neon-cyan' }
     if (status === 'success') return { text: '成功', cls: 'text-neon-green' }
     if (status === 'failed') return { text: '失败', cls: 'text-neon-red' }
     if (status === 'cancelled') return { text: '已取消', cls: 'text-gray-400' }
@@ -353,7 +353,7 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
               setSelected(null)
             }}
             className={`flex-1 py-3 text-center transition-colors ${activeTab === 'proposals'
-                ? 'text-neon-blue border-b-2 border-neon-blue'
+                ? 'text-neon-cyan border-b-2 border-neon-cyan'
                 : 'text-gray-400 hover:text-white'
               }`}
           >
@@ -366,7 +366,7 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
               setSelected(null)
             }}
             className={`flex-1 py-3 text-center transition-colors ${activeTab === 'history'
-                ? 'text-neon-blue border-b-2 border-neon-blue'
+                ? 'text-neon-cyan border-b-2 border-neon-cyan'
                 : 'text-gray-400 hover:text-white'
               }`}
           >
@@ -377,13 +377,13 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
         {/* 内容 */}
         <div className="flex-1 overflow-y-auto p-4">
           {actionNotice && (
-            <div className="mb-3 p-3 bg-neon-blue/10 border border-neon-blue/30 rounded-lg text-neon-blue text-sm">
+            <div className="mb-3 p-3 bg-neon-cyan/10 border border-neon-cyan/30 rounded-lg text-neon-cyan text-sm">
               {actionNotice}
               {handoffText && onSendToQA && (
                 <div className="mt-2">
                   <button
                     onClick={() => onSendToQA(`基于以下活动摘要，帮我继续分析并给出下一步建议：\n\n${handoffText}`)}
-                    className="px-3 py-1.5 rounded-lg bg-neon-blue/15 text-neon-blue hover:bg-neon-blue/25 transition-colors text-xs"
+                    className="px-3 py-1.5 rounded-lg bg-neon-cyan/15 text-neon-cyan hover:bg-neon-cyan/25 transition-colors text-xs"
                   >
                     带到问答继续追问
                   </button>
@@ -417,7 +417,7 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
                     <button
                       onClick={handleExecute}
                       disabled={executing}
-                      className="px-4 py-2 rounded-lg bg-neon-blue/20 text-neon-blue hover:bg-neon-blue/30 transition-colors flex items-center gap-2"
+                      className="px-4 py-2 rounded-lg bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors flex items-center gap-2"
                     >
                       {executing ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -523,7 +523,7 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
 
                 {loading ? (
                   <div className="flex justify-center py-10">
-                    <Loader2 className="w-6 h-6 animate-spin text-neon-blue" />
+                    <Loader2 className="w-6 h-6 animate-spin text-neon-cyan" />
                   </div>
                 ) : proposals.length === 0 ? (
                   <div className="text-center py-10 text-gray-500">
@@ -535,7 +535,7 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
                       <button
                         key={p.id}
                         onClick={() => handleViewDetail(p)}
-                        className="w-full text-left p-4 bg-surface/50 border border-glass-border/50 rounded-lg hover:border-neon-blue/30 hover:bg-surface/80 transition-all"
+                        className="w-full text-left p-4 bg-surface/50 border border-glass-border/50 rounded-lg hover:border-neon-cyan/30 hover:bg-surface/80 transition-all"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
@@ -547,7 +547,7 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
                                 return (
                                   <>
                                     {urls > 0 && (
-                                      <div className="flex items-center gap-1.5 text-neon-blue/80">
+                                      <div className="flex items-center gap-1.5 text-neon-cyan/80">
                                         <Globe className="w-3.5 h-3.5" />
                                         <span>包含 {urls} 个链接</span>
                                       </div>
@@ -603,7 +603,7 @@ export default function AgentProposalModal({ open, onClose, onSendToQA }: AgentP
 
               {loadingHistory ? (
                 <div className="flex justify-center py-10">
-                  <Loader2 className="w-6 h-6 animate-spin text-neon-blue" />
+                  <Loader2 className="w-6 h-6 animate-spin text-neon-cyan" />
                 </div>
               ) : executions.length === 0 ? (
                 <div className="text-center py-10 text-gray-500">暂无执行记录</div>

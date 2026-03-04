@@ -1,7 +1,8 @@
 import { useState, useEffect, useReducer, useCallback } from 'react'
-import { X, Check, AlertCircle, Loader2, ChevronDown, Shield, Settings, Bot, Plus, Trash2, Eye, FolderOpen, Gauge, Sparkles } from 'lucide-react'
+import { X, Check, AlertCircle, Loader2, ChevronDown, Shield, Settings, Bot, Plus, Trash2, Eye, FolderOpen, Gauge, Sparkles, Download, HardDrive, Database, Trash, Power } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
-import { open as openFileDialog } from '@tauri-apps/plugin-dialog'
+import { open as openFileDialog, save as saveFileDialog } from '@tauri-apps/plugin-dialog'
+import { writeTextFile } from '@tauri-apps/plugin-fs'
 import { useApp } from '../contexts/AppContext'
 
 // 调试辅助：检查 dialog 插件是否可用
@@ -177,7 +178,7 @@ function GroupedSelect({ value, onChange, groups, customOption, className }: Sel
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`w-full appearance-none px-4 py-2.5 pr-10 bg-surface border border-glass-border rounded-lg text-white cursor-pointer hover:border-neon-blue/50 transition-colors focus:outline-none focus:ring-2 focus:ring-neon-blue/30 ${className}`}
+        className={`w-full appearance-none px-4 py-2.5 pr-10 bg-surface border border-glass-border rounded-lg text-white cursor-pointer hover:border-neon-cyan/50 transition-colors focus:outline-none focus:ring-2 focus:ring-neon-cyan/30 ${className}`}
       >
         {groups.map((group) => (
           <optgroup key={group.label} label={group.label} className="bg-surface">
@@ -233,7 +234,7 @@ function InputField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="flex-1 px-4 py-2.5 bg-surface border border-glass-border rounded-lg text-white placeholder:text-gray-500 hover:border-neon-blue/50 transition-colors focus:outline-none focus:ring-2 focus:ring-neon-blue/30"
+          className="flex-1 px-4 py-2.5 bg-surface border border-glass-border rounded-lg text-white placeholder:text-gray-500 hover:border-neon-cyan/50 transition-colors focus:outline-none focus:ring-2 focus:ring-neon-cyan/30"
         />
         {rightElement}
       </div>
@@ -266,13 +267,35 @@ interface SettingsModalProps {
 export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { state, dispatch } = useApp()
   const [draftConfig, setDraftConfig] = useState(state.config)
-  const [activeTab, setActiveTab] = useState<'general' | 'privacy'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'privacy' | 'storage'>('general')
 
   // Blocklist state
   const [blocklist, setBlocklist] = useState<string[]>([])
   const [newBlockItem, setNewBlockItem] = useState('')
   const [blocklistLoading, setBlocklistLoading] = useState(false)
   const [blocklistError, setBlocklistError] = useState<string | null>(null)
+
+  // P5.5-3: Storage stats
+  const [storageStats, setStorageStats] = useState<{
+    screenshotsCount: number
+    screenshotsSizeMb: number
+    activitiesCount: number
+    databaseSizeMb: number
+    totalSizeMb: number
+    maxStorageGb: number
+    usagePercent: number
+    nextGcTime: string | null
+  } | null>(null)
+  const [storageLoading, setStorageLoading] = useState(false)
+  const [storageError, setStorageError] = useState<string | null>(null)
+
+  // P5.5-4: Export state
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+
+  // 自启动状态
+  const [autostartEnabled, setAutostartEnabled] = useState(false)
+  const [autostartLoading, setAutostartLoading] = useState(false)
 
   // Form state with reducer
   const initialFormState: ModelFormState = {
@@ -319,6 +342,9 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
       setDraftConfig(state.config)
       loadBlocklist()
 
+      // 加载自启动状态
+      loadAutostartStatus()
+
       // 检查 dialog 插件可用性
       checkDialogPlugin().then((available) => {
         if (!available) {
@@ -356,6 +382,13 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }, [open, state.config])
 
+  // P5.5-3: 当切换到存储 tab 时加载存储统计
+  useEffect(() => {
+    if (activeTab === 'storage') {
+      loadStorageStats()
+    }
+  }, [activeTab])
+
   const loadBlocklist = async () => {
     try {
       setBlocklistLoading(true)
@@ -367,6 +400,115 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
       setBlocklistError(String(e))
     } finally {
       setBlocklistLoading(false)
+    }
+  }
+
+  // 加载自启动状态
+  const loadAutostartStatus = async () => {
+    try {
+      setAutostartLoading(true)
+      const info = await invoke<{ enabled: boolean; appName: string }>('get_autostart_status')
+      setAutostartEnabled(info.enabled)
+    } catch (e) {
+      console.error('加载自启动状态失败:', e)
+    } finally {
+      setAutostartLoading(false)
+    }
+  }
+
+  // P5.5-3: 加载存储统计
+  const loadStorageStats = async () => {
+    try {
+      setStorageLoading(true)
+      setStorageError(null)
+      const stats = await invoke<{
+        screenshotsCount: number
+        screenshotsSizeMb: number
+        activitiesCount: number
+        databaseSizeMb: number
+        totalSizeMb: number
+        maxStorageGb: number
+        usagePercent: number
+        nextGcTime: string | null
+      }>('get_storage_stats')
+      setStorageStats(stats)
+    } catch (e) {
+      console.error('加载存储统计失败:', e)
+      setStorageError(String(e))
+    } finally {
+      setStorageLoading(false)
+    }
+  }
+
+  // P5.5-4: 导出 JSON 数据
+  const handleExportJson = async () => {
+    try {
+      setExporting(true)
+      setExportError(null)
+      
+      const data = await invoke<string>('export_data_json', { limit: 1000 })
+      
+      const filePath = await saveFileDialog({
+        defaultPath: `memflow_export_${new Date().toISOString().split('T')[0]}.json`,
+        filters: [{ name: 'JSON', extensions: ['json'] }]
+      })
+      
+      if (filePath) {
+        await writeTextFile(filePath, data)
+        alert('导出成功！')
+      }
+    } catch (e) {
+      console.error('导出 JSON 失败:', e)
+      setExportError(String(e))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // P5.5-4: 导出 Markdown 数据
+  const handleExportMarkdown = async () => {
+    try {
+      setExporting(true)
+      setExportError(null)
+      
+      const data = await invoke<string>('export_data_markdown', { limit: 1000 })
+      
+      const filePath = await saveFileDialog({
+        defaultPath: `memflow_export_${new Date().toISOString().split('T')[0]}.md`,
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      })
+      
+      if (filePath) {
+        await writeTextFile(filePath, data)
+        alert('导出成功！')
+      }
+    } catch (e) {
+      console.error('导出 Markdown 失败:', e)
+      setExportError(String(e))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // P5.5-4: 一键清理
+  const handleClearAllData = async () => {
+    const confirmed = confirm('确定要清空所有数据吗？此操作不可恢复！')
+    if (!confirmed) return
+    
+    try {
+      const result = await invoke<{
+        deletedActivities: number
+        deletedScreenshots: number
+        freedBytes: number
+      }>('clear_all_data')
+      
+      alert(`清理完成！\n删除 ${result.deletedActivities} 条活动记录\n删除 ${result.deletedScreenshots} 张截图\n释放 ${(result.freedBytes / 1024 / 1024).toFixed(2)} MB`)
+      
+      // 刷新存储统计
+      loadStorageStats()
+    } catch (e) {
+      console.error('清理数据失败:', e)
+      alert('清理失败: ' + e)
     }
   }
 
@@ -726,19 +868,33 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   const showEmbeddingKeyField = formState.embedding.provider !== 'openai' || !canShareKey || !formState.embedding.useSharedKey
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="glass w-full max-w-3xl h-[80vh] flex flex-col rounded-2xl border border-glass-border/50 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* 背景遮罩 - 毛玻璃 */}
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
+      
+      {/* 弹窗主体 - 官网风格 */}
+      <div className="relative w-full max-w-3xl max-h-[80vh] bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+        {/* 斜切装饰 - 官网特色 */}
+        <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none">
+          <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-neon-cyan/10 to-transparent transform skew-x-12 translate-x-8 -translate-y-4" />
+        </div>
+        
+        {/* 顶部装饰线 */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-cyan/50 to-transparent" />
+        
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-glass-border/50 bg-surface/80 backdrop-blur-md">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Settings className="w-5 h-5 text-neon-blue" />
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+          <h2 className="text-lg font-bold text-white flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-neon-cyan/20 text-neon-cyan flex items-center justify-center">
+              <Settings className="w-4 h-4" />
+            </div>
             设置
           </h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            className="p-2 text-zinc-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-gray-400" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -748,7 +904,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
             <button
               onClick={() => setActiveTab('general')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'general'
-                ? 'bg-neon-blue/20 text-neon-blue'
+                ? 'bg-neon-cyan/20 text-neon-cyan'
                 : 'text-gray-400 hover:bg-white/5 hover:text-white'
                 }`}
             >
@@ -758,12 +914,22 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
             <button
               onClick={() => setActiveTab('privacy')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'privacy'
-                ? 'bg-neon-blue/20 text-neon-blue'
+                ? 'bg-neon-cyan/20 text-neon-cyan'
                 : 'text-gray-400 hover:bg-white/5 hover:text-white'
                 }`}
             >
               <Shield className="w-4 h-4" />
               隐私与屏蔽
+            </button>
+            <button
+              onClick={() => setActiveTab('storage')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'storage'
+                ? 'bg-neon-cyan/20 text-neon-cyan'
+                : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                }`}
+            >
+              <HardDrive className="w-4 h-4" />
+              存储管理
             </button>
           </div>
 
@@ -774,7 +940,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <section className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-neon-blue/20 text-neon-blue flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg bg-neon-cyan/20 text-neon-cyan flex items-center justify-center">
                         <Sparkles className="w-5 h-5" />
                       </div>
                       <div>
@@ -789,7 +955,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                           aiEnabled: !prev.aiEnabled,
                         }))
                       }
-                      className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.aiEnabled ? 'bg-neon-blue' : 'bg-gray-600'
+                      className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.aiEnabled ? 'bg-neon-cyan' : 'bg-gray-600'
                         }`}
                     >
                       <div
@@ -806,7 +972,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <section className="space-y-4">
                     <div className="flex items-center justify-between p-4 rounded-xl bg-surface/30 border border-glass-border/30">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-neon-blue/20 text-neon-blue flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-neon-cyan/20 text-neon-cyan flex items-center justify-center">
                           <Sparkles className="w-5 h-5" />
                         </div>
                         <div>
@@ -821,7 +987,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                             enableProactiveAssistant: !prev.enableProactiveAssistant,
                           }))
                         }
-                        className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.enableProactiveAssistant ? 'bg-neon-blue' : 'bg-gray-600'
+                        className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.enableProactiveAssistant ? 'bg-neon-cyan' : 'bg-gray-600'
                           }`}
                       >
                         <div
@@ -833,10 +999,58 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                   </section>
                 )}
 
+                {/* Autostart Settings */}
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-neon-cyan/20 text-neon-cyan flex items-center justify-center">
+                        <Power className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">开机自启动</h3>
+                        <p className="text-sm text-gray-400">系统启动时自动运行 MemFlow</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (autostartLoading) return
+                        try {
+                          setAutostartLoading(true)
+                          if (autostartEnabled) {
+                            await invoke('disable_autostart')
+                            setAutostartEnabled(false)
+                          } else {
+                            await invoke('enable_autostart')
+                            setAutostartEnabled(true)
+                          }
+                        } catch (e) {
+                          console.error('设置自启动失败:', e)
+                          alert('设置自启动失败: ' + e)
+                        } finally {
+                          setAutostartLoading(false)
+                        }
+                      }}
+                      disabled={autostartLoading}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${autostartEnabled ? 'bg-neon-cyan' : 'bg-gray-600'
+                        } disabled:opacity-50`}
+                    >
+                      {autostartLoading && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Loader2 className="w-3 h-3 animate-spin text-white" />
+                        </div>
+                      )}
+                      <div
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${autostartEnabled ? 'translate-x-6' : 'translate-x-0'
+                          }`}
+                      />
+                    </button>
+                  </div>
+                </section>
+
                 {/* Recording Settings */}
                 <section className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-neon-blue/20 text-neon-blue flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-neon-cyan/20 text-neon-cyan flex items-center justify-center">
                       <Eye className="w-5 h-5" />
                     </div>
                     <h3 className="text-lg font-semibold text-white">录制设置</h3>
@@ -856,7 +1070,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                     <div className="space-y-1.5 pt-2">
                       <label className="block text-sm font-medium text-gray-300">
-                        图片质量 (压缩率) <span className="text-neon-blue ml-2">{draftConfig.compressionQuality || 80}%</span>
+                        图片质量 (压缩率) <span className="text-neon-cyan ml-2">{draftConfig.compressionQuality || 80}%</span>
                       </label>
                       <input
                         type="range"
@@ -865,14 +1079,14 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                         step="10"
                         value={draftConfig.compressionQuality || 80}
                         onChange={(e) => setDraftConfig(prev => ({ ...prev, compressionQuality: parseInt(e.target.value) }))}
-                        className="w-full accent-neon-blue h-2 rounded-lg appearance-none cursor-pointer bg-glass-border"
+                        className="w-full accent-neon-cyan h-2 rounded-lg appearance-none cursor-pointer bg-glass-border"
                       />
                       <p className="text-xs text-gray-500">数值越小文件越小，但画面会变模糊 (推荐 60-80)</p>
                     </div>
 
                     <div className="space-y-1.5 pt-2">
                       <label className="block text-sm font-medium text-gray-300">
-                        分辨率缩放 <span className="text-neon-blue ml-2">{draftConfig.targetResolutionScale || 1.0}x</span>
+                        分辨率缩放 <span className="text-neon-cyan ml-2">{draftConfig.targetResolutionScale || 1.0}x</span>
                       </label>
                       <input
                         type="range"
@@ -881,7 +1095,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                         step="0.1"
                         value={draftConfig.targetResolutionScale || 1.0}
                         onChange={(e) => setDraftConfig(prev => ({ ...prev, targetResolutionScale: parseFloat(e.target.value) }))}
-                        className="w-full accent-neon-blue h-2 rounded-lg appearance-none cursor-pointer bg-glass-border"
+                        className="w-full accent-neon-cyan h-2 rounded-lg appearance-none cursor-pointer bg-glass-border"
                       />
                       <p className="text-xs text-gray-500">降低分辨率可大幅减小体积 (如 0.5 表示长宽各缩小一半)</p>
                     </div>
@@ -891,7 +1105,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                 {/* ==================== Chat Model Section ==================== */}
                 <section className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-blue to-neon-purple flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center">
                       <span className="text-sm">💬</span>
                     </div>
                     <h3 className="text-lg font-semibold text-white">对话模型</h3>
@@ -1136,7 +1350,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                             payload: !formState.embedding.useSharedKey,
                           })
                         }
-                        className={`w-10 h-6 rounded-full transition-colors relative ${formState.embedding.useSharedKey ? 'bg-neon-blue' : 'bg-gray-600'
+                        className={`w-10 h-6 rounded-full transition-colors relative ${formState.embedding.useSharedKey ? 'bg-neon-cyan' : 'bg-gray-600'
                           }`}
                       >
                         <div
@@ -1194,7 +1408,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                                 formState.embedding.apiKey === '••••••••••••••••' ||
                                 apiKeyStatus.embedding.loading
                               }
-                              className="px-4 py-2 rounded-lg bg-neon-blue text-black font-medium hover:bg-neon-blue/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                              className="px-4 py-2 rounded-lg bg-neon-cyan text-black font-medium hover:bg-neon-cyan/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
                               {apiKeyStatus.embedding.loading && (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1246,7 +1460,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                   </div>
                 </section>
               </div>
-            ) : (
+            ) : activeTab === 'privacy' ? (
               // ==================== Privacy & Blocklist Tab ====================
               <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                 {/* OCR Privacy Settings */}
@@ -1392,7 +1606,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <section className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-neon-blue/20 text-neon-blue flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg bg-neon-cyan/20 text-neon-cyan flex items-center justify-center">
                         <Sparkles className="w-5 h-5" />
                       </div>
                       <div>
@@ -1407,7 +1621,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                           enableProactiveAssistant: !prev.enableProactiveAssistant,
                         }))
                       }
-                      className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.enableProactiveAssistant ? 'bg-neon-blue' : 'bg-gray-600'
+                      className={`w-12 h-6 rounded-full transition-colors relative ${draftConfig.enableProactiveAssistant ? 'bg-neon-cyan' : 'bg-gray-600'
                         }`}
                     >
                       <div
@@ -1545,7 +1759,183 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                   </div>
                 </section>
               </div>
-            )}
+            ) : activeTab === 'storage' ? (
+              // ==================== Storage Management Tab ====================
+              <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                {/* Storage Stats */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-neon-cyan/20 text-neon-cyan flex items-center justify-center">
+                      <HardDrive className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white">存储使用情况</h3>
+                  </div>
+                  
+                  {storageLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-neon-cyan" />
+                    </div>
+                  ) : storageError ? (
+                    <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
+                      {storageError}
+                    </div>
+                  ) : storageStats && (
+                    <div className="space-y-4">
+                      {/* Usage Bar */}
+                      <div className="p-4 rounded-xl bg-surface/50 border border-glass-border/30">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm text-gray-300">存储使用</span>
+                          <span className="text-sm font-medium text-white">
+                            {storageStats.totalSizeMb.toFixed(2)} MB / {storageStats.maxStorageGb} GB
+                          </span>
+                        </div>
+                        <div className="w-full h-3 bg-gray-700 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all ${
+                              storageStats.usagePercent > 90 ? 'bg-red-500' :
+                              storageStats.usagePercent > 70 ? 'bg-amber-500' : 'bg-neon-cyan'
+                            }`}
+                            style={{ width: `${Math.min(storageStats.usagePercent, 100)}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          使用率: {storageStats.usagePercent.toFixed(1)}%
+                        </p>
+                      </div>
+
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl bg-surface/30 border border-glass-border/30">
+                          <div className="flex items-center gap-2 text-gray-400 mb-1">
+                            <Database className="w-4 h-4" />
+                            <span className="text-xs">截图</span>
+                          </div>
+                          <p className="text-xl font-semibold text-white">{storageStats.screenshotsCount}</p>
+                          <p className="text-xs text-gray-500">{storageStats.screenshotsSizeMb.toFixed(2)} MB</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-surface/30 border border-glass-border/30">
+                          <div className="flex items-center gap-2 text-gray-400 mb-1">
+                            <HardDrive className="w-4 h-4" />
+                            <span className="text-xs">活动记录</span>
+                          </div>
+                          <p className="text-xl font-semibold text-white">{storageStats.activitiesCount}</p>
+                          <p className="text-xs text-gray-500">{storageStats.databaseSizeMb.toFixed(2)} MB</p>
+                        </div>
+                      </div>
+
+                      {/* Next GC */}
+                      {storageStats.nextGcTime && (
+                        <p className="text-xs text-gray-500 text-center">
+                          下次自动清理: {storageStats.nextGcTime}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                <div className="h-px bg-glass-border/50" />
+
+                {/* Retention Policy */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white">保留策略</h3>
+                  </div>
+                  
+                  <div className="p-4 rounded-xl bg-surface/50 border border-glass-border/30 space-y-4">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-300">
+                        保留最近 <span className="text-neon-cyan">{draftConfig.retentionDays || 30}</span> 天的数据
+                      </label>
+                      <input
+                        type="range"
+                        min="7"
+                        max="365"
+                        step="7"
+                        value={draftConfig.retentionDays || 30}
+                        onChange={(e) => setDraftConfig(prev => ({ ...prev, retentionDays: parseInt(e.target.value) }))}
+                        className="w-full accent-neon-cyan h-2 rounded-lg appearance-none cursor-pointer bg-glass-border"
+                      />
+                      <p className="text-xs text-gray-500">超过此天数的数据将被自动清理</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-300">
+                        最大存储空间 <span className="text-neon-cyan">{draftConfig.maxStorageGb || 10} GB</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="100"
+                        step="1"
+                        value={draftConfig.maxStorageGb || 10}
+                        onChange={(e) => setDraftConfig(prev => ({ ...prev, maxStorageGb: parseInt(e.target.value) }))}
+                        className="w-full accent-neon-cyan h-2 rounded-lg appearance-none cursor-pointer bg-glass-border"
+                      />
+                      <p className="text-xs text-gray-500">超过此限制时将优先清理更早的数据</p>
+                    </div>
+                  </div>
+                </section>
+
+                <div className="h-px bg-glass-border/50" />
+
+                {/* Export & Clear */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                      <Download className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white">数据导出与清理</h3>
+                  </div>
+                  
+                  <div className="p-4 rounded-xl bg-surface/50 border border-glass-border/30 space-y-4">
+                    <p className="text-sm text-gray-400">导出您的活动记录为可读格式</p>
+                    
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleExportJson}
+                        disabled={exporting}
+                        className="flex-1 px-4 py-2 rounded-lg bg-surface border border-glass-border hover:bg-white/10 text-gray-300 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        导出 JSON
+                      </button>
+                      <button
+                        onClick={handleExportMarkdown}
+                        disabled={exporting}
+                        className="flex-1 px-4 py-2 rounded-lg bg-surface border border-glass-border hover:bg-white/10 text-gray-300 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        导出 Markdown
+                      </button>
+                    </div>
+                    
+                    {exportError && (
+                      <p className="text-xs text-red-400">{exportError}</p>
+                    )}
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 space-y-4">
+                    <div className="flex items-center gap-2 text-red-400">
+                      <AlertCircle className="w-5 h-5" />
+                      <h4 className="font-medium">危险区域</h4>
+                    </div>
+                    <p className="text-sm text-gray-400">
+                      一键清理将删除所有活动记录、截图和 OCR 数据。此操作不可恢复！
+                    </p>
+                    <button
+                      onClick={handleClearAllData}
+                      className="w-full px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Trash className="w-4 h-4" />
+                      一键清理所有数据
+                    </button>
+                  </div>
+                </section>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -1559,7 +1949,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           </button>
           <button
             onClick={handleSave}
-            className="px-6 py-2 rounded-lg bg-neon-blue text-black font-semibold hover:bg-neon-blue/90 transition-colors shadow-lg shadow-neon-blue/20"
+            className="px-6 py-2 rounded-lg bg-neon-cyan text-black font-semibold hover:bg-neon-cyan/90 transition-colors shadow-lg shadow-neon-cyan/20"
           >
             保存配置
           </button>
