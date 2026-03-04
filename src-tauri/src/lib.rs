@@ -82,6 +82,15 @@ pub fn run() {
             commands::run_retention_cleanup,
             commands::get_recording_stats,
             commands::get_ocr_queue_stats,
+            // Autostart commands
+            commands::enable_autostart,
+            commands::disable_autostart,
+            commands::get_autostart_status,
+            // Data management commands
+            commands::clear_all_data,
+            commands::get_storage_stats,
+            commands::export_data_json,
+            commands::export_data_markdown,
         ])
         .setup(|app| {
             let mut filter = tracing_subscriber::EnvFilter::try_from_default_env()

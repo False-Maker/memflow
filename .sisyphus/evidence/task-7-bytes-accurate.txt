@@ -1,0 +1,66 @@
+# Task 7: Clear All Data - Verification Evidence
+
+## Implementation Summary
+Implemented `clear_all_data` function in `src-tauri/src/commands.rs` with the following features:
+
+### Database Deletion (Transaction-Based)
+- Deletes all records from:
+  - `vector_embeddings`
+  - `knowledge_edges`
+  - `knowledge_nodes`
+  - `ocr_queue`
+  - `focus_metrics`
+  - `recording_stats`
+  - `terminal_logs`
+  - `activity_logs`
+- Uses SQL transaction for atomicity (all or nothing)
+- FTS triggers automatically clean `activity_logs_fts`
+
+### File Deletion
+- Deletes all screenshot files referenced in database
+- Counts and tracks bytes freed for accurate reporting
+
+### Return Values
+- `deleted_activities`: Count of activities deleted
+- `deleted_screenshots`: Count of screenshot files deleted
+- `freed_bytes`: Total bytes freed from disk
+
+### Config Preservation
+- Only deletes data files
+- Preserves all config files (API keys, user settings, preferences)
+
+## Test Results
+```
+running 19 tests
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+## Code Quality
+- LSP diagnostics: 0 errors in commands.rs
+- Build status: Success
+- Transaction safety: Implemented
+- Error handling: Comprehensive logging on all failures
+
+## Files Modified
+1. `src-tauri/src/commands.rs`:
+   - Added `use sqlx;` import
+   - Implemented `clear_all_data` function (lines 926-1037)
+   - Added `scan_directory` helper function
+
+2. `src-tauri/src/lib.rs`:
+   - Registered `clear_all_data` command in invoke_handler
+
+## Verification Steps Completed
+1. ✅ Function implemented with transaction safety
+2. ✅ All database tables cleared in correct order
+3. ✅ Screenshot files deleted from disk
+4. ✅ Accurate counts returned
+5. ✅ Config files preserved (not deleted)
+6. ✅ Command registered in Tauri invoke handler
+7. ✅ Cargo tests pass (19/19)
+8. ✅ LSP diagnostics clean (0 errors)
+
+## Notes
+- The implementation follows the pattern from `cleanup_old_activities` in memflow_core
+- Transaction ensures atomicity - if any deletion fails, nothing is deleted
+- Screenshot files are only deleted after successful database transaction

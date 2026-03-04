@@ -1,4 +1,4 @@
-import { useState, useEffect, useReducer, useCallback, useRef } from 'react'
+import { useState, useEffect, useReducer, useCallback } from 'react'
 import { X, Check, AlertCircle, Loader2, ChevronDown, Shield, Settings, Bot, Plus, Trash2, Eye, FolderOpen, Gauge, Sparkles, Download, HardDrive, Database, Trash, Power } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { open as openFileDialog, save as saveFileDialog } from '@tauri-apps/plugin-dialog'
@@ -863,12 +863,6 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     return () => {
       document.body.style.overflow = originalStyle
     }
-  }, [])
-
-  // Prevent wheel events from propagating to background
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    // Allow scrolling within the modal content
-    // The overflow-y-auto on content div will handle it naturally
   }, [])
 
   if (!open) return null

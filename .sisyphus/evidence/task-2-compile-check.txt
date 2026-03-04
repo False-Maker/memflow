@@ -1,0 +1,35 @@
+# Task 2 Verification: Add storage stats command skeleton
+
+## Completion Status: ✅ SUCCESS
+
+### Files Modified
+- `src-tauri/src/commands.rs`: Added `get_storage_stats` command skeleton
+
+### Implementation Details
+1. **Struct Created**: `StorageStatsResponse` with required fields matching frontend interface
+   - screenshots_count: u64
+   - screenshots_size_mb: f64  
+   - activities_count: u64
+   - database_size_mb: f64
+   - total_size_mb: f64
+   - max_storage_gb: f64
+   - usage_percent: f64
+   - next_gc_time: Option<String>
+
+2. **Command Added**: `get_storage_stats()` function
+   - Returns `Result<StorageStatsResponse, String>`
+   - Includes proper logging and debug output
+   - Uses placeholder values (implementation in Task 5)
+   - Follows existing command patterns
+
+### Verification Results
+- ✅ Compilation passes: `cargo check` completed successfully
+- ✅ Command exists in source: grep confirms placement at line 926
+- ✅ Struct exists in source: grep confirms placement at line 903
+- ✅ No compilation errors detected
+- ✅ Matches frontend interface from SettingsModal.tsx:279-288
+
+### Next Steps
+- Task 5 will implement actual filesystem scanning logic
+- Command is ready to be called from frontend
+- Struct properly serializes to camelCase matching frontend expectations

@@ -1,0 +1,31 @@
+{
+  "taskId": "task-7-clear-all-data",
+  "taskName": "Implement clear_all_data - Task 7 from fix-settings-issues plan",
+  "status": "completed",
+  "completedAt": "2026-03-05T00:00:00Z",
+  "verification": {
+    "testsPassed": 19,
+    "testsFailed": 0,
+    "cargoTestResult": "ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out",
+    "lspDiagnosticsErrors": 0,
+    "lspDiagnosticsWarnings": 1,
+    "buildStatus": "success"
+  },
+  "implementation": {
+    "function": "clear_all_data",
+    "file": "src-tauri/src/commands.rs",
+    "lines": "926-1037",
+    "features": [
+      "Uses transaction for database deletion (all or nothing)",
+      "Deletes from vector_embeddings, knowledge_edges, knowledge_nodes, ocr_queue, focus_metrics, recording_stats, terminal_logs, activity_logs",
+      "Deletes screenshot files from disk",
+      "Returns accurate counts (deleted_activities, deleted_screenshots, freed_bytes)",
+      "Preserves config files (only deletes data, not settings/API keys)",
+      "Handles errors gracefully with logging"
+    ]
+  },
+  "commandRegistered": true,
+  "commandName": "clear_all_data",
+  "libImport": "use sqlx;",
+  "returnType": "Result<ClearResult, String>"
+}

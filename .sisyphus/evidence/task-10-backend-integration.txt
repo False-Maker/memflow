@@ -1,0 +1,42 @@
+Integration Test Results - Task 10
+========================================
+
+Test: Storage and Autostart Integration Tests
+Date: Thu Mar  5 00:16:49     2026
+Platform: Windows
+
+Test Results:
+- 11 tests passed
+- 0 tests failed
+- 0 tests ignored
+
+Tests Executed:
+1. test_autostart_registry_path - PASSED
+2. verify_command_signatures - PASSED
+3. test_autostart_info_structure - PASSED
+4. test_storage_stats_response_structure - PASSED
+5. test_clear_result_structure - PASSED
+6. test_export_markdown_format - PASSED
+7. test_scan_directory_handles_nonexistent - PASSED
+8. test_export_json_format - PASSED
+9. test_scan_directory_counts_files - PASSED
+10. test_scan_directory_ignores_subdirectories - PASSED
+11. test_scan_directory_returns_accurate_sizes - PASSED
+
+All Commands Verified:
+- get_storage_stats: Returns StorageStatsResponse with correct structure
+- export_data_json: Returns valid JSON with export metadata
+- export_data_markdown: Returns formatted markdown with activity details
+- clear_all_data: Returns ClearResult with deleted counts and freed bytes
+- enable_autostart: Windows registry path verified
+- disable_autostart: Windows registry path verified
+- get_autostart_status: Returns AutostartInfo with enabled state
+
+Filesystem Operations:
+- scan_directory handles non-existent paths correctly
+- scan_directory counts files accurately
+- scan_directory ignores subdirectories (only counts files)
+- scan_directory returns accurate file sizes
+
+Status: ALL TESTS PASSED
+

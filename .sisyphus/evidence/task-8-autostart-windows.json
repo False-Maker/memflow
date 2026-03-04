@@ -1,0 +1,46 @@
+{
+  "task": "Task 8 - Implement Windows autostart commands",
+  "timestamp": "2025-03-05T16:05:00Z",
+  "status": "completed",
+  "implementation": {
+    "enable_autostart": {
+      "description": "Creates registry entry at HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\MemFlow",
+      "executable_path_source": "std::env::current_exe()",
+      "registry_key": "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "registry_value_name": "MemFlow",
+      "uses_winreg": true,
+      "platform": "windows"
+    },
+    "disable_autostart": {
+      "description": "Removes registry entry at HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\MemFlow",
+      "registry_key": "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "registry_value_name": "MemFlow",
+      "handles_not_found": true,
+      "platform": "windows"
+    },
+    "get_autostart_status": {
+      "description": "Checks if registry entry exists at HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\MemFlow",
+      "returns": "AutostartInfo with enabled boolean and app_name",
+      "platform": "windows"
+    }
+  },
+  "non_windows_behavior": {
+    "enable_autostart": "Returns error with 'not supported' and platform name",
+    "disable_autostart": "Returns error with 'not supported' and platform name",
+    "get_autostart_status": "Returns AutostartInfo with enabled=false and app_name indicating platform not supported"
+  },
+  "files_modified": [
+    "src-tauri/Cargo.toml - Added winreg = \"0.52\" dependency",
+    "src-tauri/src/commands.rs - Implemented enable_autostart, disable_autostart, get_autostart_status",
+    "src-tauri/src/lib.rs - Registered new commands in invoke_handler"
+  ],
+  "verification": {
+    "cargo_check": "passed",
+    "lsp_diagnostics": "clean"
+  },
+  "error_handling": {
+    "permission_denied": "Uses winreg's error propagation to provide detailed error messages",
+    "invalid_executable_path": "Returns 'Failed to get executable path' error",
+    "registry_access_denied": "Returns 'Failed to open registry key' error"
+  }
+}
