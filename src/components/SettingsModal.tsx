@@ -884,7 +884,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
       <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
       
       {/* 弹窗主体 - 官网风格 */}
-      <div className="relative w-full max-w-3xl max-h-[80vh] bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-3xl h-[80vh] bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
         {/* 斜切装饰 - 官网特色 */}
         <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none">
           <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-neon-cyan/10 to-transparent transform skew-x-12 translate-x-8 -translate-y-4" />
@@ -909,7 +909,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden min-h-0">
+        <div className="flex flex-1 overflow-hidden min-h-0 flex-row">
           {/* Sidebar */}
           <div className="w-48 border-r border-glass-border/50 bg-surface/30 p-4 space-y-2">
             <button
