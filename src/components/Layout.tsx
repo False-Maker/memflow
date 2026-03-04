@@ -199,12 +199,12 @@ export default function Layout({
     }} />
 
     {[
-      { id: 'timeline', label: 'T', full: 'TIME' },
-      { id: 'gallery', label: 'G', full: 'GALLERY' },
-      { id: 'replay', label: 'R', full: 'REPLAY' },
-      { id: 'graph', label: 'K', full: 'KNOWLEDGE' },
-      { id: 'stats', label: 'S', full: 'STATS' },
-      { id: 'qa', label: 'Q', full: 'Q&A' },
+      { id: 'timeline', label: '时间轴', full: '时间轴' },
+      { id: 'gallery', label: '图库', full: '图库' },
+      { id: 'replay', label: '回放', full: '回放' },
+      { id: 'graph', label: '图谱', full: '知识图谱' },
+      { id: 'stats', label: '统计', full: '统计' },
+      { id: 'qa', label: '问答', full: '问答' },
     ].map((view, index) => (
       <button
         key={view.id}

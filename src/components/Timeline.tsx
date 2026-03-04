@@ -384,14 +384,32 @@ export default function Timeline() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col relative">
+      {/* 背景网格装饰 */}
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `
+            linear-gradient(rgba(0, 240, 255, 0.15) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 240, 255, 0.15) 1px, transparent 1px)
+          `,
+          backgroundSize: '24px 24px'
+        }} />
+      </div>
+      
+      {/* 装饰性发光元素 */}
+      <div className="absolute top-0 right-20 w-32 h-32 bg-neon-cyan/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-10 w-40 h-40 bg-neon-cyan/3 rounded-full blur-3xl pointer-events-none" />
+      
       <ImagePreviewModal
         open={previewActivity !== null}
         activity={previewActivity}
         onClose={() => setPreviewActivity(null)}
       />
 
-      <div className="border-b border-zinc-800 px-4 py-2 flex items-center gap-2 bg-void">
+      <div className="border-b border-white/10 px-4 py-2 flex items-center gap-2 bg-void relative">
+        {/* 搜索栏区域装饰 - 左侧发光线条 */}
+        <div className="absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-neon-cyan/50 via-transparent to-transparent" />
+        
         {/* 标题 */}
         <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono flex items-center gap-2 mr-2">
           <Clock className="w-3.5 h-3.5 text-neon-cyan" />
@@ -399,12 +417,15 @@ export default function Timeline() {
         </h2>
 
         {/* 紧凑搜索框 */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+        <div className="relative flex-1 max-w-md group">
+          {/* 搜索框背景装饰 */}
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-neon-cyan/0 via-neon-cyan/10 to-neon-cyan/0 rounded-sm opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 blur-sm" />
+          
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 group-focus-within:text-neon-cyan transition-colors z-10" />
           <input
             type="text"
             placeholder="搜索活动记录..."
-            className="w-full bg-void border border-white/10 rounded-sm pl-8 pr-8 py-1.5 text-xs font-mono text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan/50 transition-all backdrop-blur-sm"
+            className="w-full bg-void border border-white/10 rounded-sm pl-8 pr-8 py-1.5 text-xs font-mono text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan/50 transition-all backdrop-blur-sm relative group-focus-within:shadow-[0_0_10px_rgba(0,240,255,0.2)]"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -567,8 +588,10 @@ className={`mx-4 mt-2 text-[10px] px-3 py-2 rounded-lg border ${
                       {formatDate(activity.timestamp)}
                     </div>
                   )}
-<div className="glass mx-6 mb-3 p-4 border border-white/10 bg-void hover:bg-neon-cyan/5 transition-all rounded-sm group relative hover:shadow-[0_0_15px_rgba(0,240,255,0.3)]">
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover:bg-neon-cyan transition-colors"></div>
+<div className="glass mx-6 mb-3 p-4 border border-white/10 bg-white/5 backdrop-blur-md hover:bg-neon-cyan/10 transition-all duration-300 rounded-sm group relative hover:shadow-[0_0_20px_rgba(0,240,255,0.4)] hover:border-neon-cyan/30">
+                    {/* 悬停时显示的扫描线动画 */}
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-neon-cyan/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-neon-cyan group-hover:bg-neon-cyan transition-colors shadow-[0_0_8px_rgba(0,240,255,0.8)]" />
                     <div className="flex items-start gap-4">
                       {/* 截图缩略图 */}
                       <div className="flex-shrink-0">
