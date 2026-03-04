@@ -1,4 +1,4 @@
-import { useState, useEffect, useReducer, useCallback } from 'react'
+import { useState, useEffect, useReducer, useCallback, useRef } from 'react'
 import { X, Check, AlertCircle, Loader2, ChevronDown, Shield, Settings, Bot, Plus, Trash2, Eye, FolderOpen, Gauge, Sparkles, Download, HardDrive, Database, Trash, Power } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { open as openFileDialog, save as saveFileDialog } from '@tauri-apps/plugin-dialog'
@@ -854,6 +854,23 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }
 
+  // Handle body overflow when modal is open
+  useEffect(() => {
+    // Save original overflow and prevent background scrolling
+    const originalStyle = window.getComputedStyle(document.body).overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = originalStyle
+    }
+  }, [])
+
+  // Prevent wheel events from propagating to background
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    // Allow scrolling within the modal content
+    // The overflow-y-auto on content div will handle it naturally
+  }, [])
+
   if (!open) return null
 
   // Determine which fields to show based on chat provider
@@ -898,7 +915,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden min-h-0">
           {/* Sidebar */}
           <div className="w-48 border-r border-glass-border/50 bg-surface/30 p-4 space-y-2">
             <button
