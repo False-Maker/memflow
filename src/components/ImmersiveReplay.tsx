@@ -263,7 +263,7 @@ export default function ImmersiveReplay() {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <div className="w-8 h-8 border-2 border-neon-blue border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-neon-cyan border-t-transparent rounded-full animate-spin" />
             </div>
           )}
         </div>
@@ -299,7 +299,7 @@ export default function ImmersiveReplay() {
                     </button>
                     <button
                         onClick={togglePlay}
-                        className="p-2 rounded-full bg-neon-blue text-black hover:bg-neon-blue/90 transition-all mx-1"
+                        className="p-2 rounded-full bg-neon-cyan text-black hover:bg-neon-cyan/90 transition-all mx-1"
                         title="Space"
                     >
                         {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current pl-0.5" />}
@@ -327,7 +327,7 @@ export default function ImmersiveReplay() {
                         onClick={() => setSpeed(s as ReplaySpeed)}
                         className={`px-2 py-0.5 rounded text-xs font-medium transition-all ${
                             speed === s
-                            ? 'bg-neon-blue/20 text-neon-blue shadow-sm'
+                            ? 'bg-neon-cyan/20 text-neon-cyan shadow-sm'
                             : 'text-gray-400 hover:text-white hover:bg-white/5'
                         }`}
                         >
@@ -357,7 +357,7 @@ export default function ImmersiveReplay() {
                     className="no-scrollbar"
                 />
                  {/* Center Marker Line */}
-                 <div className="absolute top-0 bottom-0 left-1/2 w-px bg-neon-blue/50 pointer-events-none z-10 hidden" />
+                 <div className="absolute top-0 bottom-0 left-1/2 w-px bg-neon-cyan/50 pointer-events-none z-10 hidden" />
             </div>
         </div>
       </div>
@@ -388,7 +388,7 @@ function Thumbnail({ activity, active, onClick }: { activity: ActivityLog, activ
     <div 
       className={`relative h-14 aspect-video flex-shrink-0 cursor-pointer rounded-md overflow-hidden transition-all duration-200 group ${
           active 
-            ? 'ring-2 ring-neon-blue ring-offset-1 ring-offset-black scale-105 z-10' 
+            ? 'ring-2 ring-neon-cyan ring-offset-1 ring-offset-black scale-105 z-10' 
             : 'opacity-50 hover:opacity-100 hover:scale-105 grayscale hover:grayscale-0'
       }`}
       onClick={onClick}

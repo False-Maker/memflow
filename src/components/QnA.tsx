@@ -259,8 +259,8 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
     <div className="h-full flex flex-col min-h-0">
       <div className="glass border-b border-glass-border px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-neon-blue" />
-          <h2 className="text-lg font-semibold text-neon-blue">问答</h2>
+          <Sparkles className="w-5 h-5 text-neon-cyan" />
+          <h2 className="text-lg font-semibold text-neon-cyan">问答</h2>
           {sessionId && (
             <span className="text-xs text-gray-500 ml-2">
               会话 #{sessionId}
@@ -285,7 +285,7 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
       <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3">
         {isLoadingHistory ? (
           <div className="flex justify-center py-8" role="status" aria-label="加载中">
-            <Loader2 className="w-6 h-6 animate-spin text-neon-blue" />
+            <Loader2 className="w-6 h-6 animate-spin text-neon-cyan" />
           </div>
         ) : (
           messages.map((m, index) => (
@@ -295,7 +295,7 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
             >
               <div
                 className={`max-w-[85%] rounded-2xl px-4 py-3 border ${m.role === 'user'
-                  ? 'bg-neon-blue/10 border-neon-blue/20 text-white'
+                  ? 'bg-neon-cyan/10 border-neon-cyan/20 text-white'
                   : 'bg-surface/50 border-glass-border/50 text-gray-100'
                   }`}
               >
@@ -318,7 +318,7 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
         {loading && (
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-2xl px-4 py-3 border bg-surface/50 border-glass-border/50 text-gray-100 flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-neon-blue" />
+              <Loader2 className="w-4 h-4 animate-spin text-neon-cyan" />
               <span className="text-sm text-gray-300">正在思考…</span>
             </div>
           </div>
@@ -343,12 +343,12 @@ export default function QnA({ initialSessionId, onSessionCreated, draft }: QnAPr
               }
             }}
             placeholder="输入你的问题（Enter 发送，Shift+Enter 换行）"
-            className="flex-1 min-h-[44px] max-h-40 resize-none px-4 py-2.5 bg-surface border border-glass-border rounded-lg text-white placeholder:text-gray-500 hover:border-neon-blue/30 transition-colors focus:outline-none focus:ring-2 focus:ring-neon-blue/30"
+            className="flex-1 min-h-[44px] max-h-40 resize-none px-4 py-2.5 bg-surface border border-glass-border rounded-lg text-white placeholder:text-gray-500 hover:border-neon-cyan/30 transition-colors focus:outline-none focus:ring-2 focus:ring-neon-cyan/30"
           />
           <button
             onClick={() => void send()}
             disabled={!canSend}
-            className="px-4 py-2.5 rounded-lg bg-neon-blue/20 text-neon-blue hover:bg-neon-blue/30 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2.5 rounded-lg bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="w-4 h-4" />
             <span>发送</span>

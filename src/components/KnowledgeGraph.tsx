@@ -142,7 +142,7 @@ export default function KnowledgeGraph() {
       return (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
-            <RefreshCw className="w-8 h-8 mx-auto mb-4 text-neon-purple animate-spin" />
+            <RefreshCw className="w-8 h-8 mx-auto mb-4 text-neon-cyan animate-spin" />
             <p className="text-gray-400">
               {lastAction === 'rebuild' ? '正在重建知识图谱...' : '加载知识图谱...'}
             </p>
@@ -158,7 +158,7 @@ export default function KnowledgeGraph() {
             <p className="text-red-400 mb-4">错误: {error}</p>
             <button
               onClick={lastAction === 'rebuild' ? rebuildGraph : loadGraph}
-              className="px-4 py-2 rounded-lg bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 transition-colors"
+              className="px-4 py-2 rounded-lg bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors"
             >
               重试
             </button>
@@ -226,7 +226,7 @@ export default function KnowledgeGraph() {
     <div className="h-full flex flex-col">
       <div className="glass border-b border-glass-border px-6 py-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-neon-purple">
+          <h2 className="text-lg font-semibold text-neon-cyan">
             知识图谱
           </h2>
           <p className="text-sm text-gray-400 mt-1">
@@ -239,7 +239,7 @@ export default function KnowledgeGraph() {
         <button
           onClick={rebuildGraph}
           disabled={loading}
-          className="px-4 py-2 rounded-lg bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 transition-colors flex items-center gap-2 disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 transition-colors flex items-center gap-2 disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           重建图谱
@@ -247,7 +247,7 @@ export default function KnowledgeGraph() {
       </div>
 
       {notice && (
-        <div className="px-6 py-3 border-b border-glass-border text-sm text-neon-purple bg-neon-purple/5">
+        <div className="px-6 py-3 border-b border-glass-border text-sm text-neon-cyan bg-neon-cyan/5">
           {notice}
         </div>
       )}

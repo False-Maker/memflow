@@ -138,3 +138,70 @@
 - ✅ OCR tag maintains neon-green
 - ✅ Grid layout logic unchanged
 - ✅ Filtering functionality unchanged
+
+## KnowledgeGraph Color Update
+
+**Date**: 2026-03-04  
+**Task**: Update KnowledgeGraph.tsx to use neon-cyan instead of neon-purple
+
+### Changes Made
+
+1. **Loading spinner**: Changed `text-neon-purple` → `text-neon-cyan`
+2. **Error retry button**: Changed `bg-neon-purple/20`, `text-neon-purple`, `hover:bg-neon-purple/30` → `neon-cyan` equivalents
+3. **Header title**: Changed `text-neon-purple` → `text-neon-cyan`
+4. **Rebuild button**: Changed `bg-neon-purple/20`, `text-neon-purple`, `hover:bg-neon-purple/30` → `neon-cyan` equivalents
+5. **Notice banner**: Changed `text-neon-purple`, `bg-neon-purple/5` → `neon-cyan` equivalents
+
+### Design Rationale
+
+- Consistency with Wave 1-2 UI updates: neon-cyan (#00f0ff) is the unified primary accent
+- Zinc color scheme preserved for graph nodes (data visualization best practice)
+- Interactive elements use neon-cyan for visual consistency
+- Force-directed layout, D3 configuration, and graph data structure unchanged
+
+### Files Modified
+
+- `src/components/KnowledgeGraph.tsx`: Updated all neon-purple references to neon-cyan
+
+### Verification
+
+- ✅ `grep -c "neon-purple"` returns 0 in KnowledgeGraph.tsx
+- ✅ All interactive elements use neon-cyan
+- ✅ Graph node colors remain zinc-based (app: zinc-100, doc: zinc-400, time: zinc-700)
+- ✅ Force layout logic unchanged
+
+## QnA Component Color Update
+
+**Date**: 2026-03-04  
+**Task**: Update QnA.tsx to use neon-cyan instead of neon-blue
+
+### Changes Made
+
+1. **Header icon & title**: Changed `text-neon-blue` → `text-neon-cyan` (Sparkles icon, h2)
+2. **Loading spinner**: Changed `text-neon-blue` → `text-neon-cyan`
+3. **User message bubble**: Changed `bg-neon-blue/10 border-neon-blue/20` → `bg-neon-cyan/10 border-neon-cyan/20`
+4. **Thinking indicator**: Changed `text-neon-blue` → `text-neon-cyan`
+5. **Input hover/focus**: Changed `border-neon-blue/30` and `ring-neon-blue/30` → `neon-cyan` equivalents
+6. **Send button**: Changed `bg-neon-blue/20 text-neon-blue hover:bg-neon-blue/30` → `bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30`
+
+### Design Rationale
+
+- Consistency with Wave 1-2 UI updates: neon-cyan (#00f0ff) is the unified primary accent
+- User bubble now uses neon-cyan for clear contrast with assistant bubble (surface/glass)
+- Input field focus ring updated to cyan for consistent interaction feedback
+- Send button maintains its prominence with cyan background
+- Message rendering, streaming logic, and Tauri event handling unchanged
+
+### Files Modified
+
+- `src/components/QnA.tsx`: Updated all neon-blue references to neon-cyan
+
+### Verification
+
+- ✅ `grep -c "neon-blue"` returns 0 in QnA.tsx
+- ✅ 9 occurrences of neon-cyan found
+- ✅ Message bubble styles updated (user: cyan bg, assistant: glass bg)
+- ✅ Input field focus ring updated
+- ✅ Send button updated
+- ✅ Streaming listener unchanged
+- ✅ Tauri event handling unchanged

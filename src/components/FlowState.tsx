@@ -124,7 +124,7 @@ export default function FlowState() {
 
   return (
     <div className="h-full overflow-y-auto p-6">
-      <div className="glass border-b border-glass-border px-6 py-4 mb-6">
+      <div className="glass border-b border-white/10 px-6 py-4 mb-6">
         <h2 className="text-lg font-semibold text-neon-green">活动统计</h2>
       </div>
 
@@ -132,11 +132,11 @@ export default function FlowState() {
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="glass p-6 rounded-lg">
           <div className="flex items-center gap-3 mb-2">
-            <Activity className="w-6 h-6 text-neon-blue" />
+            <Activity className="w-6 h-6 text-neon-cyan" />
             <span className="text-sm text-gray-400">总活动数</span>
           </div>
           {loading ? (
-            <Loader2 className="w-6 h-6 animate-spin text-neon-blue" />
+            <Loader2 className="w-6 h-6 animate-spin text-neon-cyan" />
           ) : (
             <div className="text-3xl font-bold text-white">{stats.totalActivities}</div>
           )}
