@@ -7,8 +7,8 @@ export default {
   theme: {
     extend: {
     colors: {
-        void: '#050505', // Deep Matte Black
-        surface: '#18181B', // Zinc 900
+        void: '#030712', // Midnight Blue - Sci-fi tech feel
+        surface: '#0f172a', // Slate 900 - Cool blue-gray tech surface
         signal: '#00f0ff', // Neon Cyan - Primary emphasis
         muted: '#71717A', // Zinc 500
         border: '#27272A', // Zinc 800
