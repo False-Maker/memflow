@@ -14,6 +14,9 @@ use crate::recorder;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
+// Re-export sqlx for database operations
+use sqlx;
+
 // ActivityLog is imported from crate::db (re-exported from memflow_core)
 pub use crate::db::ActivityLog;
 
@@ -925,88 +928,480 @@ pub async fn agent_cancel_execution(execution_id: i64) -> Result<(), String> {
 #[tauri::command]
 pub async fn clear_all_data() -> Result<ClearResult, String> {
     tracing::info!("clear_all_data called");
-    // TODO: Implement actual deletion logic (Task 7, 8)
-    Ok(ClearResult {
+
+    // Get the database pool and screenshots directory
+    let pool = db::get_pool().await.map_err(|e| e.to_string())?;
+    let screenshots_dir = db::get_screenshots_dir()
+        .await
+        .ok_or_else(|| "Screenshots directory not initialized".to_string())?;
+
+    let mut result = ClearResult {
         deleted_activities: 0,
         deleted_screenshots: 0,
         freed_bytes: 0,
-    })
+    };
+
+    // Use transaction for database deletion (all or nothing)
+    let mut tx = pool.begin().await.map_err(|e| {
+        tracing::error!("Failed to begin transaction: {}", e);
+        e.to_string()
+    })?;
+
+    // 1. Count activities before deletion (for accurate reporting)
+    let activity_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM activity_logs")
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to count activities: {}", e);
+            e.to_string()
+        })?;
+    result.deleted_activities = activity_count as u64;
+
+    // 2. Get all image paths before deleting from database
+    let image_rows: Vec<(String,)> = sqlx::query_as("SELECT image_path FROM activity_logs WHERE image_path IS NOT NULL")
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch image paths: {}", e);
+            e.to_string()
+        })?;
+
+    // 3. Delete from database in proper order (respecting foreign keys)
+    // FTS table will be cleaned by triggers
+
+    // Delete from vector_embeddings (CASCADE will handle via FK)
+    sqlx::query("DELETE FROM vector_embeddings")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete vector embeddings: {}", e);
+            e.to_string()
+        })?;
+
+    // Delete from knowledge_edges
+    sqlx::query("DELETE FROM knowledge_edges")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete knowledge edges: {}", e);
+            e.to_string()
+        })?;
+
+    // Delete from knowledge_nodes
+    sqlx::query("DELETE FROM knowledge_nodes")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete knowledge nodes: {}", e);
+            e.to_string()
+        })?;
+
+    // Delete from ocr_queue
+    sqlx::query("DELETE FROM ocr_queue")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete OCR queue: {}", e);
+            e.to_string()
+        })?;
+
+    // Delete from focus_metrics
+    sqlx::query("DELETE FROM focus_metrics")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete focus metrics: {}", e);
+            e.to_string()
+        })?;
+
+    // Delete from recording_stats
+    sqlx::query("DELETE FROM recording_stats")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete recording stats: {}", e);
+            e.to_string()
+        })?;
+
+    // Delete from terminal_logs
+    sqlx::query("DELETE FROM terminal_logs")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete terminal logs: {}", e);
+            e.to_string()
+        })?;
+
+    // Delete from activity_logs (FTS triggers will clean activity_logs_fts)
+    let deleted = sqlx::query("DELETE FROM activity_logs")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete activity logs: {}", e);
+            e.to_string()
+        })?;
+
+    tracing::info!("Deleted {} activities from database", deleted.rows_affected());
+
+    // Commit transaction
+    tx.commit().await.map_err(|e| {
+        tracing::error!("Failed to commit transaction: {}", e);
+        e.to_string()
+    })?;
+
+    // 4. Delete screenshot files
+    for (image_path,) in image_rows {
+        let full_path = screenshots_dir.join(&image_path);
+        if let Ok(metadata) = std::fs::metadata(&full_path) {
+            result.freed_bytes += metadata.len();
+        }
+        if std::fs::remove_file(&full_path).is_ok() {
+            result.deleted_screenshots += 1;
+        } else {
+            tracing::warn!("Failed to delete screenshot: {:?}", full_path);
+        }
+    }
+
+    // 5. Clean up FTS table explicitly (triggers should handle this, but let's be safe)
+    let _ = sqlx::query("DELETE FROM activity_logs_fts")
+        .execute(&pool)
+        .await;
+
+    tracing::info!(
+        "clear_all_data completed: {} activities, {} screenshots, {} bytes freed",
+        result.deleted_activities,
+        result.deleted_screenshots,
+        result.freed_bytes
+    );
+
+    Ok(result)
 }
 
 #[tauri::command]
 pub async fn enable_autostart() -> Result<(), String> {
     tracing::info!("enable_autostart called");
-    // TODO: Implement autostart enable logic
-    Ok(())
+
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::enums::{HKEY_CURRENT_USER, KEY_WRITE};
+        use winreg::RegKey;
+
+        // Get the current executable path
+        let exe_path = std::env::current_exe()
+            .map_err(|e| format!("Failed to get executable path: {}", e))?;
+
+        let exe_path_str = exe_path
+            .to_str()
+            .ok_or_else(|| "Executable path contains invalid UTF-8 characters".to_string())?;
+
+        // Open the registry key for autostart
+        let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let key = hkcu
+            .open_subkey_with_flags(path, KEY_WRITE)
+            .map_err(|e| format!("Failed to open registry key: {}", e))?;
+
+        // Set the registry value
+        key.set_value("MemFlow", &exe_path_str)
+            .map_err(|e| format!("Failed to set registry value: {}", e))?;
+
+        tracing::info!("Autostart enabled: {}", exe_path_str);
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err(format!(
+            "Autostart is not supported on this platform ({}). Please use platform-specific methods.",
+            std::env::consts::OS
+        ))
+    }
 }
 
 #[tauri::command]
 pub async fn disable_autostart() -> Result<(), String> {
     tracing::info!("disable_autostart called");
-    // TODO: Implement autostart disable logic
-    Ok(())
+
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::enums::{HKEY_CURRENT_USER, KEY_WRITE};
+        use winreg::RegKey;
+
+        // Open the registry key for autostart
+        let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let key = hkcu
+            .open_subkey_with_flags(path, KEY_WRITE)
+            .map_err(|e| format!("Failed to open registry key: {}", e))?;
+
+        // Delete the registry value if it exists
+        match key.delete_value("MemFlow") {
+            Ok(_) => {
+                tracing::info!("Autostart disabled");
+                Ok(())
+            }
+            Err(e) => {
+                // Ignore "value not found" error - it means autostart was already disabled
+                if e.raw_os_error() == Some(2) {
+                    // ERROR_FILE_NOT_FOUND
+                    tracing::info!("Autostart registry value does not exist (already disabled)");
+                    Ok(())
+                } else {
+                    Err(format!("Failed to delete registry value: {}", e))
+                }
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err(format!(
+            "Autostart is not supported on this platform ({}). Please use platform-specific methods.",
+            std::env::consts::OS
+        ))
+    }
 }
 
 #[tauri::command]
 pub async fn get_autostart_status() -> Result<AutostartInfo, String> {
     tracing::info!("get_autostart_status called");
-    // TODO: Implement actual autostart status checking
-    Ok(AutostartInfo {
-        enabled: false,
-        app_name: "MemFlow".to_string(),
-    })
+
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+        use winreg::RegKey;
+
+        // Open the registry key for autostart
+        let path = r"Software\Microsoft\Windows\CurrentVersion\Run";
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let key = hkcu
+            .open_subkey_with_flags(path, KEY_READ)
+            .map_err(|e| format!("Failed to open registry key: {}", e))?;
+
+        // Check if the registry value exists
+        let enabled = key
+            .get_value::<String, _>("MemFlow")
+            .ok()
+            .is_some();
+
+        tracing::info!("Autostart status: enabled={}", enabled);
+        Ok(AutostartInfo {
+            enabled,
+            app_name: "MemFlow".to_string(),
+        })
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // For non-Windows platforms, return disabled with platform info
+        Ok(AutostartInfo {
+            enabled: false,
+            app_name: format!("MemFlow (not supported on {})", std::env::consts::OS),
+        })
+    }
 }
 
 #[tauri::command]
-pub async fn get_storage_stats() -> Result<StorageStatsResponse, String> {
+pub async fn get_storage_stats(app_handle: tauri::AppHandle) -> Result<StorageStatsResponse, String> {
     tracing::info!("Frontend requested get_storage_stats");
-    println!("[DEBUG] Frontend requested get_storage_stats");
-    
-    // Return placeholder values for now (implementation in Task 5)
+
+    // Get config for max_storage_gb
+    let config = app_config::get_config().await
+        .map_err(|e| format!("Failed to read config: {}", e))?;
+    let max_storage_gb = config.max_storage_gb as f64;
+
+    // Get database size
+    let database_size_bytes = db::get_database_size().await;
+    let database_size_mb = database_size_bytes as f64 / 1024.0 / 1024.0;
+
+    // Get activity count from database
+    let activities_count = match db::get_pool().await {
+        Ok(pool) => {
+            match sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM activity_logs")
+                .fetch_one(&pool)
+                .await
+            {
+                Ok(count) => count as u64,
+                Err(e) => {
+                    tracing::warn!("Failed to get activity count: {}", e);
+                    0
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to get database pool: {}", e);
+            0
+        }
+    };
+
+    // Scan screenshots directory for count and size
+    let app_data_dir = app_handle.path().app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+
+    let screenshots_dir = app_data_dir.join("screenshots");
+    let (screenshots_count, screenshots_size_bytes) = scan_directory(&screenshots_dir)
+        .unwrap_or_else(|e| {
+            tracing::warn!("Failed to scan screenshots directory '{}': {}", screenshots_dir.display(), e);
+            (0, 0)
+        });
+    let screenshots_size_mb = screenshots_size_bytes as f64 / 1024.0 / 1024.0;
+
+    // Scan logs directory for size
+    let logs_dir = app_data_dir.join("logs");
+    let logs_size_bytes = scan_directory(&logs_dir)
+        .unwrap_or_else(|e| {
+            tracing::warn!("Failed to scan logs directory '{}': {}", logs_dir.display(), e);
+            (0, 0)
+        })
+        .1; // Only need size
+
+    // Calculate total size
+    let total_size_bytes = database_size_bytes + screenshots_size_bytes + logs_size_bytes;
+    let total_size_mb = total_size_bytes as f64 / 1024.0 / 1024.0;
+
+    // Calculate usage percentage
+    let usage_percent = if max_storage_gb > 0.0 {
+        (total_size_mb / (max_storage_gb * 1024.0)) * 100.0
+    } else {
+        0.0
+    };
+
+    // Calculate next GC time (retention days from config)
+    let next_gc_time = if config.retention_days > 0 {
+        let next_gc_ts = chrono::Utc::now().timestamp() + (config.retention_days as i64 * 86400);
+        Some(chrono::DateTime::from_timestamp(next_gc_ts, 0)
+            .unwrap_or_else(|| chrono::Utc::now())
+            .to_rfc3339())
+    } else {
+        None
+    };
+
     Ok(StorageStatsResponse {
-        screenshots_count: 0,
-        screenshots_size_mb: 0.0,
-        activities_count: 0,
-        database_size_mb: 0.0,
-        total_size_mb: 0.0,
-        max_storage_gb: 10.0, // Default 10GB
-        usage_percent: 0.0,
-        next_gc_time: None,
+        screenshots_count,
+        screenshots_size_mb,
+        activities_count,
+        database_size_mb,
+        total_size_mb,
+        max_storage_gb,
+        usage_percent,
+        next_gc_time,
     })
 }
 
 #[tauri::command]
 pub async fn export_data_json(limit: i64) -> Result<String, String> {
     tracing::info!("Frontend requested export_data_json with limit: {}", limit);
-    println!("[DEBUG] Frontend requested export_data_json with limit: {}", limit);
-    
-    // TODO: Implement actual export logic in Task 6
-    // Return placeholder JSON for now
-    let placeholder_data = serde_json::json!({
-        "export_type": "json",
-        "limit": limit,
+
+    // Query activities from database
+    let activities = db::get_activities(limit)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to query activities for export: {}", e);
+            format!("Failed to query activities: {}", e)
+        })?;
+
+    // Format as JSON array with metadata
+    let export_data = serde_json::json!({
+        "exportType": "json",
+        "version": "1.0",
         "timestamp": chrono::Utc::now().to_rfc3339(),
-        "message": "Export functionality - placeholder implementation",
-        "data": []
+        "count": activities.len(),
+        "activities": activities
     });
-    
-    Ok(serde_json::to_string_pretty(&placeholder_data).unwrap_or_else(|_| {
-        r#"{"error": "Failed to serialize placeholder data"}"#.to_string()
-    }))
+
+    serde_json::to_string_pretty(&export_data)
+        .map_err(|e| format!("Failed to serialize JSON: {}", e))
 }
 
 #[tauri::command]
 pub async fn export_data_markdown(limit: i64) -> Result<String, String> {
     tracing::info!("Frontend requested export_data_markdown with limit: {}", limit);
-    println!("[DEBUG] Frontend requested export_data_markdown with limit: {}", limit);
-    
-    // TODO: Implement actual export logic in Task 6
-    // Return placeholder Markdown for now
-    let placeholder = format!(
-        "# MemFlow Export\n\n**Export Type:** Markdown\n**Limit:** {}\n**Timestamp:** {}\n\n## Export Information\n\n- This is a placeholder implementation\n- Actual export functionality will be implemented in Task 6\n- Export data will be available here\n\n---\n\n*Generated by MemFlow*",
-        limit,
-        chrono::Utc::now().to_rfc3339()
-    );
-    
-    Ok(placeholder)
+
+    // Query activities from database
+    let activities = db::get_activities(limit)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to query activities for markdown export: {}", e);
+            format!("Failed to query activities: {}", e)
+        })?;
+
+    if activities.is_empty() {
+        return Ok(
+            "# MemFlow Activity Export\n\n**No activities found**\n\nThere are no activities to export.".to_string()
+        );
+    }
+
+    // Build markdown output
+    let mut md = String::from("# MemFlow Activity Export\n\n");
+    md.push_str(&format!("**Export Date:** {}\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
+    md.push_str(&format!("**Total Activities:** {}\n\n", activities.len()));
+    md.push_str("---\n\n");
+
+    for (idx, activity) in activities.iter().enumerate() {
+        md.push_str(&format!("## Activity #{}\n", idx + 1));
+        md.push_str(&format!("**ID:** `{}`\n", activity.id));
+        md.push_str(&format!("**Timestamp:** `{}`\n", activity.timestamp));
+
+        // Format timestamp as human-readable date
+        if let Some(dt) = chrono::DateTime::from_timestamp(activity.timestamp, 0) {
+            md.push_str(&format!("**Date:** {}\n", dt.format("%Y-%m-%d %H:%M:%S")));
+        }
+
+        md.push_str(&format!("**Application:** `{}`\n", activity.app_name));
+        md.push_str(&format!("**Window Title:** `{}`\n", activity.window_title));
+
+        if let Some(ref path) = activity.image_path {
+            md.push_str(&format!("**Screenshot:** `{}`\n", path));
+        }
+
+        if let Some(ref text) = activity.ocr_text {
+            if !text.is_empty() {
+                md.push_str("**OCR Text:**\n");
+                md.push_str("```\n");
+                // Truncate OCR text if too long for readability
+                if text.len() > 500 {
+                    md.push_str(&text[..500]);
+                    md.push_str("...\n");
+                } else {
+                    md.push_str(text);
+                    md.push_str("\n");
+                }
+                md.push_str("```\n");
+            }
+        }
+
+        md.push_str("\n---\n\n");
+    }
+
+    md.push_str("*Generated by [MemFlow](https://github.com/memflow-app/memflow)*\n");
+
+    Ok(md)
+}
+
+/// Helper function to scan a directory and return file count and total size
+fn scan_directory(dir_path: &std::path::Path) -> Result<(u64, u64), String> {
+    if !dir_path.exists() {
+        return Ok((0, 0));
+    }
+
+    let mut file_count = 0u64;
+    let mut total_size = 0u64;
+
+    let entries = std::fs::read_dir(dir_path)
+        .map_err(|e| format!("Permission denied or access error reading directory '{}': {}", dir_path.display(), e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+
+        // Skip directories and special files
+        if path.is_file() {
+            if let Ok(metadata) = std::fs::metadata(&path) {
+                file_count += 1;
+                total_size += metadata.len();
+            }
+        }
+    }
+
+    Ok((file_count, total_size))
 }
