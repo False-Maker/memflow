@@ -124,7 +124,32 @@ pub fn run() {
                 }
             });
 
-            // 初始化录制器（传递 AppHandle）
+            // Initialize database SYNCHRONOUSLY (must be ready before recorder)
+            let db_handle = app_handle.clone();
+            tracing::info!("Initializing database synchronously...");
+            if let Err(e) = tauri::async_runtime::block_on(async move {
+                db::init_db(db_handle).await
+            }) {
+                let error_msg = format!("CRITICAL: Database init failed: {}", e);
+                tracing::error!("{}", error_msg);
+                tracing::error!("CRITICAL: Database init failed (debug): {:?}", e);
+                eprintln!("{}", error_msg);
+
+                let (kind, hint) = db::diagnose_init_error(&e);
+                tracing::error!("Database init failure kind: {:?}. {}", kind, hint);
+                eprintln!("Database init hint: {}", hint);
+                
+                if let Ok(db_path) = db::get_db_path_for_diagnostics(&app_handle) {
+                    tracing::error!(
+                        "诊断信息 - 数据库路径: {}, 请检查文件权限和是否被其他进程占用",
+                        db_path.display()
+                    );
+                }
+            } else {
+                tracing::info!("Database initialization completed successfully.");
+            }
+
+            // 初始化录制器（传递 AppHandle） - now DB is ready
             recorder::init(app_handle.clone());
             
             // 初始化后台 OCR Worker
@@ -132,7 +157,7 @@ pub fn run() {
             ocr_worker::spawn_ocr_worker(app_handle.clone());
             tracing::info!("ocr_worker::spawn_ocr_worker returned.");
 
-            // 初始化配置和数据库
+            // 初始化配置和 Prompts (can run parallel)
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = app_config::init_config(app_handle.clone()).await {
                     tracing::error!("CRITICAL: Config init failed: {:#}", e);
@@ -147,30 +172,9 @@ pub fn run() {
                 } else {
                     tracing::info!("Prompts 配置初始化完成");
                 }
-
-                tracing::info!("Starting database initialization...");
-                if let Err(e) = db::init_db(app_handle.clone()).await {
-                    let error_msg = format!("CRITICAL: Database init failed: {}", e);
-                    tracing::error!("{}", error_msg);
-                    tracing::error!("CRITICAL: Database init failed (debug): {:?}", e);
-                    eprintln!("{}", error_msg);
-
-                    let (kind, hint) = db::diagnose_init_error(&e);
-                    tracing::error!("Database init failure kind: {:?}. {}", kind, hint);
-                    eprintln!("Database init hint: {}", hint);
-                     
-                    // 记录详细的诊断信息
-                    if let Ok(db_path) = db::get_db_path_for_diagnostics(&app_handle) {
-                        tracing::error!(
-                            "诊断信息 - 数据库路径: {}, 请检查文件权限和是否被其他进程占用",
-                            db_path.display()
-                        );
-                    }
-                } else {
-                    tracing::info!("Database initialization completed successfully.");
-                    // 启动自动清理调度器 (等待数据库初始化完成后)
-                    scheduler::spawn_retention_scheduler();
-                }
+                
+                // 启动自动清理调度器 (等待数据库初始化完成后 - but DB is already ready now)
+                scheduler::spawn_retention_scheduler();
             });
 
             Ok(())

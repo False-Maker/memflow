@@ -95,6 +95,15 @@ pub struct AppConfig {
         alias = "target_resolution_scale"
     )]
     pub target_resolution_scale: f32,
+    /// 暂停录制开关
+    #[serde(default, alias = "pause_recording_enabled")]
+    pub pause_recording_enabled: bool,
+    /// 暂停录制到指定时间戳
+    #[serde(default, alias = "pause_until")]
+    pub pause_until: Option<i64>,
+    /// 最大存储空间（GB）
+    #[serde(default = "default_max_storage_gb", alias = "max_storage_gb")]
+    pub max_storage_gb: u32,
 }
 
 fn default_recording_interval() -> u64 {
@@ -116,6 +125,11 @@ fn default_ocr_redaction_level() -> String {
 fn default_ocr_preprocess_enabled() -> bool {
     true
 }
+
+fn default_max_storage_gb() -> u32 {
+    10
+}
+
 
 fn default_ocr_preprocess_target_width() -> u32 {
     1280
