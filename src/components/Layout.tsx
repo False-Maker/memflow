@@ -55,7 +55,6 @@ export default function Layout({
   // ... (props unchanged)
   onOpenSettings,
   onOpenChatHistory,
-  onOpenFeedback,
   onOpenPerformance,
   currentSessionId,
   shouldSwitchToQA,
