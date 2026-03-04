@@ -297,6 +297,9 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [autostartEnabled, setAutostartEnabled] = useState(false)
   const [autostartLoading, setAutostartLoading] = useState(false)
 
+  // 数据目录状态
+  const [dataDirectory, setDataDirectory] = useState<string | null>(null)
+
   // Form state with reducer
   const initialFormState: ModelFormState = {
     chat: {
@@ -344,6 +347,9 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
 
       // 加载自启动状态
       loadAutostartStatus()
+
+      // 加载数据目录
+      loadDataDirectory()
 
       // 检查 dialog 插件可用性
       checkDialogPlugin().then((available) => {
@@ -509,6 +515,50 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     } catch (e) {
       console.error('清理数据失败:', e)
       alert('清理失败: ' + e)
+    }
+  }
+
+  // 数据目录相关处理
+  const handleSelectDataDirectory = async () => {
+    try {
+      const selected = await openFileDialog({
+        directory: true,
+        multiple: false,
+        title: '选择数据存储目录'
+      })
+      if (selected && typeof selected === 'string') {
+        // 更新配置
+        await invoke('set_data_directory', { path: selected })
+        setDataDirectory(selected)
+        alert('数据目录已更新，请重启应用以使更改生效')
+      }
+    } catch (e) {
+      console.error('选择目录失败:', e)
+      if (e !== 'Canceled') {
+        alert('选择目录失败: ' + e)
+      }
+    }
+  }
+
+  const handleResetDataDirectory = async () => {
+    try {
+      // 清空配置以使用默认目录
+      await invoke('set_data_directory', { path: '' })
+      setDataDirectory(null)
+      alert('已重置为默认目录，请重启应用以使更改生效')
+    } catch (e) {
+      console.error('重置目录失败:', e)
+      alert('重置失败: ' + e)
+    }
+  }
+
+  // 加载数据目录
+  const loadDataDirectory = async () => {
+    try {
+      const dir = await invoke<string>('get_data_directory')
+      setDataDirectory(dir)
+    } catch (e) {
+      console.error('加载数据目录失败:', e)
     }
   }
 
@@ -1842,6 +1892,55 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                       )}
                     </div>
                   )}
+                </section>
+
+                <div className="h-px bg-glass-border/50" />
+
+                {/* Data Directory */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                      <FolderOpen className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white">数据目录</h3>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-surface/50 border border-glass-border/30 space-y-4">
+                    <p className="text-sm text-gray-400">自定义数据存储位置（留空使用默认位置）</p>
+
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={dataDirectory || '默认位置'}
+                          readOnly
+                          placeholder="使用默认应用数据目录"
+                          className="flex-1 px-4 py-2 bg-surface border border-glass-border rounded-lg text-gray-300 placeholder:text-gray-500"
+                        />
+                        <button
+                          onClick={handleSelectDataDirectory}
+                          className="px-4 py-2 rounded-lg bg-surface border border-glass-border hover:bg-white/10 text-gray-300 transition-colors flex items-center gap-2"
+                        >
+                          <FolderOpen className="w-4 h-4" />
+                          浏览
+                        </button>
+                      </div>
+
+                      {(draftConfig.dataDirectory || dataDirectory) && (
+                        <button
+                          onClick={handleResetDataDirectory}
+                          className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          重置为默认目录
+                        </button>
+                      )}
+
+                      <p className="text-xs text-gray-500">
+                        ⚠️ 修改数据目录后需要重启应用才能生效
+                      </p>
+                    </div>
+                  </div>
                 </section>
 
                 <div className="h-px bg-glass-border/50" />

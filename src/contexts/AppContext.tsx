@@ -36,6 +36,7 @@ export interface AppConfig {
   enableFocusAnalytics: boolean
   enableProactiveAssistant: boolean
   retentionDays: number
+  maxStorageGb?: number
   apiKey?: string
   chatModel?: string
   embeddingModel?: string
@@ -48,6 +49,13 @@ export interface AppConfig {
   privacyModeEnabled: boolean
   privacyModeUntil?: number
   intentParseTimeoutMs?: number
+  // P5.5-1: 暂停录制
+  pauseRecordingEnabled?: boolean
+  pauseUntil?: number
+  // 自启动
+  autostartEnabled?: boolean
+  // 数据目录
+  dataDirectory?: string
 }
 
 export interface SearchParams extends Record<string, unknown> {
@@ -96,6 +104,7 @@ const initialState: AppState = {
     blocklistEnabled: false,
     blocklistMode: 'blocklist',
     privacyModeEnabled: false,
+    autostartEnabled: false,
   },
   configLoaded: false,
   configError: null,

@@ -91,6 +91,9 @@ pub fn run() {
             commands::get_storage_stats,
             commands::export_data_json,
             commands::export_data_markdown,
+            // Data directory commands
+            commands::get_data_directory,
+            commands::set_data_directory,
         ])
         .setup(|app| {
             let mut filter = tracing_subscriber::EnvFilter::try_from_default_env()

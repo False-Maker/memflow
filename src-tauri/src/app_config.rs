@@ -33,6 +33,7 @@ pub async fn init_config(app_handle: AppHandle) -> Result<()> {
             ocr_engine: "rapidocr".to_string(),
             ai_enabled: false,
             retention_days: 30,
+            max_storage_gb: 10,
             chat_model: "gpt-4o-mini".to_string(),
             embedding_model: "text-embedding-3-small".to_string(),
             embedding_base_url: None,
@@ -54,6 +55,10 @@ pub async fn init_config(app_handle: AppHandle) -> Result<()> {
             agent_note_path: None,
             compression_quality: 80,
             target_resolution_scale: 1.0,
+            data_directory: None,
+            // P5.5-1: 暂停状态
+            pause_recording_enabled: false,
+            pause_until: None,
         };
         save_config_internal(&config_path, &default_config).await?;
         *CONFIG.write().await = Some(default_config);
