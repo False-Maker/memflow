@@ -52,7 +52,7 @@ export default function ActivityHeatmap({ onClose }: { onClose?: () => void }) {
   return (
     <div className="p-4 bg-surface/30 rounded-lg border border-glass-border">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-neon-blue font-semibold text-sm">Activity Heatmap</h3>
+        <h3 className="text-neon-cyan font-semibold text-sm">Activity Heatmap</h3>
         <div className="text-xs text-gray-500">{year}</div>
       </div>
       
@@ -110,7 +110,7 @@ export default function ActivityHeatmap({ onClose }: { onClose?: () => void }) {
           fill: #2563eb; /* blue-600 */
         }
         .react-calendar-heatmap .color-scale-4 {
-          fill: #00f3ff; /* neon-blue */
+          fill: #00f0ff; /* neon-cyan */
         }
       `}</style>
     </div>

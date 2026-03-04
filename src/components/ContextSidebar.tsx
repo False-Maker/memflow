@@ -111,7 +111,7 @@ export default function ContextSidebar({ onSendToQA }: { onSendToQA?: (text: str
   const getActionIcon = (type: string, index: number) => {
     if (type === 'copy' && copiedIndex === index) return <Check className="w-4 h-4 text-green-400" />
     switch (type) {
-      case 'open_url': return <ExternalLink className="w-4 h-4 text-neon-blue" />
+      case 'open_url': return <ExternalLink className="w-4 h-4 text-neon-cyan" />
       case 'search': return <Search className="w-4 h-4 text-neon-purple" />
       case 'copy': return <Copy className="w-4 h-4 text-gray-400" />
       default: return <Lightbulb className="w-4 h-4 text-yellow-400" />
