@@ -566,6 +566,142 @@ fn parse_filter_params_from_llm_response(response: &str) -> Result<FilterParams>
     Ok(params)
 }
 
+/// 带重试的 OpenAI 调用（用于意图解析）
+async fn call_openai_with_retry(
+    query: &str,
+    model_id: &str,
+    provider_config: &ProviderConfig,
+    system_prompt: &str,
+    timeout_ms: u64,
+) -> Option<String> {
+    let max_retries = 3;
+    let base_delay_ms = 2000u64;
+
+    for attempt in 0..max_retries {
+        let llm_timeout = std::time::Duration::from_millis(timeout_ms);
+
+        match tokio::time::timeout(
+            llm_timeout,
+            chat_with_openai(query, "", model_id, provider_config, Some(system_prompt)),
+        )
+        .await
+        {
+            Ok(Ok(v)) => return Some(v),
+            Ok(Err(e)) => {
+                let err_msg = crate::redact::redact_secrets(&e.to_string());
+                // 如果是限流错误(429)，则重试
+                if err_msg.contains("429") || err_msg.contains("rate") || err_msg.contains("Rate") {
+                    if attempt < max_retries - 1 {
+                        let delay = base_delay_ms * 2u64.pow(attempt);
+                        tracing::warn!(
+                            "parse_query_intent: OpenAI 限流(429), {}ms 后重试 (attempt {}/{})",
+                            delay,
+                            attempt + 1,
+                            max_retries
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                        continue;
+                    }
+                }
+                tracing::warn!(
+                    "parse_query_intent: OpenAI 调用失败: {}",
+                    err_msg
+                );
+                return None;
+            }
+            Err(_) => {
+                // 超时
+                if attempt < max_retries - 1 {
+                    let delay = base_delay_ms * 2u64.pow(attempt);
+                    tracing::warn!(
+                        "parse_query_intent: OpenAI 调用超时, {}ms 后重试 (attempt {}/{})",
+                        delay,
+                        attempt + 1,
+                        max_retries
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                    continue;
+                }
+                tracing::warn!(
+                    "parse_query_intent: OpenAI 调用超时({}ms) model={} base_url={}，使用回退解析",
+                    timeout_ms,
+                    model_id,
+                    provider_config.base_url
+                );
+                return None;
+            }
+        }
+    }
+    None
+}
+
+/// 带重试的 Anthropic 调用（用于意图解析）
+async fn call_anthropic_with_retry(
+    query: &str,
+    model_id: &str,
+    provider_config: &ProviderConfig,
+    system_prompt: &str,
+    timeout_ms: u64,
+) -> Option<String> {
+    let max_retries = 3;
+    let base_delay_ms = 2000u64;
+
+    for attempt in 0..max_retries {
+        let llm_timeout = std::time::Duration::from_millis(timeout_ms);
+
+        match tokio::time::timeout(
+            llm_timeout,
+            chat_with_anthropic(query, "", model_id, provider_config, Some(system_prompt)),
+        )
+        .await
+        {
+            Ok(Ok(v)) => return Some(v),
+            Ok(Err(e)) => {
+                let err_msg = crate::redact::redact_secrets(&e.to_string());
+                if err_msg.contains("429") || err_msg.contains("rate") || err_msg.contains("Rate") {
+                    if attempt < max_retries - 1 {
+                        let delay = base_delay_ms * 2u64.pow(attempt);
+                        tracing::warn!(
+                            "parse_query_intent: Anthropic 限流(429), {}ms 后重试 (attempt {}/{})",
+                            delay,
+                            attempt + 1,
+                            max_retries
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                        continue;
+                    }
+                }
+                tracing::warn!(
+                    "parse_query_intent: Anthropic 调用失败: {}",
+                    err_msg
+                );
+                return None;
+            }
+            Err(_) => {
+                if attempt < max_retries - 1 {
+                    let delay = base_delay_ms * 2u64.pow(attempt);
+                    tracing::warn!(
+                        "parse_query_intent: Anthropic 调用超时, {}ms 后重试 (attempt {}/{})",
+                        delay,
+                        attempt + 1,
+                        max_retries
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                    continue;
+                }
+                tracing::warn!(
+                    "parse_query_intent: Anthropic 调用超时({}ms) model={} base_url={}，使用回退解析",
+                    timeout_ms,
+                    model_id,
+                    provider_config.base_url
+                );
+                return None;
+            }
+        }
+    }
+    None
+}
+
 // fallback_filter_params is imported from memflow_core::ai
 
 pub async fn parse_query_intent(query: &str) -> Result<FilterParams> {
@@ -581,8 +717,8 @@ pub async fn parse_query_intent(query: &str) -> Result<FilterParams> {
 
     let model_id = &config.chat_model;
     let is_anthropic = model_id.starts_with("claude-");
-    let timeout_ms = config.intent_parse_timeout_ms.unwrap_or(20_000);
-    let llm_timeout = std::time::Duration::from_millis(timeout_ms);
+    // BigModel (glm) 模型较慢，增加超时时间到 45 秒
+    let timeout_ms = config.intent_parse_timeout_ms.unwrap_or(45_000);
 
     // 从外部配置加载系统提示词
     let system_prompt = get_intent_parser_prompt().await;
@@ -596,30 +732,7 @@ pub async fn parse_query_intent(query: &str) -> Result<FilterParams> {
                     "https://api.anthropic.com",
                 );
 
-                match tokio::time::timeout(
-                    llm_timeout,
-                    chat_with_anthropic(query, "", model_id, &provider_config, Some(&system_prompt)),
-                )
-                .await
-                {
-                    Ok(Ok(v)) => Some(v),
-                    Ok(Err(e)) => {
-                        tracing::warn!(
-                            "parse_query_intent: Anthropic 调用失败，使用回退解析: {}",
-                            crate::redact::redact_secrets(&e.to_string())
-                        );
-                        None
-                    }
-                    Err(_) => {
-                        tracing::warn!(
-                            "parse_query_intent: Anthropic 调用超时({}ms) model={} base_url={}，使用回退解析",
-                            timeout_ms,
-                            model_id,
-                            provider_config.base_url
-                        );
-                        None
-                    }
-                }
+                call_anthropic_with_retry(query, model_id, &provider_config, &system_prompt, timeout_ms).await
             }
             Ok(None) => {
                 tracing::debug!("parse_query_intent: 未配置 Anthropic API Key，使用回退解析");
@@ -642,30 +755,7 @@ pub async fn parse_query_intent(query: &str) -> Result<FilterParams> {
                     "https://api.openai.com/v1",
                 );
 
-                match tokio::time::timeout(
-                    llm_timeout,
-                    chat_with_openai(query, "", model_id, &provider_config, Some(&system_prompt)),
-                )
-                .await
-                {
-                    Ok(Ok(v)) => Some(v),
-                    Ok(Err(e)) => {
-                        tracing::warn!(
-                            "parse_query_intent: OpenAI 调用失败，使用回退解析: {}",
-                            crate::redact::redact_secrets(&e.to_string())
-                        );
-                        None
-                    }
-                    Err(_) => {
-                        tracing::warn!(
-                            "parse_query_intent: OpenAI 调用超时({}ms) model={} base_url={}，使用回退解析",
-                            timeout_ms,
-                            model_id,
-                            provider_config.base_url
-                        );
-                        None
-                    }
-                }
+                call_openai_with_retry(query, model_id, &provider_config, &system_prompt, timeout_ms).await
             }
             Ok(None) => {
                 tracing::debug!("parse_query_intent: 未配置 OpenAI API Key，使用回退解析");

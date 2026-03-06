@@ -1,0 +1,27 @@
+[package]
+name = "memflow-daemon"
+version = "0.1.0"
+edition = "2021"
+description = "MemFlow Core Daemon - Background service for activity recording"
+
+[[bin]]
+name = "memflow-daemon"
+path = "src/main.rs"
+
+[dependencies]
+memflow-core = { path = "../memflow-core" }
+tokio = { version = "1.0", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+dirs = "5.0"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_LibraryLoader"] }
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

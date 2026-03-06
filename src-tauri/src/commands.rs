@@ -3,7 +3,7 @@ use crate::desktop_context::TauriContext;
 use std::sync::Arc;
 use crate::ai;
 use crate::ai::provider::{
-    chat_with_anthropic, chat_with_openai, embedding_with_openai, ProviderConfig,
+    chat_with_anthropic, chat_with_openai, ProviderConfig,
 };
 use crate::app_config;
 use crate::chat;
@@ -39,11 +39,6 @@ pub struct AppConfig {
     pub embedding_model: String,
     #[serde(default, alias = "embedding_base_url")]
     pub embedding_base_url: Option<String>,
-    #[serde(
-        default = "default_embedding_use_shared_key",
-        alias = "embedding_use_shared_key"
-    )]
-    pub embedding_use_shared_key: bool,
     // API 配置
     #[serde(default, alias = "openai_base_url")]
     pub openai_base_url: Option<String>,
@@ -107,6 +102,15 @@ pub struct AppConfig {
     pub pause_until: Option<i64>,
     #[serde(default = "default_max_storage_gb", alias = "max_storage_gb")]
     pub max_storage_gb: u32,
+    /// 向量化任务是否启用
+    #[serde(default = "default_vectorize_enabled", alias = "vectorize_enabled")]
+    pub vectorize_enabled: bool,
+    /// 向量化任务间隔（秒）
+    #[serde(default = "default_vectorize_interval", alias = "vectorize_interval")]
+    pub vectorize_interval: u64,
+    /// 每批转换数量
+    #[serde(default = "default_vectorize_batch_size", alias = "vectorize_batch_size")]
+    pub vectorize_batch_size: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -148,6 +152,18 @@ fn default_max_storage_gb() -> u32 {
     10
 }
 
+fn default_vectorize_enabled() -> bool {
+    true
+}
+
+fn default_vectorize_interval() -> u64 {
+    300 // 5分钟
+}
+
+fn default_vectorize_batch_size() -> i64 {
+    50
+}
+
 
 fn default_ocr_preprocess_target_width() -> u32 {
     1280
@@ -179,10 +195,6 @@ fn default_chat_model() -> String {
 
 fn default_embedding_model() -> String {
     "text-embedding-3-small".to_string()
-}
-
-fn default_embedding_use_shared_key() -> bool {
-    true
 }
 
 fn default_enable_focus_analytics() -> bool {
@@ -305,6 +317,119 @@ pub async fn get_activity_by_id(id: i64) -> Result<ActivityLog, String> {
 #[tauri::command]
 pub async fn get_config() -> Result<AppConfig, String> {
     app_config::get_config().await.map_err(|e| e.to_string())
+}
+
+/// Manually trigger vectorization for pending activities (debug command)
+#[tauri::command]
+pub async fn trigger_vectorize() -> Result<TriggerVectorizeResult, String> {
+    use crate::vector_db;
+    
+    let config = app_config::get_config().await.map_err(|e| e.to_string())?;
+    
+    let pending = db::get_pending_vectorize_tasks(config.vectorize_batch_size)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if pending.is_empty() {
+        return Ok(TriggerVectorizeResult {
+            processed: 0,
+            success: 0,
+            failed: 0,
+            message: "No pending activities to vectorize".to_string(),
+        });
+    }
+
+    let mut success_count = 0;
+    let mut fail_count = 0;
+
+    for activity_id in pending {
+        let activity = match db::get_activity_by_id(activity_id).await {
+            Ok(a) => a,
+            Err(_) => {
+                fail_count += 1;
+                continue;
+            }
+        };
+
+        let text = activity.ocr_text.unwrap_or_default();
+        if text.is_empty() {
+            continue;
+        }
+
+        match vector_db::generate_embedding(&text).await {
+            Ok(embedding) => {
+                if let Err(_) = memflow_core::vector_db::insert_embedding(activity_id, embedding).await {
+                    fail_count += 1;
+                } else {
+                    success_count += 1;
+                }
+            }
+            Err(_) => {
+                fail_count += 1;
+            }
+        }
+    }
+
+    Ok(TriggerVectorizeResult {
+        processed: success_count + fail_count,
+        success: success_count,
+        failed: fail_count,
+        message: format!("Processed {} activities: {} success, {} failed", 
+            success_count + fail_count, success_count, fail_count),
+    })
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerVectorizeResult {
+    pub processed: usize,
+    pub success: usize,
+    pub failed: usize,
+    pub message: String,
+}
+
+/// Get vector statistics
+#[tauri::command]
+pub async fn get_vector_stats() -> Result<VectorStats, String> {
+    let pool = memflow_core::db::get_pool().await.map_err(|e| e.to_string())?;
+    
+    // Total vector count
+    let total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM vector_embeddings")
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    // Activities with OCR text
+    let with_ocr: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM activity_logs WHERE ocr_text IS NOT NULL AND ocr_text != ''"
+    )
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    
+    // Pending (has OCR but no vector)
+    let pending: (i64,) = sqlx::query_as(
+        r#"SELECT COUNT(*) FROM activity_logs a
+           LEFT JOIN vector_embeddings v ON a.id = v.activity_id
+           WHERE a.ocr_text IS NOT NULL AND a.ocr_text != '' AND v.activity_id IS NULL"#
+    )
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    
+    Ok(VectorStats {
+        total_vectors: total.0,
+        total_with_ocr: with_ocr.0,
+        pending: pending.0,
+    })
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VectorStats {
+    pub total_vectors: i64,
+    pub total_with_ocr: i64,
+    pub pending: i64,
 }
 
 #[tauri::command]
@@ -539,7 +664,6 @@ mod tests {
         assert_eq!(cfg.chat_model, "gpt-4o-mini");
         assert_eq!(cfg.embedding_model, "text-embedding-3-small");
         assert_eq!(cfg.embedding_base_url, None);
-        assert_eq!(cfg.embedding_use_shared_key, true);
         assert_eq!(cfg.openai_base_url, None);
         assert_eq!(cfg.anthropic_base_url, None);
         assert_eq!(cfg.enable_focus_analytics, true); // 修正：默认值应为 true
@@ -587,7 +711,6 @@ mod tests {
           "chat_model": "gpt-4o-mini",
           "embedding_model": "text-embedding-3-small",
           "embedding_base_url": "http://localhost:11434/v1",
-          "embedding_use_shared_key": false,
           "openai_base_url": "https://api.openai.com/v1",
           "anthropic_base_url": "https://api.anthropic.com",
           "enable_focus_analytics": true
@@ -605,7 +728,6 @@ mod tests {
             cfg.embedding_base_url.as_deref(),
             Some("http://localhost:11434/v1")
         );
-        assert_eq!(cfg.embedding_use_shared_key, false);
         assert_eq!(
             cfg.openai_base_url.as_deref(),
             Some("https://api.openai.com/v1")
@@ -720,57 +842,6 @@ pub async fn test_chat_connection(params: TestChatConnectionParams) -> Result<()
             .map(|_| ())
             .map_err(|e| crate::redact::redact_secrets(&e.to_string()))
     }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TestEmbeddingConnectionParams {
-    pub provider: String, // openai | custom
-    pub model: String,
-    pub api_key: Option<String>,  // 如果前端传了，优先用；否则走安全存储
-    pub base_url: Option<String>, // 可选覆盖（自定义端点）
-    pub use_shared_key: bool,
-}
-
-#[tauri::command]
-pub async fn test_embedding_connection(
-    params: TestEmbeddingConnectionParams,
-) -> Result<(), String> {
-    let provider = params.provider;
-    let model = params.model;
-
-    // 当前实现仅支持 OpenAI 兼容 embeddings
-    let api_key = if let Some(k) = params.api_key.filter(|s| !s.trim().is_empty()) {
-        k
-    } else {
-        let service = if params.use_shared_key {
-            "openai"
-        } else {
-            "embedding"
-        };
-        crate::secure_storage::get_api_key(service)
-            .await
-            .map_err(|e| crate::redact::redact_secrets(&e.to_string()))?
-            .ok_or_else(|| format!("未配置 {} API Key", service))?
-    };
-
-    let cfg = ProviderConfig::new(api_key, params.base_url, "https://api.openai.com/v1");
-
-    // 真实调用一次 embeddings
-    let vec = embedding_with_openai("ping", &model, &cfg)
-        .await
-        .map_err(|e| crate::redact::redact_secrets(&e.to_string()))?;
-
-    if vec.is_empty() {
-        return Err("Embeddings API 返回空向量".to_string());
-    }
-
-    // provider 仅用于参数合法性（保留扩展空间）
-    if provider != "openai" && provider != "custom" {
-        return Err("未知 embedding provider".to_string());
-    }
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -1507,4 +1578,14 @@ pub async fn set_data_directory(path: String, app_handle: tauri::AppHandle) -> R
     
     tracing::info!("Data directory updated to: {}", path);
     Ok(())
+}
+
+/// Result structure for regenerate all embeddings
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegenerateEmbeddingsResult {
+    pub total: i64,
+    pub success: i64,
+    pub failed: i64,
+    pub message: String,
 }

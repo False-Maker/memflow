@@ -36,7 +36,6 @@ interface EmbeddingModelConfig {
   modelId: string
   apiKey?: string
   baseUrl?: string
-  useSharedKey: boolean
 }
 
 interface ModelFormState {
@@ -89,7 +88,6 @@ type FormAction =
   | { type: 'SET_EMBEDDING_MODEL_ID'; payload: string }
   | { type: 'SET_EMBEDDING_API_KEY'; payload: string }
   | { type: 'SET_EMBEDDING_BASE_URL'; payload: string }
-  | { type: 'SET_EMBEDDING_USE_SHARED_KEY'; payload: boolean }
   | { type: 'RESET_FORM'; payload: ModelFormState }
 
 function getProviderFromModelId(modelId: string): ChatModelProvider {
@@ -150,8 +148,6 @@ function formReducer(state: ModelFormState, action: FormAction): ModelFormState 
       return { ...state, embedding: { ...state.embedding, apiKey: action.payload } }
     case 'SET_EMBEDDING_BASE_URL':
       return { ...state, embedding: { ...state.embedding, baseUrl: action.payload || undefined } }
-    case 'SET_EMBEDDING_USE_SHARED_KEY':
-      return { ...state, embedding: { ...state.embedding, useSharedKey: action.payload } }
     case 'RESET_FORM':
       return action.payload
     default:
@@ -317,7 +313,6 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
         getEmbeddingProviderFromModelId(state.config.embeddingModel || '') === 'custom'
           ? state.config.embeddingBaseUrl
           : undefined,
-      useSharedKey: state.config.embeddingUseSharedKey ?? true,
     },
   }
 
@@ -381,7 +376,6 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
               getEmbeddingProviderFromModelId(state.config.embeddingModel || '') === 'custom'
                 ? state.config.embeddingBaseUrl
                 : undefined,
-            useSharedKey: state.config.embeddingUseSharedKey ?? true,
           },
         },
       })
@@ -734,12 +728,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
             ? formState.embedding.modelId
             : formState.embedding.modelId || 'text-embedding-3-small'
 
-        const useSharedKey =
-          provider === 'openai' ? !!formState.embedding.useSharedKey : false
-
         const apiKey =
-          !useSharedKey &&
-            formState.embedding.apiKey &&
+          formState.embedding.apiKey &&
             formState.embedding.apiKey !== '••••••••••••••••'
             ? formState.embedding.apiKey
             : undefined
@@ -753,7 +743,6 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
             model,
             apiKey,
             baseUrl,
-            useSharedKey,
           },
         })
 
@@ -888,7 +877,6 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
             : formState.embedding.modelId || 'text-embedding-3-small',
         embeddingBaseUrl:
           formState.embedding.provider === 'custom' ? formState.embedding.baseUrl : undefined,
-        embeddingUseSharedKey: formState.embedding.useSharedKey,
         openaiBaseUrl:
           formState.chat.provider === 'custom' ? formState.chat.baseUrl : draftConfig.openaiBaseUrl,
         compressionQuality: draftConfig.compressionQuality,
@@ -922,11 +910,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   const showAnthropicFields = formState.chat.provider === 'anthropic'
   const showCustomFields = formState.chat.provider === 'custom'
 
-  // Can share key only if chat provider is OpenAI and embedding provider is OpenAI
-  const canShareKey =
-    formState.chat.provider === 'openai' && formState.embedding.provider === 'openai'
-
-  const showEmbeddingKeyField = formState.embedding.provider !== 'openai' || !canShareKey || !formState.embedding.useSharedKey
+  // Determine embedding key field visibility - always show for embedding
+  const showEmbeddingKeyField = formState.embedding.provider !== 'openai' || !!formState.embedding.apiKey
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -1380,143 +1365,9 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-purple to-pink-500 flex items-center justify-center">
                       <span className="text-sm">🔍</span>
                     </div>
-                    <h3 className="text-lg font-semibold text-white">Embedding 模型</h3>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-300">选择模型</label>
-                    <GroupedSelect
-                      value={formState.embedding.provider === 'custom' ? 'custom' : formState.embedding.modelId}
-                      onChange={(val) => {
-                        if (val === 'custom') {
-                          formDispatch({ type: 'SET_EMBEDDING_PROVIDER', payload: 'custom' })
-                        } else {
-                          const provider = getEmbeddingProviderFromModelId(val)
-                          formDispatch({ type: 'SET_EMBEDDING_PROVIDER', payload: provider })
-                          formDispatch({ type: 'SET_EMBEDDING_MODEL_ID', payload: val })
-                        }
-                      }}
-                      groups={[{ label: 'OpenAI', options: [...EMBEDDING_MODELS] }]}
-                      customOption={{ label: '自定义模型', value: 'custom' }}
-                    />
-                  </div>
-
-                  {/* OpenAI Shared Key Option */}
-                  {canShareKey && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          formDispatch({
-                            type: 'SET_EMBEDDING_USE_SHARED_KEY',
-                            payload: !formState.embedding.useSharedKey,
-                          })
-                        }
-                        className={`w-10 h-6 rounded-full transition-colors relative ${formState.embedding.useSharedKey ? 'bg-neon-cyan' : 'bg-gray-600'
-                          }`}
-                      >
-                        <div
-                          className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${formState.embedding.useSharedKey ? 'translate-x-4' : 'translate-x-0'
-                            }`}
-                        />
-                      </button>
-                      <span className="text-sm text-gray-300">
-                        使用对话模型的 API Key
-                        {formState.embedding.useSharedKey && <span className="text-gray-500 ml-2">(已启用)</span>}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Embedding Custom Fields / Key */}
-                  <div className="space-y-4 pt-2">
-                    {formState.embedding.provider === 'custom' && (
-                      <>
-                        <InputField
-                          label="模型 ID"
-                          value={formState.embedding.modelId}
-                          onChange={(v) => formDispatch({ type: 'SET_EMBEDDING_MODEL_ID', payload: v })}
-                          placeholder="例如: text-embedding-ada-002"
-                        />
-                        <InputField
-                          label="Base URL"
-                          value={formState.embedding.baseUrl || ''}
-                          onChange={(v) => formDispatch({ type: 'SET_EMBEDDING_BASE_URL', payload: v })}
-                          placeholder="https://api.openai.com/v1"
-                        />
-                      </>
-                    )}
-
-                    {showEmbeddingKeyField && (
-                      <InputField
-                        label="Embedding API Key"
-                        value={formState.embedding.apiKey || ''}
-                        onChange={(v) => {
-                          formDispatch({ type: 'SET_EMBEDDING_API_KEY', payload: v })
-                          setApiKeyStatus((prev) => ({
-                            ...prev,
-                            embedding: { ...prev.embedding, message: '' },
-                          }))
-                        }}
-                        type="password"
-                        placeholder="sk-..."
-                        status={apiKeyStatus.embedding.saved ? 'saved' : 'idle'}
-                        statusMessage={apiKeyStatus.embedding.message}
-                        rightElement={
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleSaveApiKey('embedding', formState.embedding.apiKey || '')}
-                              disabled={
-                                !formState.embedding.apiKey ||
-                                formState.embedding.apiKey === '••••••••••••••••' ||
-                                apiKeyStatus.embedding.loading
-                              }
-                              className="px-4 py-2 rounded-lg bg-neon-cyan text-black font-medium hover:bg-neon-cyan/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                            >
-                              {apiKeyStatus.embedding.loading && (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              )}
-                              保存
-                            </button>
-                            {apiKeyStatus.embedding.saved && (
-                              <button
-                                onClick={() => handleDeleteApiKey('embedding')}
-                                className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-                              >
-                                删除
-                              </button>
-                            )}
-                          </div>
-                        }
-                      />
-                    )}
-
-                    {/* Test Embedding Connection */}
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={() => handleTestConnection('embedding')}
-                        disabled={testState.embedding.testing}
-                        className="px-4 py-2 rounded-lg border border-glass-border text-gray-300 hover:bg-white/5 hover:text-white transition-colors disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {testState.embedding.testing ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Check className="w-4 h-4" />
-                        )}
-                        测试 Embedding
-                      </button>
-                      {testState.embedding.message && (
-                        <span
-                          className={`text-sm flex items-center gap-1 ${testState.embedding.result === 'success'
-                            ? 'text-emerald-400'
-                            : testState.embedding.result === 'error'
-                              ? 'text-red-400'
-                              : 'text-gray-400'
-                            }`}
-                        >
-                          {testState.embedding.result === 'success' && <Check className="w-4 h-4" />}
-                          {testState.embedding.result === 'error' && <AlertCircle className="w-4 h-4" />}
-                          {testState.embedding.message}
-                        </span>
-                      )}
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Embedding 模型</h3>
+                      <p className="text-sm text-gray-400">使用本地中文模型 BGE-small-zh-v1.5</p>
                     </div>
                   </div>
                 </section>

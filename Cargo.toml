@@ -2,6 +2,7 @@
 members = [
     "src-tauri",
     "crates/memflow-core",
-    "crates/memflow-mcp"
+    "crates/memflow-mcp",
+    "crates/memflow-daemon"
 ]
 resolver = "2"

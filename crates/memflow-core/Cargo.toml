@@ -31,8 +31,24 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "blocking", "multipart", "stream"] }
 
 # Utilities
+image = "0.24"
 once_cell = "1.19"
 regex = "1.10"
+
+# Local embedding model (shared by Tauri & MCP via memflow-core::ai::embedding)
+# Note: versions aligned with memflow-mcp's previous direct dependency
+fastembed = { version = "5.8.1", default-features = false, features = [
+    "hf-hub-rustls-tls",
+    "ort-load-dynamic",
+    "image-models"
+] }
+ort = { version = "2.0.0-rc.11", default-features = false, features = [
+    "std",
+    "ndarray",
+    "load-dynamic",
+    "copy-dylibs",
+    "tls-rustls"
+] }
 
 # NLP
 jieba-rs = "0.7"
@@ -46,5 +62,26 @@ dirs = "5.0"
 # Input device monitoring (for focus analytics)
 device_query = "0.2.4"
 
+# Scope guard for RAII patterns
+scopeguard = "1.2"
+
+# IPC support (tokio already includes io utilities)
+futures-util = "0.3"
+
+# Screen capture (for collection module)
+xcap = "0.2"
+webp = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Accessibility",
+    "Win32_System_Com",
+    "Win32_System_Threading",
+    "Win32_Graphics_Gdi"
+] }
+
 [dev-dependencies]
+criterion = "0.5"
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }

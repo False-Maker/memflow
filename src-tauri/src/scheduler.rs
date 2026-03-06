@@ -26,24 +26,69 @@ pub fn spawn_retention_scheduler() {
     });
 }
 
-/// 执行单次清理
+/// 执行单次清理（按时间和空间）
 async fn run_cleanup() {
     match app_config::get_config().await {
         Ok(config) => {
             let days = config.retention_days;
-            tracing::info!("🧹 自动清理调度启动：保留最近 {} 天数据", days);
+            let max_storage_mb = config.max_storage_gb as f64 * 1024.0;
+            
+            tracing::info!("🧹 自动清理调度启动：保留最近 {} 天数据，最大存储 {} GB", days, config.max_storage_gb);
 
+            // 1. 首先按时间清理
             match db::cleanup_old_activities(days, false).await {
                 Ok(stats) => {
                     tracing::info!(
-                        "✅ 自动清理完成: 删除 {} 条活动记录, {} 张截图, 释放 {:.2} MB",
+                        "✅ 时间清理完成: 删除 {} 条活动记录, {} 张截图, 释放 {:.2} MB",
                         stats.deleted_activities,
                         stats.deleted_screenshots,
                         stats.freed_bytes as f64 / 1024.0 / 1024.0
                     );
                 }
                 Err(e) => {
-                    tracing::error!("❌ 自动清理失败: {}", e);
+                    tracing::error!("❌ 时间清理失败: {}", e);
+                }
+            }
+
+            // 2. 然后检查磁盘空间，如果超过限制则继续清理
+            let current_size = calculate_current_storage_size().await;
+            if current_size > max_storage_mb {
+                tracing::info!(
+                    "📊 当前存储 {:.2} MB 超过限制 {} MB，开始按空间清理...",
+                    current_size,
+                    max_storage_mb
+                );
+                
+                // 逐步删除更早的数据直到空间足够
+                let mut cleanup_days = days;
+                while calculate_current_storage_size().await > max_storage_mb && cleanup_days > 1 {
+                    cleanup_days = cleanup_days.saturating_sub(7); // 每次减少7天
+                    if cleanup_days < 1 {
+                        break;
+                    }
+                    
+                    tracing::info!("🧹 按空间清理：保留最近 {} 天数据", cleanup_days);
+                    match db::cleanup_old_activities(cleanup_days, false).await {
+                        Ok(stats) => {
+                            tracing::info!(
+                                "✅ 空间清理完成: 删除 {} 条活动记录, {} 张截图, 释放 {:.2} MB",
+                                stats.deleted_activities,
+                                stats.deleted_screenshots,
+                                stats.freed_bytes as f64 / 1024.0 / 1024.0
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!("❌ 空间清理失败: {}", e);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // 3. 执行数据库 VACUUM 回收空间
+            if let Ok(pool) = db::get_pool().await {
+                if let Err(e) = sqlx::query("VACUUM").execute(&pool).await {
+                    tracing::warn!("⚠️ VACUUM 失败: {}", e);
                 }
             }
         }
@@ -51,4 +96,27 @@ async fn run_cleanup() {
             tracing::warn!("⚠️ 获取配置失败，跳过自动清理: {}", e);
         }
     }
+}
+
+/// 计算当前存储大小（MB）
+async fn calculate_current_storage_size() -> f64 {
+    let mut total: f64 = 0.0;
+    
+    // 截图目录大小
+    if let Some(screenshots_dir) = db::get_screenshots_dir().await {
+        if screenshots_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&screenshots_dir) {
+                for entry in entries.flatten() {
+                    if let Ok(meta) = entry.metadata() {
+                        total += meta.len() as f64 / 1024.0 / 1024.0;
+                    }
+                }
+            }
+        }
+    }
+    
+    // 数据库文件大小
+    total += db::get_database_size_mb().await;
+    
+    total
 }

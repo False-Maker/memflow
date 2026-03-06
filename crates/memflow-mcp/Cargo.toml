@@ -3,6 +3,10 @@ name = "memflow-mcp"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "memflow-mcp"
+path = "src/main.rs"
+
 [dependencies]
 memflow-core = { path = "../memflow-core" }
 tokio = { version = "1", features = ["full"] }
@@ -16,23 +20,11 @@ dirs = "5.0"
 chrono = "0.4"
 sqlx = { version = "0.7", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "macros", "chrono", "uuid", "migrate"] }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "blocking", "multipart", "stream"] }
-# Fastembed 5.8.1 uses ort 2.0.0-rc.11
-fastembed = { version = "5.8.1", default-features = false, features = [
-    "hf-hub-rustls-tls",
-    "ort-load-dynamic",
-    "image-models"
-] }
 
-# Explicit ort dependency aligned with fastembed's requirement
-ort = { version = "2.0.0-rc.11", default-features = false, features = [
-    "std",
-    "ndarray",
-    "load-dynamic", 
-    "copy-dylibs",
-    "tls-rustls"
-] }
-
-
-
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_LibraryLoader"] }
 [features]
 default = []
+
+[dev-dependencies]
+tokio-test = "0.4"

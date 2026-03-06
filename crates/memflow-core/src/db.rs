@@ -22,6 +22,28 @@ pub struct ActivityLog {
     pub ocr_text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phash: Option<String>,
+    /// 可选的 OCR 质量指标（仅在做质量评估/回归时才会写入）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_cer: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_wer: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_quality: Option<f64>,
+}
+
+/// Terminal output log entry for captured terminal sessions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalLog {
+    pub id: i64,
+    pub timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub terminal_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window_title: Option<String>,
+    pub text: String,
 }
 
 /// Statistics summary for the activity logs
@@ -37,6 +59,9 @@ static DB_POOL: once_cell::sync::Lazy<tokio::sync::Mutex<Option<SqlitePool>>> =
     once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(None));
 
 static SCREENSHOTS_DIR: once_cell::sync::Lazy<tokio::sync::Mutex<Option<PathBuf>>> =
+    once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(None));
+
+static DB_PATH: once_cell::sync::Lazy<tokio::sync::Mutex<Option<PathBuf>>> =
     once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(None));
 
 // 恢复操作互斥锁，确保一次只有一个恢复操作
@@ -91,6 +116,7 @@ pub async fn init_db_with_path(db_path: PathBuf, screenshots_dir: PathBuf) -> Re
     // Create screenshots directory
     std::fs::create_dir_all(&screenshots_dir)?;
     *SCREENSHOTS_DIR.lock().await = Some(screenshots_dir);
+    *DB_PATH.lock().await = Some(db_path.clone());
 
 
     let mut retry_count = 0;
@@ -161,6 +187,19 @@ pub async fn get_pool() -> Result<SqlitePool> {
         .ok_or_else(|| anyhow::anyhow!("数据库未初始化"))
 }
 
+/// Check if the database is accessible (core health check).
+///
+/// Returns Ok if the database connection works, Err otherwise.
+/// This is used by MCP to verify Core/Daemon is running.
+pub async fn check_core_health() -> Result<()> {
+    let pool = get_pool().await?;
+    // Simple query to verify connection is alive
+    let _: i64 = sqlx::query_scalar("SELECT 1")
+        .fetch_one(&pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn get_activities(limit: i64) -> Result<Vec<ActivityLog>> {
     let pool = get_pool().await?;
 
@@ -184,10 +223,72 @@ pub async fn get_activities(limit: i64) -> Result<Vec<ActivityLog>> {
             image_path: row.get(4),
             ocr_text: row.get(5),
             phash: row.get(6),
+            ocr_cer: None,
+            ocr_wer: None,
+            ocr_quality: None,
         })
         .collect();
 
     Ok(activities)
+}
+
+/// Insert a terminal output log entry.
+///
+/// This is the write path for the终端捕获流水线（Phase 2 功能），当前仅在
+/// 桌面端实现中使用；MCP 通过 `get_recent_terminal_output` 读取。
+pub async fn insert_terminal_output(
+    terminal_session_id: Option<&str>,
+    app_name: Option<&str>,
+    window_title: Option<&str>,
+    text: &str,
+) -> Result<i64> {
+    let pool = get_pool().await?;
+
+    let result = sqlx::query(
+        r#"
+        INSERT INTO terminal_logs (terminal_session_id, app_name, window_title, text)
+        VALUES (?, ?, ?, ?)
+        "#,
+    )
+    .bind(terminal_session_id)
+    .bind(app_name)
+    .bind(window_title)
+    .bind(text)
+    .execute(&pool)
+    .await?;
+
+    Ok(result.last_insert_rowid())
+}
+
+/// Fetch recent terminal output logs ordered by newest first.
+pub async fn get_recent_terminal_output(limit: i64) -> Result<Vec<TerminalLog>> {
+    let pool = get_pool().await?;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT id, timestamp, terminal_session_id, app_name, window_title, text
+        FROM terminal_logs
+        ORDER BY timestamp DESC, id DESC
+        LIMIT ?
+        "#,
+    )
+    .bind(limit)
+    .fetch_all(&pool)
+    .await?;
+
+    let logs = rows
+        .into_iter()
+        .map(|row| TerminalLog {
+            id: row.get(0),
+            timestamp: row.get(1),
+            terminal_session_id: row.get(2),
+            app_name: row.get(3),
+            window_title: row.get(4),
+            text: row.get(5),
+        })
+        .collect();
+
+    Ok(logs)
 }
 
 pub async fn get_activity_by_id(id: i64) -> Result<ActivityLog> {
@@ -210,6 +311,9 @@ pub async fn get_activity_by_id(id: i64) -> Result<ActivityLog> {
         image_path: row.get(4),
         ocr_text: row.get(5),
         phash: row.get(6),
+        ocr_cer: None,
+        ocr_wer: None,
+        ocr_quality: None,
     })
 }
 
@@ -249,6 +353,32 @@ pub async fn update_activity_ocr(id: i64, ocr_text: &str) -> Result<()> {
         .bind(id)
         .execute(&pool)
         .await?;
+
+    Ok(())
+}
+
+/// 更新活动的 OCR 质量指标（CER/WER/综合评分）。
+///
+/// 说明：
+/// - 这些字段是可选的，仅在有对照文本做质量评估时才会写入；
+/// - 正常桌面采集流水线目前只关心 `ocr_text` 本身，质量评估更偏向回归/实验场景。
+pub async fn update_activity_ocr_quality(
+    id: i64,
+    cer: f64,
+    wer: f64,
+    quality: f64,
+) -> Result<()> {
+    let pool = get_pool().await?;
+
+    sqlx::query(
+        "UPDATE activity_logs SET ocr_cer = ?, ocr_wer = ?, ocr_quality = ? WHERE id = ?",
+    )
+    .bind(cer)
+    .bind(wer)
+    .bind(quality)
+    .bind(id)
+    .execute(&pool)
+    .await?;
 
     Ok(())
 }
@@ -315,6 +445,10 @@ pub async fn get_activity_count() -> Result<i64> {
 
 pub async fn get_screenshots_dir() -> Option<PathBuf> {
     SCREENSHOTS_DIR.lock().await.clone()
+}
+
+pub async fn get_db_path() -> Option<PathBuf> {
+    DB_PATH.lock().await.clone()
 }
 
 pub async fn find_activity_by_phash(phash: &str) -> Result<Option<i64>> {
@@ -491,6 +625,9 @@ pub async fn search_activities_impl(
             image_path: row.get(4),
             ocr_text: row.get(5),
             phash: row.get(6),
+            ocr_cer: None,
+            ocr_wer: None,
+            ocr_quality: None,
         })
         .collect();
 
@@ -776,6 +913,30 @@ pub async fn get_pending_ocr_tasks(limit: i64) -> Result<Vec<OcrQueueItem>> {
     .await?;
 
     Ok(tasks)
+}
+
+/// Get activities that need to be vectorized
+/// Condition: has OCR text but no vector embedding record
+pub async fn get_pending_vectorize_tasks(limit: i64) -> Result<Vec<i64>> {
+    let pool = get_pool().await?;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT a.id FROM activity_logs a
+        LEFT JOIN vector_embeddings v ON a.id = v.activity_id
+        WHERE a.ocr_text IS NOT NULL 
+          AND a.ocr_text != ''
+          AND v.activity_id IS NULL
+        ORDER BY a.timestamp DESC
+        LIMIT ?
+        "#
+    )
+    .bind(limit)
+    .fetch_all(&pool)
+    .await?;
+
+    let ids: Vec<i64> = rows.iter().map(|row| row.get(0)).collect();
+    Ok(ids)
 }
 
 pub async fn update_ocr_queue_status(id: i64, status: &str, error_message: Option<&str>) -> Result<()> {

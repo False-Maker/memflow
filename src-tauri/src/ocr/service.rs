@@ -9,7 +9,9 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+use memflow_core::context::RuntimeContext;
+use crate::desktop_context::TauriContext;
 
 /// OCR 服务默认端口
 pub const OCR_SERVICE_PORT: u16 = 9003;
@@ -110,11 +112,9 @@ pub fn start_service(app_handle: &AppHandle) -> Result<()> {
 
     tracing::info!("启动 OCR 服务: {} {}", python.display(), script_path.display());
 
-    let log_path = app_handle
-        .path()
-        .app_data_dir()
-        .ok()
-        .map(|p| p.join("ocr_server.log"));
+    // 使用统一的 RuntimeContext 获取日志目录
+    let ctx = TauriContext::new(app_handle.clone());
+    let log_path = Some(ctx.app_dir().join("ocr_server.log"));
 
     let stderr = if let Some(ref log_path) = log_path {
         let _ = std::fs::create_dir_all(log_path.parent().unwrap_or(log_path));
@@ -359,12 +359,14 @@ fn summarize_log_error(log_path: &Path) -> Option<String> {
 
 /// 获取 OCR 服务脚本路径
 fn get_ocr_server_path(app_handle: &AppHandle) -> Result<std::path::PathBuf> {
+    // 通过统一的 RuntimeContext 获取资源目录
+    let ctx = TauriContext::new(app_handle.clone());
+
     // 1. 尝试资源目录
-    if let Ok(resource_dir) = app_handle.path().resource_dir() {
-        let script_path = resource_dir.join("scripts").join("ocr_server.py");
-        if script_path.exists() {
-            return Ok(script_path);
-        }
+    let resource_dir = ctx.resource_dir();
+    let script_path = resource_dir.join("scripts").join("ocr_server.py");
+    if script_path.exists() {
+        return Ok(script_path);
     }
 
     // 2. 尝试开发环境路径

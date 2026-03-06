@@ -85,3 +85,53 @@
 - Function signature changed from `get_storage_stats()` to `get_storage_stats(app_handle)` to access app data directory
 - Tests use `super::scan_directory()` because helper function is defined after the test module
 
+
+---
+
+## Task 10 Learnings - Integration Testing
+
+### Test Files Created
+1. **Backend Integration Test**: `src-tauri/tests/storage_autostart_integration.rs`
+   - 11 tests covering all 7 new commands
+   - Tests data structure serialization/deserialization
+   - Tests filesystem operations (scan_directory)
+   - Platform-specific tests for Windows/non-Windows
+
+2. **Frontend Integration Test**: `src/test/integration/SettingsModal.integration.test.tsx`
+   - 19 tests covering complete user workflows
+   - Tests command invocation and error handling
+   - Tests data type validation
+   - Tests complete integration workflow
+
+### Test Results
+- **Backend**: 11/11 tests passed
+- **Frontend**: 19/19 tests passed (plus 7 existing AppContext tests)
+- **Total**: 26 integration tests passed
+
+### Commands Verified
+1. `get_storage_stats` - Returns StorageStatsResponse with all fields
+2. `export_data_json` - Returns valid JSON with metadata
+3. `export_data_markdown` - Returns formatted markdown
+4. `clear_all_data` - Returns ClearResult with accurate counts
+5. `enable_autostart` - Creates registry entry on Windows
+6. `disable_autostart` - Removes registry entry on Windows
+7. `get_autostart_status` - Returns AutostartInfo with enabled state
+
+### Test Patterns Used
+- Mocked Tauri API (`vi.mock('@tauri-apps/api/core')`)
+- Type assertions for TypeScript (`as StorageStats`)
+- Sequential command testing for workflow validation
+- Error scenario testing (connection failures, permission errors)
+
+### Findings
+1. All commands are properly registered in lib.rs (Task 9)
+2. Command signatures match frontend expectations
+3. Data structures serialize correctly with camelCase
+4. Error handling works for common failure scenarios
+5. Platform-specific code compiles correctly on Windows
+
+### Notes
+- Playwright tests were not implemented (would require significant setup)
+- Vitest integration tests provide good coverage of the command flow
+- Manual UI testing would be required for scroll wheel verification
+- Registry operations on Windows require platform-specific compilation

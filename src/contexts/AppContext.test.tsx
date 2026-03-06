@@ -679,5 +679,79 @@ describe('AppContext', () => {
       expect(result.current.state.activities[0].ocrText).toBeUndefined()
     })
   })
+
+  describe('事件监听', () => {
+    it('应该正确注册 recording-status 事件监听', async () => {
+      mockInvoke.mockResolvedValue(undefined)
+      mockInvoke.mockResolvedValueOnce([])
+
+      renderHook(() => useApp(), {
+        wrapper: AppProvider,
+      })
+
+      await waitFor(() => {
+        expect(mockListen).toHaveBeenCalledWith('recording-status', expect.any(Function))
+      })
+    })
+
+    it('应该正确注册 new-activity 事件监听', async () => {
+      mockInvoke.mockResolvedValue(undefined)
+      mockInvoke.mockResolvedValueOnce([])
+
+      renderHook(() => useApp(), {
+        wrapper: AppProvider,
+      })
+
+      await waitFor(() => {
+        expect(mockListen).toHaveBeenCalledWith('new-activity', expect.any(Function))
+      })
+    })
+
+    it('应该正确注册 ocr-updated 事件监听', async () => {
+      mockInvoke.mockResolvedValue(undefined)
+      mockInvoke.mockResolvedValueOnce([])
+
+      renderHook(() => useApp(), {
+        wrapper: AppProvider,
+      })
+
+      await waitFor(() => {
+        expect(mockListen).toHaveBeenCalledWith('ocr-updated', expect.any(Function))
+      })
+    })
+
+    it('应该正确注册 backend-log 事件监听', async () => {
+      mockInvoke.mockResolvedValue(undefined)
+      mockInvoke.mockResolvedValueOnce([])
+
+      renderHook(() => useApp(), {
+        wrapper: AppProvider,
+      })
+
+      await waitFor(() => {
+        expect(mockListen).toHaveBeenCalledWith('backend-log', expect.any(Function))
+      })
+    })
+
+    it('应该注册所有 4 种后端事件监听', async () => {
+      mockInvoke.mockResolvedValue(undefined)
+      mockInvoke.mockResolvedValueOnce([])
+
+      renderHook(() => useApp(), {
+        wrapper: AppProvider,
+      })
+
+      await waitFor(() => {
+        expect(mockListen).toHaveBeenCalledTimes(4)
+      })
+
+      // 验证所有 4 个事件都被监听
+      const calledEvents = mockListen.mock.calls.map((call: unknown[]) => call[0])
+      expect(calledEvents).toContain('recording-status')
+      expect(calledEvents).toContain('new-activity')
+      expect(calledEvents).toContain('ocr-updated')
+      expect(calledEvents).toContain('backend-log')
+    })
+  })
 })
 

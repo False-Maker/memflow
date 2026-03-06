@@ -54,7 +54,7 @@ impl Default for PromptsConfig {
         Self {
             chat: ChatPrompts {
                 system_default: "你是桌面活动记录分析助手。直接回答用户的问题，简洁明了。如果用户只是测试，简单确认即可。".to_string(),
-                system_with_context: "你是桌面活动记录分析助手。基于用户提供的桌面活动记录（OCR文本、应用名称等）回答问题。只回答事实，不要解释如何设计系统。".to_string(),
+                system_with_context: "你是桌面活动记录分析助手。你可以通过 MemFlow 工具检索用户最近的桌面活动记录，包括：\n1. 屏幕截图（通过 OCR 识别的文字）\n2. 窗口标题和应用名称\n3. 近期打开的文件路径\n\n重要约束：\n- 不要说\"无法访问微信/QQ聊天记录\"这类绝对的话，你应该说\"我在 MemFlow 记录中没有找到相关内容\"\n- 回答时先基于检索到的记录进行分析\n- 如果用户询问的内容确实不在记录中，再建议用户手动上传截图\n- 只回答事实，不要解释系统设计".to_string(),
             },
             intent_parser: IntentParserPrompts {
                 system: r#"You are a smart query parser for a personal activity logger. 

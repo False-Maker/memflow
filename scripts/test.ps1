@@ -68,4 +68,16 @@ Pop-Location
 Write-Host "V Rust Check and Test Passed" -ForegroundColor Green
 
 Write-Host ""
+Write-Host "3. Running memflow-core tests (including OCR quality evaluation)..." -ForegroundColor Yellow
+Push-Location $repoRoot
+cargo test -p memflow-core
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "X memflow-core tests failed" -ForegroundColor Red
+    Pop-Location
+    exit 1
+}
+Pop-Location
+Write-Host "V memflow-core tests passed" -ForegroundColor Green
+
+Write-Host ""
 Write-Host "V All Checks Completed!" -ForegroundColor Green

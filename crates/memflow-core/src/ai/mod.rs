@@ -15,6 +15,7 @@ pub mod prompt_engine;
 pub mod prompts;
 pub mod provider;
 pub mod rag;
+pub mod embedding;
 
 // Re-export commonly used types
 pub use prompt_engine::PromptTemplate;

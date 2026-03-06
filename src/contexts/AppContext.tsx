@@ -41,7 +41,6 @@ export interface AppConfig {
   chatModel?: string
   embeddingModel?: string
   embeddingBaseUrl?: string
-  embeddingUseSharedKey?: boolean
   openaiBaseUrl?: string
   anthropicBaseUrl?: string
   blocklistEnabled: boolean
@@ -100,7 +99,6 @@ const initialState: AppState = {
     retentionDays: 30,
     chatModel: 'gpt-4o-mini',
     embeddingModel: 'text-embedding-3-small',
-    embeddingUseSharedKey: true,
     blocklistEnabled: false,
     blocklistMode: 'blocklist',
     privacyModeEnabled: false,

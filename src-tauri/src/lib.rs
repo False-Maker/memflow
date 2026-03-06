@@ -58,10 +58,10 @@ pub fn run() {
             commands::ai_chat,
             commands::ai_chat_stream,
             commands::test_chat_connection,
-            commands::test_embedding_connection,
             commands::save_api_key,
             commands::get_api_key,
             commands::delete_api_key,
+            commands::parse_query_intent,
             // 对话历史相关命令
             commands::create_chat_session,
             commands::save_chat_message,
@@ -82,6 +82,9 @@ pub fn run() {
             commands::run_retention_cleanup,
             commands::get_recording_stats,
             commands::get_ocr_queue_stats,
+            // Vectorization commands
+            commands::trigger_vectorize,
+            commands::get_vector_stats,
             // Autostart commands
             commands::enable_autostart,
             commands::disable_autostart,
@@ -168,6 +171,16 @@ pub fn run() {
             tracing::info!("Calling ocr_worker::spawn_ocr_worker...");
             ocr_worker::spawn_ocr_worker(app_handle.clone());
             tracing::info!("ocr_worker::spawn_ocr_worker returned.");
+
+            // 启动向量转换 Worker
+            tracing::info!("Calling ocr_worker::spawn_vectorize_worker...");
+            ocr_worker::spawn_vectorize_worker(app_handle.clone());
+            tracing::info!("ocr_worker::spawn_vectorize_worker returned.");
+
+            // 启动时转换历史数据
+            tracing::info!("Calling ocr_worker::run_startup_vectorize...");
+            ocr_worker::run_startup_vectorize();
+            tracing::info!("ocr_worker::run_startup_vectorize returned.");
 
             // 初始化配置和 Prompts (can run parallel)
             tauri::async_runtime::spawn(async move {

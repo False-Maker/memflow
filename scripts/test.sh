@@ -31,13 +31,18 @@ echo "2. 安装依赖..."
 pnpm install
 
 echo ""
-echo "3. 检查 Rust 依赖..."
+echo "3. 检查 Rust 依赖并运行桌面端测试..."
 cd src-tauri
 cargo check
+cargo test
 cd ..
 
 echo ""
-echo "4. 类型检查..."
+echo "4. 运行 memflow-core 测试（包含 OCR 质量评估相关用例）..."
+cargo test -p memflow-core
+
+echo ""
+echo "5. 类型检查..."
 pnpm type-check
 
 echo ""

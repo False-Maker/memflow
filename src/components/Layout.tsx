@@ -263,7 +263,7 @@ export default function Layout({
 </div>
 
         {/* 右侧操作按钮 - 增强图标样式 */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 z-[60] relative" style={{ zIndex: 60 }}>
           <div className="flex items-center gap-1 bg-zinc-900/60 rounded-lg p-1 border border-white/5">
             <IconButton icon={Calendar} label="Activity" onClick={() => setHeatmapOpen(true)} />
             <IconButton icon={History} label="History" onClick={onOpenChatHistory} />

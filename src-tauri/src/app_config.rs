@@ -37,7 +37,6 @@ pub async fn init_config(app_handle: AppHandle) -> Result<()> {
             chat_model: "gpt-4o-mini".to_string(),
             embedding_model: "text-embedding-3-small".to_string(),
             embedding_base_url: None,
-            embedding_use_shared_key: true,
             openai_base_url: None,
             anthropic_base_url: None,
             blocklist_enabled: false,
@@ -59,6 +58,10 @@ pub async fn init_config(app_handle: AppHandle) -> Result<()> {
             // P5.5-1: 暂停状态
             pause_recording_enabled: false,
             pause_until: None,
+            // 向量化配置
+            vectorize_enabled: true,
+            vectorize_interval: 300,
+            vectorize_batch_size: 50,
         };
         save_config_internal(&config_path, &default_config).await?;
         *CONFIG.write().await = Some(default_config);

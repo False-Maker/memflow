@@ -1,0 +1,25 @@
+﻿08c70aa refactor: remove unimplemented Q&A view and Agent feature
+6cb5c0c fix(frontend): complete frontend simplification - remove Q&A/Chat/Feedback UI
+a46e6fe feat(tray): add basic system tray functionality
+17ad7ab chore(frontend): simplify UI - remove Q&A, chat history, feedback, and agent features
+d714548 docs(mcp): add issue tracking and plans
+8b2a654 docs(e2e): update integration status - 3 of 4 MCP issues resolved
+734dd86 fix(onnx): add onnxruntime.dll 1.24.1 for ort compatibility
+ab6d243 fix(tauri): remove non-existent externalBin paths and unused import
+938b3eb feat(mcp): complete all 5 remaining MCP tasks from MCP_REMAINING_TASKS.md
+0ad9012 chore: save work before branch switch
+bf9e530 refactor(mcp): normalize tool routing via ToolName enum
+97c7719 docs(terminal): add comprehensive documentation and integration tests
+6bfe2b8 feat(terminal): add background cache system for terminal capture
+7bcad1d feat(terminal): implement hybrid capture with Console API and UIA fallback
+252d12d feat(terminal): implement terminal detection and add Windows Console API deps
+f769220 瀹屽杽 MCP 宸ュ叿涓庢彁绀?54006ee feat: headless tray status and cleanup
+f81bd01 feat: dynamic stats duration, configurable recording interval & quality, UI fixes
+7edc35c chore: cleanup temporary log and debug files
+24c89bf feat: update app icons and cleanup project config
+75a7245 refactor: workspace layout, add memflow-mcp crate, remove obsolete docs and coverage
+c58d47e Phase 3: Migrate agent module to memflow-core and decouple from Tauri
+52c0584 feat: add new features and optimizations - UI automation, NLP, prompt engine, and performance improvements
+460e8e4 chore: update code and configuration optimizations
+77d7869 feat: 閺囧瓨鏌婇崝鐔诲厴娑撳簼绱崠?- 濞ｈ濮?AI 閺呴缚鍏橀幖婊呭偍閵嗕椒瀵岄崝銊ョ础娑撳﹣绗呴弬鍥уИ閻炲棎鈧胶鍔嶉悙鐟板瀻閺嬫劗鐡戦崝鐔诲厴閿涘苯鐣崰鍕ゴ鐠囨洝顩惄鏍ф嫲閺傚洦銆?d28da03 閺囧瓨鏌婇懕濠傘亯閸旂喕鍏橀崪瀛獵R閺堝秴濮?3142526 Sync local code with remote
+f930b5d Add files via upload

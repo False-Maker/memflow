@@ -23,6 +23,10 @@
         "decorations": true
       }
     ],
+    "trayIcon": {
+      "iconPath": "icons/icon.ico",
+      "iconAsTemplate": true
+    },
     "security": {
       "csp": null,
       "assetProtocol": {
@@ -41,12 +45,14 @@
       "icons/icon.png",
       "icons/icon.ico"
     ],
-    "resources": [],
+    "resources": ["resources/*"],
     "externalBin": [],
     "copyright": "",
     "category": "Utility",
     "shortDescription": "智能桌面活动记录与分析工具",
     "longDescription": "MemFlow 是一个智能桌面活动记录与分析工具，专注于视觉记忆功能。通过自动截图、OCR文本提取、AI分析等技术，帮助用户记录和分析计算机活动，构建个人知识图谱。"
   },
-  "plugins": {}
+  "plugins": {
+    "global-shortcut": null
+  }
 }

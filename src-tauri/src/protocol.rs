@@ -1,5 +1,8 @@
 use anyhow::Result;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+use memflow_core::context::RuntimeContext;
+
+use crate::desktop_context::TauriContext;
 
 /// 处理 appimg:// 协议请求
 /// 格式: appimg://screenshots/filename.png
@@ -9,13 +12,9 @@ pub fn handle_appimg_protocol(app_handle: &AppHandle, uri: &str) -> Result<Vec<u
         .strip_prefix("appimg://")
         .ok_or_else(|| anyhow::anyhow!("无效的协议 URI"))?;
 
-    // 获取截图目录
-    let app_data = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| anyhow::anyhow!("无法获取应用数据目录: {}", e))?;
-
-    let screenshots_dir = app_data.join("screenshots");
+    // 获取截图目录（通过统一的 RuntimeContext）
+    let ctx = TauriContext::new(app_handle.clone());
+    let screenshots_dir = ctx.app_dir().join("screenshots");
     let file_path = screenshots_dir.join(path);
 
     // 验证路径安全性（防止路径遍历攻击）

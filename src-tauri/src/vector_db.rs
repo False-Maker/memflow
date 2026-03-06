@@ -1,79 +1,95 @@
 //! Vector database module - Tauri wrapper for memflow-core vector_db
 //!
 //! Re-exports from memflow_core::vector_db and provides the
-//! generate_embedding function that requires config/API keys.
+//! generate_embedding function.
 
-// Re-export everything from memflow-core vector_db
+// Re-export everything from memflow_core vector_db
 pub use memflow_core::vector_db::*;
 
-use crate::ai::provider::{embedding_with_openai, ProviderConfig};
+use crate::app_config;
 use anyhow::Result;
+use std::path::PathBuf;
+use std::pin::Pin;
+use std::future::Future;
 
-/// Generate embedding using configured AI provider
-/// This is Tauri-specific as it uses app_config and secure_storage
+/// Generate embedding using local BGE model
+/// This function always uses the local Chinese embedding model (BGE-small-zh-v1.5)
 pub async fn generate_embedding(text: &str) -> Result<Vec<f32>> {
-    // Get config
-    let config = crate::app_config::get_config().await.unwrap_or_else(|_| {
-        let mut cfg: crate::commands::AppConfig = serde_json::from_str("{}").unwrap();
-        cfg.ocr_enabled = true;
-        cfg
-    });
-
-    let model_id = &config.embedding_model;
-
-    // Embedding uses OpenAI-compatible API (Anthropic doesn't support embeddings)
-    // - If embedding_use_shared_key=true: reuse openai key
-    // - Otherwise: use dedicated embedding key
-    let key_service = if config.embedding_use_shared_key {
-        "openai"
-    } else {
-        "embedding"
-    };
-
-    if let Ok(Some(api_key)) = crate::secure_storage::get_api_key(key_service).await {
-        let provider_config = ProviderConfig::new(
-            api_key,
-            config
-                .embedding_base_url
-                .clone()
-                .or_else(|| config.openai_base_url.clone()),
-            "https://api.openai.com/v1",
-        );
-
-        // Use OpenAI Embeddings API
-        match embedding_with_openai(text, model_id, &provider_config).await {
-            Ok(embedding) => {
-                tracing::debug!(
-                    "使用 OpenAI Embeddings API 生成向量，模型: {}，维度: {}",
-                    model_id,
-                    embedding.len()
-                );
-                // Handle dimension adaptation
-                if embedding.len() != EMBEDDING_DIM {
-                    if embedding.len() > EMBEDDING_DIM {
-                        return Ok(embedding[..EMBEDDING_DIM].to_vec());
-                    } else {
-                        let mut result = embedding;
-                        result.resize(EMBEDDING_DIM, 0.0);
-                        return Ok(result);
-                    }
-                }
-                return Ok(embedding);
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "OpenAI Embeddings API 调用失败，使用占位实现: {}",
-                    crate::redact::redact_secrets(&e.to_string())
-                );
-            }
+    // 创建本地 context 用于本地 embedding 模型
+    struct LocalContext {
+        resource_dir: PathBuf,
+    }
+    
+    impl memflow_core::context::RuntimeContext for LocalContext {
+        fn resource_dir(&self) -> PathBuf {
+            self.resource_dir.clone()
         }
-    } else {
-        tracing::debug!(
-            "未配置 Embeddings API Key(service={})，使用占位实现",
-            key_service
-        );
+        
+        fn app_dir(&self) -> PathBuf {
+            PathBuf::from(".")
+        }
+        
+        fn emit(&self, _event: &str, _payload: serde_json::Value) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn analyze_for_proposals(
+            &self,
+            _context_text: &str,
+        ) -> Pin<Box<dyn Future<Output = Result<memflow_core::context::AiAnalysisResult>> + Send + '_>> {
+            Box::pin(async {
+                // Not implemented for local embedding generation
+                Ok(memflow_core::context::AiAnalysisResult { tasks: vec![] })
+            })
+        }
     }
 
-    // Fallback to placeholder implementation from core
-    Ok(generate_placeholder_embedding(text))
+    // 获取 resource directory
+    // 优先级：用户配置的 data_directory > 可执行文件所在目录 > 当前目录
+    let config = app_config::get_config().await;
+    
+    // 尝试从配置获取
+    let configured_dir = config
+        .ok()
+        .and_then(|cfg| cfg.data_directory.clone())
+        .map(|d| PathBuf::from(d).join("resources"));
+    
+    // 尝试获取可执行文件所在目录
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()));
+    
+    // 选择最合适的 resource directory
+    let resource_dir = configured_dir
+        .or_else(|| exe_dir.clone())
+        .unwrap_or_else(|| PathBuf::from("."));
+    
+    tracing::debug!(
+        "Using resource directory for embedding: {:?}, exe_dir: {:?}",
+        resource_dir,
+        exe_dir
+    );
+
+    let ctx = LocalContext {
+        resource_dir,
+    };
+
+    // 使用本地中文模型生成向量
+    match memflow_core::ai::embedding::embed_with_local_model(&ctx, text) {
+        Ok(embedding) => {
+            tracing::debug!(
+                "使用本地模型生成向量成功，维度: {}",
+                embedding.len()
+            );
+            Ok(embedding)
+        }
+        Err(e) => {
+            tracing::error!(
+                "本地模型生成失败: {}",
+                e
+            );
+            // 返回错误而不是 fallback 到占位符
+            Err(e)
+        }
+    }
 }
